@@ -9,7 +9,11 @@ export const authService = {
 
   login: async (nik: string, password: string): Promise<{ user: UserProfile | null; error: string | null }> => {
     const cleanNik = nik.trim();
-    const dummyEmail = `nik-${cleanNik}@pabrik.internal`;
+    const constructEmail = (nik: string) => {
+      if (nik.toLowerCase() === 'admin') return 'admin@larassanti.co.id';
+      return `LMS${nik}@larassanti.co.id`;
+    };
+    const dummyEmail = constructEmail(cleanNik);
 
     if (isSupabaseConfigured && supabase) {
       try {
@@ -94,7 +98,7 @@ export const authService = {
             name: match.name,
             department: match.department,
             role: match.role,
-            email: `nik-${match.nik}@pabrik.internal`,
+            email: constructEmail(match.nik),
             lastLogin: new Date().toISOString(),
           };
           localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(userProfile));
