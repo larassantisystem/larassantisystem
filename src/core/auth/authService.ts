@@ -145,8 +145,32 @@ export const authService = {
   }): Promise<{ success: boolean; error?: string }> => {
     const cleanNik = employee.nik.trim();
     const password = employee.password || 'password123';
+    const email = cleanNik.toLowerCase() === 'admin' ? 'admin@larassanti.co.id' : `LMS${cleanNik}@larassanti.co.id`;
 
-    // Save to local custom users storage for immediate testing
+    // 1. Try to register in Supabase Auth if configured
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              nik: cleanNik,
+              full_name: employee.name,
+              department: employee.department,
+              role: employee.role,
+            },
+          },
+        });
+        if (error) throw error;
+        return { success: true };
+      } catch (err: any) {
+        console.error('Supabase registration error', err);
+        return { success: false, error: err.message };
+      }
+    }
+
+    // Fallback: Save to local custom users storage for immediate testing
     const customUsersRaw = localStorage.getItem('cosmo_ddmp_registered_users');
     const customUsers = customUsersRaw ? JSON.parse(customUsersRaw) : [];
     
@@ -170,7 +194,6 @@ export const authService = {
 
     customUsers.push(newUser);
     localStorage.setItem('cosmo_ddmp_registered_users', JSON.stringify(customUsers));
-
     return { success: true };
   },
 };
