@@ -46,7 +46,7 @@ export const materialService = {
 
         if (error) {
           console.error('[Supabase Audit] Error fetching raw_materials:', error);
-        } else if (data && data.length > 0) {
+        } else if (data) {
           const mapped: RawMaterial[] = data.map((m: any) => ({
             id: m.id,
             code: m.code,
@@ -190,12 +190,20 @@ export const materialService = {
               }
               return { success: true, updatedId: resolvedId };
             }
+            if (insertError.message?.includes('fetch') || insertError.message?.includes('network')) {
+              console.warn('[Supabase Audit] Network notice: raw_material cached locally, cloud sync will retry:', insertError.message);
+              return { success: true, updatedId: resolvedId, error: 'Tersimpan lokal (sinkronisasi cloud tertunda).' };
+            }
             console.error('[Supabase Audit] Error inserting raw_material:', insertError);
             return { success: false, error: `${insertError.message} (${insertError.code})` };
           }
           return { success: true, updatedId: resolvedId };
         }
       } catch (err: any) {
+        if (err.message?.includes('fetch') || err.message?.includes('network')) {
+          console.warn('[Supabase Audit] Network exception: raw_material cached locally:', err.message);
+          return { success: true, updatedId: validId, error: 'Tersimpan lokal (jaringan offline).' };
+        }
         console.error('[Supabase Audit] Exception during raw_material save:', err);
         return { success: false, error: err.message || String(err) };
       }
@@ -204,16 +212,55 @@ export const materialService = {
   },
 
   saveMaterials: async (materials: RawMaterial[]): Promise<void> => {
+    if (!materials || materials.length === 0) return;
     const normalizedList = materials.map((m) => ({ ...m, id: ensureUUID(m.id) }));
-    localStorage.setItem(RAW_MATERIALS_STORAGE_KEY, JSON.stringify(normalizedList));
 
+    // 1. Update localStorage cache with deduplication by code
+    const saved = localStorage.getItem(RAW_MATERIALS_STORAGE_KEY);
+    const existingList: RawMaterial[] = saved ? JSON.parse(saved) : [];
+    const map = new Map<string, RawMaterial>();
+    existingList.forEach((r) => map.set(r.code.trim().toUpperCase(), r));
+    normalizedList.forEach((r) => map.set(r.code.trim().toUpperCase(), r));
+    const merged = Array.from(map.values());
+    localStorage.setItem(RAW_MATERIALS_STORAGE_KEY, JSON.stringify(merged));
+
+    // 2. Persist to Supabase in batches of 50 to prevent connection pool exhaustion / Failed to fetch
     if (isSupabaseConfigured && supabase) {
-      try {
-        for (const item of normalizedList) {
-          await materialService.saveSingleMaterial(item);
+      const CHUNK_SIZE = 50;
+      for (let i = 0; i < normalizedList.length; i += CHUNK_SIZE) {
+        const chunk = normalizedList.slice(i, i + CHUNK_SIZE);
+        const payloads = chunk.map((item) => {
+          const itemCode = item.code.trim().toUpperCase();
+          return {
+            id: ensureUUID(item.id),
+            code: itemCode,
+            spec_number: item.specNumber || `SP-BB-${itemCode}`,
+            name: item.name,
+            chemical_name: item.chemicalName || '',
+            category: item.category || 'active',
+            categories: item.categories || [item.category || 'active'],
+            storage_conditions: item.storageConditions || '',
+            sds_doc_number: item.sdsDocNumber || '',
+            approved_substitutes: item.approvedSubstitutes || [],
+            manufacturer: item.manufacturer || '',
+            qc_parameters: item.qcParameters || [],
+            supplier_lead_time_days: item.supplierLeadTimeDays || 14,
+            last_modified_by: item.lastModifiedBy || 'Staff RnD',
+            last_modified_at: item.lastModifiedAt || new Date().toISOString(),
+          };
+        });
+
+        try {
+          const { error } = await supabase
+            .from('raw_materials')
+            .upsert(payloads, { onConflict: 'code' });
+
+          if (error) {
+            console.warn(`[Supabase Audit] Batch raw materials upsert chunk [${i}..${i + chunk.length}] warning:`, error.message);
+          }
+        } catch (err: any) {
+          console.warn(`[Supabase Audit] Batch raw materials upsert network notice at chunk [${i}]:`, err?.message || err);
         }
-      } catch (err) {
-        console.warn('[Supabase Audit] Batch upsert error', err);
       }
     }
   },

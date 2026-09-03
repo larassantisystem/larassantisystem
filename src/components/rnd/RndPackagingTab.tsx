@@ -29,6 +29,7 @@ import {
 interface RndPackagingTabProps {
   packagingMaterials: PackagingMaterial[];
   onSavePM: (pm: PackagingMaterial) => void;
+  onBatchSavePM?: (pms: PackagingMaterial[]) => Promise<void> | void;
   onDeletePM: (id: string) => void;
 }
 
@@ -91,6 +92,7 @@ import { Pagination } from '../../core/ui-components/Pagination';
 export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
   packagingMaterials,
   onSavePM,
+  onBatchSavePM,
   onDeletePM,
 }) => {
   const { user } = useAuth();
@@ -136,8 +138,11 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
   const [importMode, setImportMode] = useState<'paste' | 'drop'>('paste');
   const [pasteData, setPasteData] = useState('');
   const [importPreview, setImportPreview] = useState<any[]>([]);
+  const [importSkippedRows, setImportSkippedRows] = useState<{ rowNum: number; reason: string; rawData: string }[]>([]);
+  const [importTotalRawRows, setImportTotalRawRows] = useState<number>(0);
   const [importError, setImportError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isSubmittingImport, setIsSubmittingImport] = useState(false);
   const excelFileInputRef = useRef<HTMLInputElement>(null);
 
   // Filtered PM
@@ -419,32 +424,95 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
 
   // --- PARSE EXCEL DATA ---
   const parseRowsToPreview = (rows: any[][]) => {
-    if (!rows || rows.length < 2) {
-      setImportError('File atau teks tidak memiliki baris data (minimal header + 1 baris isi).');
+    if (!rows || rows.length === 0) {
+      setImportError('File atau teks tidak memiliki data.');
       setImportPreview([]);
+      setImportSkippedRows([]);
+      setImportTotalRawRows(0);
       return;
     }
 
-    const dataRows = rows.slice(1);
+    setImportTotalRawRows(rows.length);
+
+    // Auto-detect header row
+    let startIndex = 0;
+    const firstRowStr = (rows[0] || []).map((c: any) => String(c ?? '').toLowerCase().trim()).join(' ');
+    const headerKeywords = ['kode', 'nama', 'tipe', 'type', 'satuan', 'unit', 'supplier', 'packaging', 'kemasan'];
+    const isFirstRowHeader = headerKeywords.some((kw) => firstRowStr.includes(kw));
+
+    if (isFirstRowHeader) {
+      startIndex = 1;
+    }
+
     const parsed: any[] = [];
+    const skipped: { rowNum: number; reason: string; rawData: string }[] = [];
+    const seenCodes = new Set<string>();
 
-    for (let i = 0; i < dataRows.length; i++) {
-      const row = dataRows[i];
-      if (!row || row.length === 0 || !row[0]) continue;
+    for (let i = startIndex; i < rows.length; i++) {
+      const row = rows[i];
+      const actualRowNum = i + 1; // 1-indexed for user readability
 
-      const rawCode = String(row[0] || '').trim().toUpperCase();
-      const rawName = String(row[1] || '').trim();
-      let rawType = String(row[2] || 'primary').trim().toLowerCase();
+      // Cek jika baris benar-benar kosong
+      if (!row || row.length === 0 || row.every((c: any) => String(c ?? '').trim() === '')) {
+        skipped.push({
+          rowNum: actualRowNum,
+          reason: 'Baris kosong / tidak ada data',
+          rawData: (row || []).join(' | '),
+        });
+        continue;
+      }
+
+      let rawCode = String(row[0] ?? '').trim().toUpperCase();
+      let rawName = String(row[1] ?? '').trim();
+
+      // Jika kode kosong tetapi ada nama kemasan di kolom 1, generate kode otomatis
+      if (!rawCode && rawName) {
+        rawCode = `K${String(packagingMaterials.length + parsed.length + 1).padStart(4, '0')}`;
+      } else if (rawCode && !rawName) {
+        // Jika nama di kolom 1 kosong tetapi ada deskripsi di kolom lain
+        const otherCols = row.slice(2).filter((c: any) => String(c ?? '').trim() !== '');
+        if (otherCols.length > 0) {
+          rawName = String(otherCols[0]).trim();
+        }
+      }
+
+      // Validasi minimal ada nama atau kode
+      if (!rawName) {
+        skipped.push({
+          rowNum: actualRowNum,
+          reason: 'Nama Kemasan kosong (kolom ke-2)',
+          rawData: row.map((c: any) => String(c ?? '').trim()).join(' | '),
+        });
+        continue;
+      }
+
+      // Pastikan kode unik dalam daftar import ini
+      if (seenCodes.has(rawCode)) {
+        // Buat suffix pembeda jika ada duplikat kode di dalam satu file
+        const uniqueSuffix = `-${parsed.length + 1}`;
+        rawCode = `${rawCode}${uniqueSuffix}`;
+      }
+      seenCodes.add(rawCode);
+
+      let rawType = String(row[2] ?? 'primary').trim().toLowerCase();
       if (!['primary', 'secondary', 'tertiary'].includes(rawType)) {
-        rawType = 'primary';
+        if (rawType.includes('primer') || rawType.includes('prim')) rawType = 'primary';
+        else if (rawType.includes('sekunder') || rawType.includes('sec')) rawType = 'secondary';
+        else if (rawType.includes('tersier') || rawType.includes('ter')) rawType = 'tertiary';
+        else rawType = 'primary';
       }
-      let rawUnit = String(row[3] || 'Pcs').trim();
+
+      let rawUnit = String(row[3] ?? 'Pcs').trim();
       if (!PACKAGING_UNITS.includes(rawUnit)) {
-        rawUnit = 'Pcs';
+        if (rawUnit.toLowerCase() === 'roll' || rawUnit.toLowerCase() === 'rol') rawUnit = 'Roll';
+        else if (rawUnit.toLowerCase() === 'box') rawUnit = 'Box';
+        else if (rawUnit.toLowerCase() === 'set') rawUnit = 'Set';
+        else rawUnit = 'Pcs';
       }
+
       const rawCapacity = Number(row[4]) || 0;
-      const rawSupplier = String(row[5] || 'Supplier Terdaftar').trim();
-      const rawStorage = String(row[6] || DEFAULT_STORAGE_CONDITIONS).trim();
+      const rawSupplier = String(row[5] ?? 'Supplier Terdaftar').trim() || 'Supplier Terdaftar';
+      const rawStorage = String(row[6] ?? DEFAULT_STORAGE_CONDITIONS).trim() || DEFAULT_STORAGE_CONDITIONS;
 
       // Extract QC Parameters from columns 7 onwards
       const qcParams: QCParameter[] = [];
@@ -460,22 +528,22 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
         qcParams.push(...DEFAULT_QC_PARAMS.map(p => ({ ...p })));
       }
 
-      if (rawCode && rawName) {
-        parsed.push({
-          code: rawCode,
-          name: rawName,
-          type: rawType as 'primary' | 'secondary' | 'tertiary',
-          unit: rawUnit,
-          unitCapacityGrams: rawType === 'primary' ? rawCapacity : undefined,
-          supplier: rawSupplier,
-          storageConditions: rawStorage,
-          qcParameters: qcParams,
-        });
-      }
+      parsed.push({
+        code: rawCode,
+        name: rawName,
+        type: rawType as 'primary' | 'secondary' | 'tertiary',
+        unit: rawUnit,
+        unitCapacityGrams: rawType === 'primary' ? rawCapacity : undefined,
+        supplier: rawSupplier,
+        storageConditions: rawStorage,
+        qcParameters: qcParams,
+      });
     }
 
+    setImportSkippedRows(skipped);
+
     if (parsed.length === 0) {
-      setImportError('Tidak ada baris data valid yang berhasil dibaca.');
+      setImportError('Tidak ada baris data valid yang berhasil dibaca dari file.');
       setImportPreview([]);
     } else {
       setImportError(null);
@@ -497,14 +565,19 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
 
   // --- HANDLE FILE DROP & UPLOAD ---
   const handleFileUpload = (file: File) => {
+    setImportError(null);
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: 'array' });
         const firstSheetName = workbook.SheetNames[0];
+        if (!firstSheetName) {
+          throw new Error('File Excel tidak memiliki lembar kerja (worksheet).');
+        }
         const worksheet = workbook.Sheets[firstSheetName];
-        const jsonRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+        // Menggunakan defval: '' dan blankrows: false agar semua kolom terbaca konsisten
+        const jsonRows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '', blankrows: false }) as any[][];
         parseRowsToPreview(jsonRows);
       } catch (err: any) {
         setImportError('Gagal membaca file Excel: ' + (err.message || 'Format tidak didukung.'));
@@ -532,55 +605,71 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
   };
 
   // --- EXECUTE IMPORT ---
-  const handleExecuteImport = () => {
-    if (importPreview.length === 0) return;
+  const handleExecuteImport = async () => {
+    if (importPreview.length === 0 || isSubmittingImport) return;
 
-    let importCount = 0;
+    setIsSubmittingImport(true);
     const actorNik = user?.nik || 'admin';
+    const timestamp = new Date().toISOString();
 
-    importPreview.forEach((item) => {
-      const newPM: PackagingMaterial = {
-        id: generateUUID(),
-        code: item.code,
-        specNumber: `SP-BK-${item.code}`,
-        name: item.name,
-        type: item.type,
-        unit: item.unit,
-        unitCapacityGrams: item.unitCapacityGrams,
-        supplier: item.supplier,
-        storageConditions: item.storageConditions,
-        qcParameters: item.qcParameters,
-        lastModifiedBy: `${user?.name || 'ADMIN'} (${actorNik}) [EXCEL_IMPORT]`,
-        lastModifiedAt: new Date().toISOString(),
-      };
-      onSavePM(newPM);
-      importCount++;
-    });
+    const newPMs: PackagingMaterial[] = importPreview.map((item) => ({
+      id: generateUUID(),
+      code: item.code,
+      specNumber: `SP-BK-${item.code}`,
+      name: item.name,
+      type: item.type,
+      unit: item.unit,
+      unitCapacityGrams: item.unitCapacityGrams,
+      supplier: item.supplier,
+      storageConditions: item.storageConditions,
+      qcParameters: item.qcParameters,
+      lastModifiedBy: `${user?.name || 'ADMIN'} (${actorNik}) [EXCEL_IMPORT]`,
+      lastModifiedAt: timestamp,
+    }));
 
-    // Record Audit Trail Log
+    const importCount = newPMs.length;
+
     try {
-      const rawAudit = localStorage.getItem('cosmo_ddmp_audit_logs');
-      const auditList = rawAudit ? JSON.parse(rawAudit) : [];
-      const newAuditLog = {
-        id: `aud-${Date.now()}`,
-        timestamp: new Date().toISOString(),
-        actorNik: actorNik,
-        actorName: user?.name || 'ADMIN',
-        module: 'rnd',
-        action: 'PM_EXCEL_IMPORT',
-        targetNik: `${importCount}_ITEMS`,
-        details: `Import massal ${importCount} data Master Bahan Kemas via ${importMode === 'paste' ? 'Copy-Paste Excel' : 'Drop File Excel'}.`,
-      };
-      localStorage.setItem('cosmo_ddmp_audit_logs', JSON.stringify([newAuditLog, ...auditList]));
-    } catch (auditErr) {
-      console.warn('Audit trail write failed:', auditErr);
-    }
+      if (onBatchSavePM) {
+        await onBatchSavePM(newPMs);
+      } else {
+        for (const pm of newPMs) {
+          onSavePM(pm);
+        }
+      }
 
-    setShowImportModal(false);
-    setImportPreview([]);
-    setPasteData('');
-    setSuccessToast(`Berhasil mengimpor ${importCount} Master Bahan Kemas ke sistem.`);
-    setTimeout(() => setSuccessToast(null), 5000);
+      // Record Audit Trail Log
+      try {
+        const rawAudit = localStorage.getItem('cosmo_ddmp_audit_logs');
+        const auditList = rawAudit ? JSON.parse(rawAudit) : [];
+        const newAuditLog = {
+          id: `aud-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          actorNik: actorNik,
+          actorName: user?.name || 'ADMIN',
+          module: 'rnd',
+          action: 'PM_EXCEL_IMPORT',
+          targetNik: `${importCount}_ITEMS`,
+          details: `Import massal ${importCount} data Master Bahan Kemas via ${importMode === 'paste' ? 'Copy-Paste Excel' : 'Drop File Excel'}.`,
+        };
+        localStorage.setItem('cosmo_ddmp_audit_logs', JSON.stringify([newAuditLog, ...auditList]));
+      } catch (auditErr) {
+        console.warn('Audit trail write failed:', auditErr);
+      }
+
+      setShowImportModal(false);
+      setImportPreview([]);
+      setImportSkippedRows([]);
+      setImportTotalRawRows(0);
+      setPasteData('');
+      setSuccessToast(`Berhasil mengimpor ${importCount} Master Bahan Kemas ke sistem.`);
+      setTimeout(() => setSuccessToast(null), 5000);
+    } catch (err: any) {
+      console.error('Import error:', err);
+      setImportError(`Terjadi kesalahan saat import: ${err.message || String(err)}`);
+    } finally {
+      setIsSubmittingImport(false);
+    }
   };
 
   return (
@@ -1366,55 +1455,109 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
                 </div>
               )}
 
-              {/* Preview Table */}
-              {importPreview.length > 0 && (
-                <div className="space-y-2 pt-1">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                      <span>Pratinjau Hasil Parsing Excel:</span>
-                      <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-black">
-                        {importPreview.length} Bahan Kemas Siap Diimport
+              {/* Preview Table & Parsing Diagnostic Summary */}
+              {importTotalRawRows > 0 && (
+                <div className="space-y-3 pt-1">
+                  {/* Parsing Status Summary Bar */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-600 font-medium">Total Baris File:</span>
+                      <span className="font-mono font-bold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">
+                        {importTotalRawRows} Baris
                       </span>
-                    </h4>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="flex items-center gap-1.5 text-emerald-700 font-bold">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        {importPreview.length} Berhasil Terbaca
+                      </span>
+                      {importSkippedRows.length > 0 && (
+                        <span className="flex items-center gap-1.5 text-amber-700 font-bold">
+                          <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                          {importSkippedRows.length} Dilewati / Kosong
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="border border-slate-200 rounded-2xl overflow-hidden max-h-52 overflow-y-auto shadow-2xs">
-                    <table className="w-full text-left border-collapse text-[10px]">
-                      <thead className="bg-slate-50 sticky top-0 border-b border-slate-200">
-                        <tr className="text-slate-600 font-bold uppercase">
-                          <th className="p-2.5 pl-3 w-10 text-center">No</th>
-                          <th className="p-2.5">Kode PM</th>
-                          <th className="p-2.5">Nama Kemasan</th>
-                          <th className="p-2.5">Tipe</th>
-                          <th className="p-2.5">Satuan</th>
-                          <th className="p-2.5">Kapasitas</th>
-                          <th className="p-2.5">Supplier</th>
-                          <th className="p-2.5 pr-3">Parameter QC</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 text-slate-600 bg-white font-medium">
-                        {importPreview.map((pm, idx) => (
-                          <tr key={idx} className="hover:bg-slate-50/50">
-                            <td className="p-2.5 pl-3 text-center font-mono font-bold text-slate-400">{idx + 1}</td>
-                            <td className="p-2.5 font-mono font-bold text-purple-700">{pm.code}</td>
-                            <td className="p-2.5 font-bold text-slate-800">{pm.name}</td>
-                            <td className="p-2.5 uppercase text-[9px] font-bold text-purple-600">{pm.type}</td>
-                            <td className="p-2.5 font-bold text-purple-900">{pm.unit}</td>
-                            <td className="p-2.5 font-mono">{pm.unitCapacityGrams ? `${pm.unitCapacityGrams}g` : '-'}</td>
-                            <td className="p-2.5">{pm.supplier}</td>
-                            <td className="p-2.5 pr-3">
-                              <div className="flex flex-wrap gap-1 max-w-[200px]">
-                                {pm.qcParameters.map((p: any, pIdx: number) => (
-                                  <span key={pIdx} className="bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-[8px] whitespace-nowrap">
-                                    {p.name}: {p.specification}
-                                  </span>
-                                ))}
-                              </div>
-                            </td>
-                          </tr>
+
+                  {/* Skipped Rows Accordion / Alert if any */}
+                  {importSkippedRows.length > 0 && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-[11px] text-amber-900 space-y-1.5">
+                      <div className="font-bold flex items-center gap-1.5 text-amber-800">
+                        <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        <span>Rincian {importSkippedRows.length} Baris yang Tidak Terbaca / Dilewati:</span>
+                      </div>
+                      <div className="max-h-24 overflow-y-auto space-y-1 pr-1 font-mono text-[10px]">
+                        {importSkippedRows.map((skip, idx) => (
+                          <div key={idx} className="bg-white/80 border border-amber-200 rounded p-1.5 flex items-center justify-between gap-2">
+                            <span>
+                              <strong className="text-amber-800">Baris ke-{skip.rowNum}:</strong> {skip.reason}
+                            </span>
+                            {skip.rawData && (
+                              <span className="text-slate-500 truncate max-w-[200px]" title={skip.rawData}>
+                                [{skip.rawData}]
+                              </span>
+                            )}
+                          </div>
                         ))}
-                      </tbody>
-                    </table>
-                  </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Valid Data Preview */}
+                  {importPreview.length > 0 && (
+                    <div>
+                      <h4 className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                        <span>Pratinjau Data Bahan Kemas ({importPreview.length} Item):</span>
+                        <span className="text-[10px] text-slate-500 font-normal">
+                          Menampilkan 50 item pertama
+                        </span>
+                      </h4>
+                      <div className="border border-slate-200 rounded-2xl overflow-hidden max-h-52 overflow-y-auto shadow-2xs">
+                        <table className="w-full text-left border-collapse text-[10px]">
+                          <thead className="bg-slate-50 sticky top-0 border-b border-slate-200">
+                            <tr className="text-slate-600 font-bold uppercase">
+                              <th className="p-2.5 pl-3 w-10 text-center">No</th>
+                              <th className="p-2.5">Kode PM</th>
+                              <th className="p-2.5">Nama Kemasan</th>
+                              <th className="p-2.5">Tipe</th>
+                              <th className="p-2.5">Satuan</th>
+                              <th className="p-2.5">Kapasitas</th>
+                              <th className="p-2.5">Supplier</th>
+                              <th className="p-2.5 pr-3">Parameter QC</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 text-slate-600 bg-white font-medium">
+                            {importPreview.slice(0, 50).map((pm, idx) => (
+                              <tr key={idx} className="hover:bg-slate-50/50">
+                                <td className="p-2.5 pl-3 text-center font-mono font-bold text-slate-400">{idx + 1}</td>
+                                <td className="p-2.5 font-mono font-bold text-purple-700">{pm.code}</td>
+                                <td className="p-2.5 font-bold text-slate-800">{pm.name}</td>
+                                <td className="p-2.5 uppercase text-[9px] font-bold text-purple-600">{pm.type}</td>
+                                <td className="p-2.5 font-bold text-purple-900">{pm.unit}</td>
+                                <td className="p-2.5 font-mono">{pm.unitCapacityGrams ? `${pm.unitCapacityGrams}g` : '-'}</td>
+                                <td className="p-2.5">{pm.supplier}</td>
+                                <td className="p-2.5 pr-3">
+                                  <div className="flex flex-wrap gap-1 max-w-[200px]">
+                                    {pm.qcParameters.map((p: any, pIdx: number) => (
+                                      <span key={pIdx} className="bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-[8px] whitespace-nowrap">
+                                        {p.name}: {p.specification}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      {importPreview.length > 50 && (
+                        <p className="text-right text-[10px] text-slate-500 mt-1 italic">
+                          Dan {importPreview.length - 50} item lainnya akan diimpor sepenuhnya.
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1423,23 +1566,33 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
             <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3 shrink-0">
               <button
                 type="button"
+                disabled={isSubmittingImport}
                 onClick={() => setShowImportModal(false)}
-                className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-bold text-slate-600 transition-all cursor-pointer"
+                className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-bold text-slate-600 transition-all cursor-pointer disabled:opacity-50"
               >
                 Batal
               </button>
               <button
                 type="button"
-                disabled={importPreview.length === 0}
+                disabled={importPreview.length === 0 || isSubmittingImport}
                 onClick={handleExecuteImport}
                 className={`px-6 py-2.5 rounded-xl text-xs font-bold text-white flex items-center gap-1.5 transition-all cursor-pointer shadow-md ${
-                  importPreview.length > 0
+                  importPreview.length > 0 && !isSubmittingImport
                     ? 'bg-emerald-600 hover:bg-emerald-700'
                     : 'bg-slate-300 cursor-not-allowed'
                 }`}
               >
-                <Check className="w-4 h-4" />
-                <span>Simpan & Import Semua Data ({importPreview.length})</span>
+                {isSubmittingImport ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Menyimpan {importPreview.length} Data...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>Simpan & Import Semua Data ({importPreview.length})</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

@@ -54,6 +54,7 @@ export const RAW_MATERIAL_CATEGORIES = [
 interface RndMaterialsTabProps {
   rawMaterials: RawMaterial[];
   onSaveRM: (rm: RawMaterial) => void;
+  onBatchSaveRM?: (rms: RawMaterial[]) => Promise<void> | void;
   onDeleteRM: (id: string) => void;
 }
 
@@ -62,6 +63,7 @@ import { Pagination } from '../../core/ui-components/Pagination';
 export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
   rawMaterials,
   onSaveRM,
+  onBatchSaveRM,
   onDeleteRM,
 }) => {
   const { user } = useAuth();
@@ -146,6 +148,7 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
   const [importError, setImportError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [importedFileName, setImportedFileName] = useState<string>('');
+  const [isSubmittingImport, setIsSubmittingImport] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // RBAC Permission Check
@@ -754,26 +757,38 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
     });
   };
 
-  const handleExecuteImport = () => {
+  const handleExecuteImport = async () => {
     if (!canWrite) {
       alert('Akses Ditolak: Anda memiliki izin Hanya Lihat (Read-Only) pada modul R&D.');
       return;
     }
-    if (importPreview.length === 0) return;
+    if (importPreview.length === 0 || isSubmittingImport) return;
 
-    // Save all to database
-    importPreview.forEach(rm => {
-      onSaveRM(rm);
-    });
-
+    setIsSubmittingImport(true);
     const count = importPreview.length;
-    setShowImportModal(false);
-    setPasteData('');
-    setImportPreview([]);
-    setImportError(null);
-    setImportedFileName('');
-    setSuccessToast(`Berhasil mengimpor ${count} data master bahan baku secara massal ke database.`);
-    setTimeout(() => setSuccessToast(null), 5000);
+
+    try {
+      if (onBatchSaveRM) {
+        await onBatchSaveRM(importPreview);
+      } else {
+        for (const rm of importPreview) {
+          onSaveRM(rm);
+        }
+      }
+
+      setShowImportModal(false);
+      setPasteData('');
+      setImportPreview([]);
+      setImportError(null);
+      setImportedFileName('');
+      setSuccessToast(`Berhasil mengimpor ${count} data master bahan baku secara massal ke database.`);
+      setTimeout(() => setSuccessToast(null), 5000);
+    } catch (err: any) {
+      console.error('Import RM error:', err);
+      setImportError(`Gagal melakukan import: ${err.message || String(err)}`);
+    } finally {
+      setIsSubmittingImport(false);
+    }
   };
 
   return (
@@ -2141,23 +2156,33 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
             <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3 shrink-0">
               <button
                 type="button"
+                disabled={isSubmittingImport}
                 onClick={() => setShowImportModal(false)}
-                className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-bold text-slate-600 transition-all cursor-pointer"
+                className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-bold text-slate-600 transition-all cursor-pointer disabled:opacity-50"
               >
                 Batal
               </button>
               <button
                 type="button"
-                disabled={importPreview.length === 0}
+                disabled={importPreview.length === 0 || isSubmittingImport}
                 onClick={handleExecuteImport}
                 className={`px-6 py-2.5 rounded-xl text-xs font-bold text-white flex items-center gap-1.5 transition-all cursor-pointer shadow-md ${
-                  importPreview.length > 0 
+                  importPreview.length > 0 && !isSubmittingImport
                     ? 'bg-emerald-600 hover:bg-emerald-700' 
                     : 'bg-slate-300 cursor-not-allowed'
                 }`}
               >
-                <Check className="w-4 h-4" />
-                <span>Simpan & Import Semua Data ({importPreview.length})</span>
+                {isSubmittingImport ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Menyimpan {importPreview.length} Data...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>Simpan & Import Semua Data ({importPreview.length})</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

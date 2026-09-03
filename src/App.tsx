@@ -9,6 +9,7 @@ import { LoginPage } from './core/auth/LoginPage';
 import { DashboardLayout } from './core/ui-components/DashboardLayout';
 import { RndModule } from './components/RndModule';
 import { EmployeeManagementModule } from './features/admin/EmployeeManagementModule';
+import { WarehouseModule } from './features/warehouse/components/WarehouseModule';
 import { Department } from './types';
 import {
   FlaskConical,
@@ -32,6 +33,7 @@ const MainAppContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Department | 'dashboard'>('dashboard');
   const [activeRndSubTab, setActiveRndSubTab] = useState<'materials' | 'packaging' | 'products' | 'formula' | 'bom-calculator'>('products');
   const [activeAdminSubTab, setActiveAdminSubTab] = useState<'users' | 'audit'>('users');
+  const [activeWarehouseSubTab, setActiveWarehouseSubTab] = useState<'inbound' | 'weighing' | 'finished-goods'>('inbound');
 
   if (isLoading) {
     return (
@@ -49,12 +51,15 @@ const MainAppContent: React.FC = () => {
   }
 
   const handleSelectSubTab = (subTabId: string) => {
-    if (activeTab === 'rnd' || ['materials', 'packaging', 'products', 'formula', 'bom-calculator'].includes(subTabId)) {
+    if (['materials', 'packaging', 'products', 'formula', 'bom-calculator'].includes(subTabId)) {
       setActiveRndSubTab(subTabId as any);
       setActiveTab('rnd');
-    } else if (activeTab === 'admin' || ['users', 'audit'].includes(subTabId)) {
+    } else if (['users', 'audit'].includes(subTabId)) {
       setActiveAdminSubTab(subTabId as any);
       setActiveTab('admin');
+    } else if (['inbound', 'weighing', 'finished-goods'].includes(subTabId)) {
+      setActiveWarehouseSubTab(subTabId as any);
+      setActiveTab('warehouse');
     }
   };
 
@@ -62,7 +67,15 @@ const MainAppContent: React.FC = () => {
     <DashboardLayout
       activeTab={activeTab}
       onSelectTab={setActiveTab}
-      activeSubTab={activeTab === 'rnd' ? activeRndSubTab : (activeTab === 'admin' ? activeAdminSubTab : undefined)}
+      activeSubTab={
+        activeTab === 'rnd'
+          ? activeRndSubTab
+          : activeTab === 'admin'
+          ? activeAdminSubTab
+          : activeTab === 'warehouse'
+          ? activeWarehouseSubTab
+          : undefined
+      }
       onSelectSubTab={handleSelectSubTab}
     >
       {activeTab === 'dashboard' && (
@@ -259,7 +272,16 @@ const MainAppContent: React.FC = () => {
         </div>
       )}
 
-      {activeTab !== 'rnd' && activeTab !== 'admin' && activeTab !== 'dashboard' && (
+      {activeTab === 'warehouse' && (
+        <div className="max-w-6xl mx-auto">
+          <WarehouseModule
+            activeSubTab={activeWarehouseSubTab}
+            onSelectSubTab={(sub) => setActiveWarehouseSubTab(sub as any)}
+          />
+        </div>
+      )}
+
+      {activeTab !== 'rnd' && activeTab !== 'admin' && activeTab !== 'warehouse' && activeTab !== 'dashboard' && (
         <div className="max-w-4xl mx-auto py-16 text-center space-y-6">
           <div className="w-20 h-20 rounded-3xl bg-white border border-slate-200 flex items-center justify-center mx-auto shadow-xs text-slate-700">
             {activeTab === 'ppic' && <CalendarDays className="w-9 h-9 text-blue-700" />}

@@ -192,9 +192,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   }, [activeTab, user, onSelectTab]);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans">
-      {/* Crisp Light Top Navigation Bar */}
-      <header className="h-16 border-b border-slate-200 bg-white px-4 sm:px-6 flex items-center justify-between sticky top-0 z-40 shadow-xs">
+    <div className="h-screen bg-slate-50 text-slate-800 flex flex-col font-sans overflow-hidden">
+      {/* Crisp Light Top Navigation Bar (Fixed / Shrink-0) */}
+      <header className="h-16 shrink-0 border-b border-slate-200 bg-white px-4 sm:px-6 flex items-center justify-between z-40 shadow-xs">
         <div className="flex items-center gap-4">
           {/* Logo Component with Text in Light Theme */}
           <Logo size="sm" showText={true} />
@@ -318,8 +318,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
       {/* Main App Layout Body */}
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-        {/* Department Sidebar Navigation (Accordion Format) */}
-        <aside className="w-full md:w-64 border-b md:border-b-0 md:border-r border-slate-200 bg-white p-3 flex md:flex-col gap-1 overflow-x-auto md:overflow-y-auto shrink-0 shadow-xs scrollbar-none items-center md:items-stretch md:sticky md:top-0 md:h-screen">
+        {/* Department Sidebar Navigation (Accordion Format) - Fixed in place, scrollable internally */}
+        <aside className="w-full md:w-64 border-b md:border-b-0 md:border-r border-slate-200 bg-white p-3 flex md:flex-col gap-1 overflow-x-auto md:overflow-y-auto shrink-0 shadow-xs scrollbar-none items-center md:items-stretch h-auto md:h-full">
           <div className="hidden md:block px-3 py-1.5 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">
             Menu Otoritas ({visibleDepartments.length} Modul)
           </div>

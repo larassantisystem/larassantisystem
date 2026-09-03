@@ -112,6 +112,19 @@ export const RndModule: React.FC<RndModuleProps> = ({
     localStorage.setItem('lsm_raw_materials_b', JSON.stringify(updated));
   };
 
+  const handleBatchSaveRM = async (newRMs: RawMaterial[]) => {
+    if (!newRMs || newRMs.length === 0) return;
+    setRawMaterials((prev) => {
+      const map = new Map<string, RawMaterial>();
+      prev.forEach((r) => map.set(r.code.trim().toUpperCase(), r));
+      newRMs.forEach((r) => map.set(r.code.trim().toUpperCase(), r));
+      const updated = Array.from(map.values());
+      localStorage.setItem('lsm_raw_materials_b', JSON.stringify(updated));
+      return updated;
+    });
+    await materialService.saveMaterials(newRMs);
+  };
+
   const handleDeleteRM = (id: string) => {
     const rm = rawMaterials.find((r) => r.id === id);
     const updated = rawMaterials.filter((r) => r.id !== id && (!rm?.code || r.code !== rm.code));
@@ -133,6 +146,19 @@ export const RndModule: React.FC<RndModuleProps> = ({
     }
     setPackagingMaterials(updated);
     localStorage.setItem('lsm_packaging_materials_k', JSON.stringify(updated));
+  };
+
+  const handleBatchSavePM = async (newPMs: PackagingMaterial[]) => {
+    if (!newPMs || newPMs.length === 0) return;
+    setPackagingMaterials((prev) => {
+      const map = new Map<string, PackagingMaterial>();
+      prev.forEach((p) => map.set(p.code.trim().toUpperCase(), p));
+      newPMs.forEach((p) => map.set(p.code.trim().toUpperCase(), p));
+      const updated = Array.from(map.values());
+      localStorage.setItem('lsm_packaging_materials_k', JSON.stringify(updated));
+      return updated;
+    });
+    await packagingService.savePackagingMaterials(newPMs);
   };
 
   const handleDeletePM = (id: string) => {
@@ -353,6 +379,7 @@ export const RndModule: React.FC<RndModuleProps> = ({
         <RndMaterialsTab
           rawMaterials={rawMaterials}
           onSaveRM={handleSaveRM}
+          onBatchSaveRM={handleBatchSaveRM}
           onDeleteRM={handleDeleteRM}
         />
       )}
@@ -361,6 +388,7 @@ export const RndModule: React.FC<RndModuleProps> = ({
         <RndPackagingTab
           packagingMaterials={packagingMaterials}
           onSavePM={handleSavePM}
+          onBatchSavePM={handleBatchSavePM}
           onDeletePM={handleDeletePM}
         />
       )}

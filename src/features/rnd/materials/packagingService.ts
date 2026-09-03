@@ -46,7 +46,7 @@ export const packagingService = {
 
         if (error) {
           console.error('[Supabase Audit] Error fetching packaging_materials:', error);
-        } else if (data && data.length > 0) {
+        } else if (data) {
           const mapped: PackagingMaterial[] = data.map((p: any) => ({
             id: p.id,
             code: p.code,
@@ -185,12 +185,20 @@ export const packagingService = {
               }
               return { success: true, updatedId: resolvedId };
             }
+            if (insertError.message?.includes('fetch') || insertError.message?.includes('network')) {
+              console.warn('[Supabase Audit] Network notice: packaging_material cached locally, cloud sync will retry:', insertError.message);
+              return { success: true, updatedId: resolvedId, error: 'Tersimpan lokal (sinkronisasi cloud tertunda).' };
+            }
             console.error('[Supabase Audit] Error inserting packaging_material:', insertError);
             return { success: false, error: `${insertError.message} (${insertError.code})` };
           }
           return { success: true, updatedId: resolvedId };
         }
       } catch (err: any) {
+        if (err.message?.includes('fetch') || err.message?.includes('network')) {
+          console.warn('[Supabase Audit] Network exception: packaging_material cached locally:', err.message);
+          return { success: true, updatedId: validId, error: 'Tersimpan lokal (jaringan offline).' };
+        }
         console.error('[Supabase Audit] Exception during packaging_material save:', err);
         return { success: false, error: err.message || String(err) };
       }
@@ -199,16 +207,54 @@ export const packagingService = {
   },
 
   savePackagingMaterials: async (materials: PackagingMaterial[]): Promise<void> => {
+    if (!materials || materials.length === 0) return;
     const normalizedList = materials.map((p) => ({ ...p, id: ensureUUID(p.id) }));
-    localStorage.setItem(PACKAGING_STORAGE_KEY, JSON.stringify(normalizedList));
 
+    // 1. Update localStorage cache with deduplication by code
+    const saved = localStorage.getItem(PACKAGING_STORAGE_KEY);
+    const existingList: PackagingMaterial[] = saved ? JSON.parse(saved) : [];
+    const map = new Map<string, PackagingMaterial>();
+    existingList.forEach((p) => map.set(p.code.trim().toUpperCase(), p));
+    normalizedList.forEach((p) => map.set(p.code.trim().toUpperCase(), p));
+    const merged = Array.from(map.values());
+    localStorage.setItem(PACKAGING_STORAGE_KEY, JSON.stringify(merged));
+
+    // 2. Persist to Supabase in batches of 50 to prevent connection pool exhaustion / Failed to fetch
     if (isSupabaseConfigured && supabase) {
-      try {
-        for (const item of normalizedList) {
-          await packagingService.saveSinglePackagingMaterial(item);
+      const CHUNK_SIZE = 50;
+      for (let i = 0; i < normalizedList.length; i += CHUNK_SIZE) {
+        const chunk = normalizedList.slice(i, i + CHUNK_SIZE);
+        const payloads = chunk.map((item) => {
+          const itemCode = item.code.trim().toUpperCase();
+          return {
+            id: ensureUUID(item.id),
+            code: itemCode,
+            spec_number: item.specNumber || `SP-BK-${itemCode}`,
+            name: item.name,
+            type: item.type || 'primary',
+            unit: item.unit || 'Pcs',
+            unit_capacity_grams: item.unitCapacityGrams ?? null,
+            supplier: item.supplier || item.manufacturer || '',
+            manufacturer: item.manufacturer || item.supplier || '',
+            storage_location: item.storageLocation || '',
+            storage_conditions: item.storageConditions || '',
+            qc_parameters: item.qcParameters || [],
+            last_modified_by: item.lastModifiedBy || 'Staff RnD',
+            last_modified_at: item.lastModifiedAt || new Date().toISOString(),
+          };
+        });
+
+        try {
+          const { error } = await supabase
+            .from('packaging_materials')
+            .upsert(payloads, { onConflict: 'code' });
+
+          if (error) {
+            console.warn(`[Supabase Audit] Batch packaging upsert chunk [${i}..${i + chunk.length}] warning:`, error.message);
+          }
+        } catch (err: any) {
+          console.warn(`[Supabase Audit] Batch packaging upsert network notice at chunk [${i}]:`, err?.message || err);
         }
-      } catch (err) {
-        console.warn('[Supabase Audit] Batch packaging upsert error', err);
       }
     }
   },
