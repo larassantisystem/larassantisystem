@@ -164,6 +164,16 @@ export const authService = {
           const accessMap = JSON.parse(accessMapRaw);
           if (accessMap[parsed.nik.toLowerCase()] !== undefined) {
             parsed.specificAccess = accessMap[parsed.nik.toLowerCase()];
+          } else {
+            const foundSys = INITIAL_SYSTEM_USERS.find((u) => u.nik.toLowerCase() === parsed.nik.toLowerCase());
+            if (foundSys && foundSys.specificAccess) {
+              parsed.specificAccess = foundSys.specificAccess;
+            }
+          }
+        } else {
+          const foundSys = INITIAL_SYSTEM_USERS.find((u) => u.nik.toLowerCase() === parsed.nik.toLowerCase());
+          if (foundSys && foundSys.specificAccess) {
+            parsed.specificAccess = foundSys.specificAccess;
           }
         }
       }

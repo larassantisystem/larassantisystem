@@ -73,10 +73,26 @@ export interface PackagingMaterial {
   code: string;
   name: string;
   type: 'primary' | 'secondary' | 'tertiary';
+  unit?: string;
   unitCapacityGrams?: number;
-  materialSpec: string;
-  artworkVersion: string;
+  supplier?: string;
+  storageLocation?: string;
+  storageConditions?: string;
+  qcParameters?: QCParameter[];
+  lastModifiedBy?: string;
+  lastModifiedAt?: string;
+  // Legacy optional fields
+  materialSpec?: string;
+  artworkVersion?: string;
   leadTimeDays?: number;
+  manufacturer?: string;
+  supplierLeadTimeDays?: number;
+  docNumber?: string;
+  docFileUrl?: string;
+  docFileName?: string;
+  docDriveId?: string;
+  approvedSubstitutes?: string[];
+  isSingleSpecificMaterial?: boolean;
 }
 
 export interface FormulationIngredient {

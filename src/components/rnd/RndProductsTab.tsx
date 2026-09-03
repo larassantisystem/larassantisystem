@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Product, ProductVariant, BulkFormulation, PackagingMaterial } from '../../types';
+import { useAuth } from '../../core/auth/AuthContext';
+import { canWriteModule } from '../../core/auth/permissionGuard';
 import {
   PackageCheck,
   Search,
@@ -17,7 +19,8 @@ import {
   Boxes,
   CheckCircle2,
   X,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Lock
 } from 'lucide-react';
 
 interface RndProductsTabProps {
@@ -39,6 +42,9 @@ export const RndProductsTab: React.FC<RndProductsTabProps> = ({
   onSaveVariant,
   onDeleteVariant,
 }) => {
+  const { user } = useAuth();
+  const canWrite = canWriteModule(user, 'rnd');
+
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedProductIds, setExpandedProductIds] = useState<string[]>(
     products.map((p) => p.id) // Default expand all to see variants easily
@@ -218,6 +224,21 @@ export const RndProductsTab: React.FC<RndProductsTabProps> = ({
 
   return (
     <div className="space-y-6 font-sans">
+      {/* READ-ONLY BANNER IF USER IS RESTRICTED */}
+      {!canWrite && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center justify-between gap-3 text-amber-800">
+          <div className="flex items-center gap-2.5">
+            <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+            <div className="text-xs leading-relaxed">
+              <span className="font-bold">Mode Akses Terbatas (Read-Only):</span> Anda memiliki hak akses baca khusus R&D. Tindakan penambahan, pengubahan, dan penghapusan produk jadi & varian dinonaktifkan demi integritas CPKB.
+            </div>
+          </div>
+          <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-amber-200/80 text-amber-900 uppercase">
+            Hanya Lihat
+          </span>
+        </div>
+      )}
+
       {/* Top Action & Metrics Bar */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -241,13 +262,15 @@ export const RndProductsTab: React.FC<RndProductsTabProps> = ({
           </div>
         </div>
 
-        <button
-          onClick={handleOpenAddProduct}
-          className="px-4 py-2 rounded-xl bg-purple-700 hover:bg-purple-800 text-xs font-bold text-white flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Tambah Produk Jadi (PJ)</span>
-        </button>
+        {canWrite && (
+          <button
+            onClick={handleOpenAddProduct}
+            className="px-4 py-2 rounded-xl bg-purple-700 hover:bg-purple-800 text-xs font-bold text-white flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Tambah Produk Jadi (PJ)</span>
+          </button>
+        )}
       </div>
 
       {/* Info Callout for 1 Product Code -> Multi Variants */}
@@ -301,27 +324,31 @@ export const RndProductsTab: React.FC<RndProductsTabProps> = ({
                   </div>
 
                   <div className="flex items-center gap-2 self-end md:self-center shrink-0">
-                    <button
-                      onClick={() => handleOpenAddVariant(prod)}
-                      className="px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Tambah Varian</span>
-                    </button>
-                    <button
-                      onClick={() => handleOpenEditProduct(prod)}
-                      className="p-1.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
-                      title="Edit Produk"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => onDeleteProduct(prod.id)}
-                      className="p-1.5 rounded-xl border border-slate-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 text-slate-600 transition-colors cursor-pointer"
-                      title="Hapus Produk"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {canWrite && (
+                      <>
+                        <button
+                          onClick={() => handleOpenAddVariant(prod)}
+                          className="px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Tambah Varian</span>
+                        </button>
+                        <button
+                          onClick={() => handleOpenEditProduct(prod)}
+                          className="p-1.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
+                          title="Edit Produk"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => onDeleteProduct(prod.id)}
+                          className="p-1.5 rounded-xl border border-slate-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 text-slate-600 transition-colors cursor-pointer"
+                          title="Hapus Produk"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    )}
                     <button
                       onClick={() => toggleExpand(prod.id)}
                       className="p-1.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
@@ -432,22 +459,24 @@ export const RndProductsTab: React.FC<RndProductsTabProps> = ({
                                 </div>
                               </div>
 
-                              <div className="flex items-center justify-end gap-1.5 pt-2 border-t border-slate-100">
-                                <button
-                                  onClick={() => handleOpenEditVariant(prod.id, variant)}
-                                  className="px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg border border-slate-200 transition-colors flex items-center gap-1 cursor-pointer"
-                                >
-                                  <Edit2 className="w-3 h-3" />
-                                  <span>Edit</span>
-                                </button>
-                                <button
-                                  onClick={() => onDeleteVariant(prod.id, variant.id)}
-                                  className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg border border-slate-200 transition-colors cursor-pointer"
-                                  title="Hapus Varian"
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </button>
-                              </div>
+                              {canWrite && (
+                                <div className="flex items-center justify-end gap-1.5 pt-2 border-t border-slate-100">
+                                  <button
+                                    onClick={() => handleOpenEditVariant(prod.id, variant)}
+                                    className="px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg border border-slate-200 transition-colors flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <Edit2 className="w-3 h-3" />
+                                    <span>Edit</span>
+                                  </button>
+                                  <button
+                                    onClick={() => onDeleteVariant(prod.id, variant.id)}
+                                    className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg border border-slate-200 transition-colors cursor-pointer"
+                                    title="Hapus Varian"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           );
                         })}

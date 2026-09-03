@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { BulkFormulation, PackagingMaterial, RawMaterial } from '../../types';
+import { useAuth } from '../../core/auth/AuthContext';
+import { canWriteModule } from '../../core/auth/permissionGuard';
 import {
   FlaskConical,
   Layers,
@@ -8,7 +10,9 @@ import {
   Cpu,
   Calculator,
   RefreshCw,
-  CheckCircle2
+  CheckCircle2,
+  Lock,
+  Eye,
 } from 'lucide-react';
 
 interface RndBomCalculatorTabProps {
@@ -26,6 +30,9 @@ export const RndBomCalculatorTab: React.FC<RndBomCalculatorTabProps> = ({
   selectedFormulation,
   onSelectFormulation,
 }) => {
+  const { user } = useAuth();
+  const canWrite = canWriteModule(user, 'rnd');
+
   const [targetBulkAllocation, setTargetBulkAllocation] = useState<number>(100);
   const [packAllocations, setPackAllocations] = useState<{ [pmCode: string]: number }>({
     'PM-201': 3000,
@@ -79,8 +86,8 @@ export const RndBomCalculatorTab: React.FC<RndBomCalculatorTabProps> = ({
           code: pm.code,
           name: pm.name,
           neededUnits: allocatedUnits,
-          material: pm.materialSpec,
-          artwork: pm.artworkVersion,
+          material: pm.supplier ? `Supplier: ${pm.supplier}` : (pm.materialSpec || 'Standard Packaging'),
+          artwork: pm.unit || pm.artworkVersion || 'Pcs',
         });
 
         // Add matching secondary box if available
@@ -92,8 +99,8 @@ export const RndBomCalculatorTab: React.FC<RndBomCalculatorTabProps> = ({
             code: secBox.code,
             name: secBox.name,
             neededUnits: allocatedUnits,
-            material: secBox.materialSpec,
-            artwork: secBox.artworkVersion,
+            material: secBox.supplier ? `Supplier: ${secBox.supplier}` : (secBox.materialSpec || 'Standard Packaging'),
+            artwork: secBox.unit || secBox.artworkVersion || 'Pcs',
           });
         }
       }
@@ -159,6 +166,25 @@ export const RndBomCalculatorTab: React.FC<RndBomCalculatorTabProps> = ({
 
   return (
     <div className="space-y-6 font-sans">
+      {!canWrite && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center justify-between shadow-2xs">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center text-amber-800 shrink-0">
+              <Lock className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-amber-900">Akses Khusus R&D: Mode Baca (Read-Only)</div>
+              <div className="text-[11px] text-amber-700">
+                Akun Anda ({user?.name || user?.nik}) memiliki hak akses khusus Read-Only untuk modul R&D.
+              </div>
+            </div>
+          </div>
+          <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-200/60 text-amber-900 px-2.5 py-1 rounded-lg flex items-center gap-1">
+            <Eye className="w-3 h-3" /> Read-Only
+          </span>
+        </div>
+      )}
+
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-5">
         <div>
           <h2 className="text-sm font-extrabold text-slate-800 uppercase tracking-wider mb-1">
@@ -358,7 +384,7 @@ export const RndBomCalculatorTab: React.FC<RndBomCalculatorTabProps> = ({
                     <div>
                       <div className="font-bold text-slate-800 text-xs">{pm.name}</div>
                       <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                        {pm.code} • Art: {pm.artwork}
+                        {pm.code} • Satuan: {pm.artwork}
                       </div>
                     </div>
                     <div className="text-right">

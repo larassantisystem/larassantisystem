@@ -68,6 +68,7 @@ export const INITIAL_SYSTEM_USERS: (UserProfile & { defaultPassword: string })[]
     role: 'manager',
     email: 'lms20003@larassanti.co.id',
     defaultPassword: 'laras123',
+    specificAccess: [{ moduleId: 'rnd', accessLevel: 'read' }],
   },
   {
     id: 'usr-lms30001',

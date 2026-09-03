@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import { BulkFormulation, RawMaterial } from '../../types';
+import { useAuth } from '../../core/auth/AuthContext';
+import { canWriteModule } from '../../core/auth/permissionGuard';
 import {
   Sliders,
   Plus,
   Trash2,
   Save,
-  CheckCircle2
+  CheckCircle2,
+  Lock
 } from 'lucide-react';
 
 interface RndFormulaTabProps {
@@ -23,6 +26,9 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
   onSelectFormulation,
   onSaveFormula,
 }) => {
+  const { user } = useAuth();
+  const canWrite = canWriteModule(user, 'rnd');
+
   const [isAddingFormula, setIsAddingFormula] = useState(false);
 
   // Form states for formula
@@ -74,12 +80,27 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 font-sans">
-      {/* List Formulasi */}
-      <div className="lg:col-span-1 space-y-4">
+    <div className="space-y-6 font-sans">
+      {!canWrite && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center justify-between gap-3 text-amber-800">
+          <div className="flex items-center gap-2.5">
+            <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+            <div className="text-xs leading-relaxed">
+              <span className="font-bold">Mode Akses Terbatas (Read-Only):</span> Anda memiliki hak akses baca khusus R&D. Formulir penambahan dan pengubahan resep formula bulk dinonaktifkan.
+            </div>
+          </div>
+          <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-amber-200/80 text-amber-900 uppercase">
+            Hanya Lihat
+          </span>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* List Formulasi */}
+        <div className="lg:col-span-1 space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-bold text-slate-700 uppercase tracking-widest">Daftar Formulasi Bulk</h3>
-          {!isAddingFormula && (
+          {!isAddingFormula && canWrite && (
             <button
               onClick={() => {
                 setIsAddingFormula(true);
@@ -393,6 +414,7 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
             </p>
           </div>
         )}
+      </div>
       </div>
     </div>
   );
