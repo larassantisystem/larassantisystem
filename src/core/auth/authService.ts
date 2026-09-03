@@ -11,12 +11,12 @@ export const authService = {
     const cleanNik = nik.trim();
     const constructEmail = (rawNik: string) => {
       const clean = rawNik.trim();
-      if (clean.toLowerCase() === 'admin' || clean.toLowerCase() === 'admin@larassanti.co.id') {
-        return 'admin@larassanti.co.id';
-      }
       if (clean.includes('@')) return clean.toLowerCase();
+      if (clean.toLowerCase() === 'admin' || clean.toLowerCase() === 'lms00000' || clean === '00000') {
+        return 'lms00000@larassanti.co.id';
+      }
       const formattedNik = clean.toUpperCase().startsWith('LMS') ? clean.toUpperCase() : `LMS${clean.toUpperCase()}`;
-      return `${formattedNik}@larassanti.co.id`;
+      return `${formattedNik.toLowerCase()}@larassanti.co.id`;
     };
     const dummyEmail = constructEmail(cleanNik);
 
@@ -40,24 +40,28 @@ export const authService = {
             .single();
 
           if (profileError || !profileData) {
+            const isAdminUser = cleanNik.toLowerCase() === 'admin' || data.user.user_metadata?.role === 'admin';
             const fallbackUser: UserProfile = {
               id: data.user.id,
-              nik: cleanNik,
-              name: data.user.user_metadata?.name || `Karyawan ${cleanNik}`,
-              department: data.user.user_metadata?.department || 'rnd',
-              role: data.user.user_metadata?.role || 'staff',
+              nik: isAdminUser ? 'admin' : cleanNik,
+              name: data.user.user_metadata?.full_name || data.user.user_metadata?.name || (isAdminUser ? 'ADMIN' : `Karyawan ${cleanNik}`),
+              department: data.user.user_metadata?.department || (isAdminUser ? 'admin' : 'rnd'),
+              role: data.user.user_metadata?.role || (isAdminUser ? 'admin' : 'staff'),
               email: dummyEmail,
             };
             localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(fallbackUser));
             return { user: fallbackUser, error: null };
           }
 
+          const isAdminUser = profileData.role === 'admin' || cleanNik.toLowerCase() === 'admin' || profileData.nik === 'LMS00000' || data.user.user_metadata?.role === 'admin';
+          const resolvedNik = isAdminUser ? 'admin' : ((data.user.user_metadata?.nik as string) || profileData.nik || cleanNik);
+
           const userProfile: UserProfile = {
             id: profileData.id,
-            nik: profileData.nik || cleanNik,
-            name: profileData.name || profileData.full_name || `Karyawan ${cleanNik}`,
-            department: profileData.department || 'rnd',
-            role: profileData.role || 'staff',
+            nik: resolvedNik,
+            name: profileData.name || profileData.full_name || (isAdminUser ? 'ADMIN' : `Karyawan ${cleanNik}`),
+            department: isAdminUser ? 'admin' : (profileData.department || 'rnd'),
+            role: isAdminUser ? 'admin' : (profileData.role || 'staff'),
             email: dummyEmail,
           };
 
@@ -70,9 +74,9 @@ export const authService = {
       }
     }
 
-    // Local / Simulation Auth Fallback
+    // Local / Simulation Auth Fallback with Root Admin
     const foundDemoUser = DEMO_USERS.find(
-      (u) => u.nik === cleanNik && (password === u.defaultPassword || password === 'password123' || password === '123456')
+      (u) => u.nik.toLowerCase() === cleanNik.toLowerCase() && (password === u.defaultPassword || password === 'admin' || password === 'password123')
     );
 
     if (foundDemoUser) {
@@ -84,6 +88,7 @@ export const authService = {
         role: foundDemoUser.role,
         email: foundDemoUser.email,
         lastLogin: new Date().toISOString(),
+        specificAccess: foundDemoUser.specificAccess || [],
       };
 
       localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(userProfile));
@@ -95,7 +100,9 @@ export const authService = {
     if (customUsersRaw) {
       try {
         const customUsers = JSON.parse(customUsersRaw);
-        const match = customUsers.find((u: { nik: string; password?: string }) => u.nik === cleanNik);
+        const match = customUsers.find(
+          (u: { nik: string; password?: string }) => u.nik.toLowerCase() === cleanNik.toLowerCase()
+        );
         if (match && (!match.password || match.password === password)) {
           const userProfile: UserProfile = {
             id: match.id,
@@ -105,6 +112,7 @@ export const authService = {
             role: match.role,
             email: constructEmail(match.nik),
             lastLogin: new Date().toISOString(),
+            specificAccess: match.specificAccess || [],
           };
           localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(userProfile));
           return { user: userProfile, error: null };
@@ -116,7 +124,7 @@ export const authService = {
 
     return {
       user: null,
-      error: `NIK "${cleanNik}" atau password salah. Cek daftar NIK demo di bawah atau gunakan password default "password123".`,
+      error: `NIK "${cleanNik}" atau Kata Sandi yang dimasukkan tidak sesuai. Silakan periksa kembali atau gunakan tombol pendaftaran akun baru.`,
     };
   },
 
@@ -135,10 +143,19 @@ export const authService = {
     const raw = localStorage.getItem(AUTH_STORAGE_KEY);
     if (!raw) return null;
     try {
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      if (parsed && (parsed.role === 'admin' || parsed.nik?.toLowerCase() === 'lms00000')) {
+        parsed.nik = 'admin';
+      }
+      return parsed;
     } catch {
       return null;
     }
+  },
+
+  getRegisteredEmployees: (): any[] => {
+    const raw = localStorage.getItem('cosmo_ddmp_registered_users');
+    return raw ? JSON.parse(raw) : [];
   },
 
   registerEmployee: async (employee: {
@@ -147,6 +164,7 @@ export const authService = {
     department: UserProfile['department'];
     role: UserProfile['role'];
     password?: string;
+    specificAccess?: UserProfile['specificAccess'];
   }): Promise<{ success: boolean; error?: string }> => {
     const rawNik = employee.nik.trim();
     const cleanNik = rawNik.toLowerCase() === 'admin' ? 'admin' : (rawNik.toUpperCase().startsWith('LMS') ? rawNik.toUpperCase() : `LMS${rawNik.toUpperCase()}`);
@@ -182,8 +200,8 @@ export const authService = {
     
     // Check if NIK already exists
     if (
-      DEMO_USERS.some((u) => u.nik === cleanNik) ||
-      customUsers.some((u: { nik: string }) => u.nik === cleanNik)
+      DEMO_USERS.some((u) => u.nik.toLowerCase() === cleanNik.toLowerCase()) ||
+      customUsers.some((u: { nik: string }) => u.nik.toLowerCase() === cleanNik.toLowerCase())
     ) {
       return { success: false, error: `NIK ${cleanNik} sudah terdaftar di sistem!` };
     }
@@ -195,11 +213,42 @@ export const authService = {
       department: employee.department,
       role: employee.role,
       password: password,
+      specificAccess: employee.specificAccess || [],
       createdAt: new Date().toISOString(),
     };
 
     customUsers.push(newUser);
     localStorage.setItem('cosmo_ddmp_registered_users', JSON.stringify(customUsers));
     return { success: true };
+  },
+
+  updateEmployee: (nik: string, updatedData: Partial<UserProfile & { password?: string }>) => {
+    const raw = localStorage.getItem('cosmo_ddmp_registered_users');
+    if (!raw) return false;
+    try {
+      const list = JSON.parse(raw);
+      const idx = list.findIndex((u: any) => u.nik.toLowerCase() === nik.toLowerCase());
+      if (idx !== -1) {
+        list[idx] = { ...list[idx], ...updatedData };
+        localStorage.setItem('cosmo_ddmp_registered_users', JSON.stringify(list));
+        return true;
+      }
+    } catch {
+      return false;
+    }
+    return false;
+  },
+
+  deleteEmployee: (nik: string) => {
+    const raw = localStorage.getItem('cosmo_ddmp_registered_users');
+    if (!raw) return false;
+    try {
+      const list = JSON.parse(raw);
+      const filtered = list.filter((u: any) => u.nik.toLowerCase() !== nik.toLowerCase());
+      localStorage.setItem('cosmo_ddmp_registered_users', JSON.stringify(filtered));
+      return true;
+    } catch {
+      return false;
+    }
   },
 };

@@ -6,7 +6,8 @@ export type Department =
   | 'procurement' 
   | 'sales' 
   | 'management' 
-  | 'admin';
+  | 'admin'
+  | 'production';
 
 export type Role = 
   | 'admin' 
@@ -14,6 +15,13 @@ export type Role =
   | 'supervisor' 
   | 'staff' 
   | 'operator';
+
+export type DocumentStatus = 'DRAFT' | 'SUBMITTED' | 'FINALIZED';
+
+export interface ModulePermission {
+  moduleId: Department;
+  accessLevel: 'read' | 'write';
+}
 
 export interface UserProfile {
   id: string;
@@ -24,6 +32,7 @@ export interface UserProfile {
   email: string;
   avatarUrl?: string;
   lastLogin?: string;
+  specificAccess?: ModulePermission[];
 }
 
 export interface AuthState {

@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useAuth } from './AuthContext';
-import { DEMO_USERS } from './mockUsers';
 import { authService } from './authService';
 import {
   Lock,
@@ -17,43 +16,60 @@ import {
   Eye,
   EyeOff,
   UserPlus,
-  Layers,
   ArrowRight,
   X,
   Boxes,
   Award,
-  RotateCcw
+  RotateCcw,
+  Check
 } from 'lucide-react';
-import { Department, Role } from '../../types';
+import { Department, Role, ModulePermission } from '../../types';
 import { Logo } from '../../components/Logo';
 
 export const LoginPage: React.FC = () => {
-  const { login, switchUser, isLoading } = useAuth();
+  const { login, isLoading } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showRegisterModal, setShowRegisterModal] = useState(false);
-  const [showDemoModal, setShowDemoModal] = useState(false);
 
   // Form for registering new employee
   const [regNik, setRegNik] = useState('');
   const [regName, setRegName] = useState('');
   const [regDept, setRegDept] = useState<Department>('rnd');
   const [regRole, setRegRole] = useState<Role>('staff');
-  const [regPassword, setRegPassword] = useState('password123');
+  const [regPassword, setRegPassword] = useState('');
   const [regSuccessMsg, setRegSuccessMsg] = useState<string | null>(null);
+  const [regSpecificAccess, setRegSpecificAccess] = useState<ModulePermission[]>([]);
+
+  const toggleSpecificModule = (deptId: Department) => {
+    setRegSpecificAccess((prev) => {
+      const exists = prev.find((p) => p.moduleId === deptId);
+      if (exists) {
+        return prev.filter((p) => p.moduleId !== deptId);
+      } else {
+        return [...prev, { moduleId: deptId, accessLevel: 'read' }];
+      }
+    });
+  };
+
+  const updateSpecificLevel = (deptId: Department, level: 'read' | 'write') => {
+    setRegSpecificAccess((prev) =>
+      prev.map((p) => (p.moduleId === deptId ? { ...p, accessLevel: level } : p))
+    );
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
     if (!username.trim()) {
-      setErrorMessage('Silakan masukkan Email, Username (admin), atau NIK (contoh: LMS2001 / LMS4001)');
+      setErrorMessage('Silakan masukkan NIK Karyawan atau Username Administrator.');
       return;
     }
     if (!password) {
-      setErrorMessage('Silakan masukkan Kata Sandi akun Anda');
+      setErrorMessage('Silakan masukkan Kata Sandi akun Anda.');
       return;
     }
 
@@ -66,17 +82,14 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  const handleQuickLogin = async (demoNik: string) => {
-    setErrorMessage(null);
-    setIsSubmitting(true);
-    await switchUser(demoNik);
-    setIsSubmitting(false);
-  };
-
   const handleRegisterEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!regNik.trim() || !regName.trim()) {
-      setErrorMessage('Lengkapi NIK (dengan awalan LMS) dan Nama Karyawan.');
+      setErrorMessage('Lengkapi NIK Karyawan dan Nama Lengkap.');
+      return;
+    }
+    if (!regPassword.trim()) {
+      setErrorMessage('Silakan tentukan kata sandi akun.');
       return;
     }
 
@@ -86,11 +99,12 @@ export const LoginPage: React.FC = () => {
       department: regDept,
       role: regRole,
       password: regPassword,
+      specificAccess: regSpecificAccess,
     });
 
     if (res.success) {
       const formattedNik = regNik.toLowerCase() === 'admin' ? 'admin' : (regNik.toUpperCase().startsWith('LMS') ? regNik.toUpperCase() : `LMS${regNik.toUpperCase()}`);
-      setRegSuccessMsg(`Karyawan ${regName} (${formattedNik}) berhasil didaftarkan!`);
+      setRegSuccessMsg(`Akun Karyawan ${regName} (${formattedNik}) berhasil didaftarkan!`);
       setUsername(formattedNik);
       setPassword(regPassword);
       setTimeout(() => {
@@ -98,6 +112,8 @@ export const LoginPage: React.FC = () => {
         setRegSuccessMsg(null);
         setRegNik('');
         setRegName('');
+        setRegPassword('');
+        setRegSpecificAccess([]);
       }, 1500);
     } else {
       setErrorMessage(res.error || 'Gagal mendaftarkan karyawan ke sistem');
@@ -293,21 +309,18 @@ export const LoginPage: React.FC = () => {
               </button>
             </form>
 
-            {/* Quick Demo & Register Links */}
-            <div className="mt-4 pt-3 border-t border-purple-900/50 flex items-center justify-between text-[11px]">
-              <button
-                type="button"
-                onClick={() => setShowDemoModal(true)}
-                className="text-purple-300 hover:text-white font-semibold cursor-pointer"
-              >
-                Login Demo Lain (RnD, QC, Gudang)
-              </button>
+            {/* Register New Account Link */}
+            <div className="mt-4 pt-3 border-t border-purple-900/50 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px]">
+              <span className="text-purple-300/60 text-[10px]">
+                Mode Otoritas Karyawan Aktif
+              </span>
               <button
                 type="button"
                 onClick={() => setShowRegisterModal(true)}
-                className="text-purple-400 hover:text-purple-200 font-semibold cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-900/50 hover:bg-purple-800/60 border border-purple-700/50 text-purple-200 hover:text-white font-semibold cursor-pointer transition-all"
               >
-                Daftar Karyawan
+                <UserPlus className="w-3.5 h-3.5 text-purple-400" />
+                <span>Daftar Karyawan Baru</span>
               </button>
             </div>
 
@@ -371,62 +384,14 @@ export const LoginPage: React.FC = () => {
         </div>
       )}
 
-      {/* POPUP MODAL: Quick Login Demo Users */}
-      {showDemoModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="bg-[#180e30] border border-purple-500/30 rounded-3xl w-full max-w-lg p-6 shadow-2xl text-white relative">
-            <div className="flex items-center justify-between pb-3 border-b border-purple-900/60 mb-4">
-              <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
-                <Layers className="w-4 h-4 text-purple-400" />
-                <span>Pilih Akun Departemen (Demo Akun)</span>
-              </h3>
-              <button
-                onClick={() => setShowDemoModal(false)}
-                className="text-purple-300 hover:text-white p-1 rounded-full cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {DEMO_USERS.map((demo) => (
-                <button
-                  key={demo.id}
-                  onClick={() => {
-                    handleQuickLogin(demo.nik);
-                    setShowDemoModal(false);
-                  }}
-                  className="flex items-start gap-3 p-3 rounded-2xl bg-purple-950/60 border border-purple-800/50 hover:border-purple-400 hover:bg-purple-900/70 transition-all text-left cursor-pointer group"
-                >
-                  <div className="p-2 rounded-xl bg-purple-900/70 border border-purple-700 text-purple-300 shrink-0 group-hover:border-purple-400">
-                    {getDepartmentIcon(demo.department)}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <span className="text-[10px] font-bold text-purple-300/70 uppercase block">
-                      {demo.department} ({demo.role})
-                    </span>
-                    <h4 className="text-xs font-bold text-white truncate group-hover:text-purple-200">
-                      {demo.name}
-                    </h4>
-                    <span className="text-[10px] font-mono text-purple-400 font-semibold block mt-0.5">
-                      NIK: {demo.nik}
-                    </span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* POPUP MODAL: Register New Employee */}
       {showRegisterModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-          <div className="bg-[#180e30] border border-purple-500/30 rounded-3xl w-full max-w-md p-6 shadow-2xl text-white relative">
-            <div className="flex items-center justify-between pb-3 border-b border-purple-900/60 mb-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-[#180e30] border border-purple-500/30 rounded-3xl w-full max-w-lg p-6 shadow-2xl text-white relative my-8 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-purple-900/60 mb-3 sticky top-0 bg-[#180e30] z-10">
               <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
                 <UserPlus className="w-4 h-4 text-purple-400" />
-                <span>Pendaftaran Karyawan Baru</span>
+                <span>Pendaftaran Akun Karyawan Asli</span>
               </h3>
               <button
                 onClick={() => setShowRegisterModal(false)}
@@ -443,13 +408,15 @@ export const LoginPage: React.FC = () => {
               </div>
             )}
 
-            <form onSubmit={handleRegisterEmployee} className="space-y-3">
+            <form onSubmit={handleRegisterEmployee} className="space-y-3.5">
               <div>
-                <label className="block text-xs font-semibold text-purple-200 mb-1">Nomor Induk Karyawan (NIK)</label>
+                <label className="block text-xs font-semibold text-purple-200 mb-1">
+                  Nomor Induk Karyawan (NIK)
+                </label>
                 <input
                   type="text"
                   required
-                  placeholder="Contoh: LMS12345 (atau admin)"
+                  placeholder="Contoh: 1001, LMS2001, atau NIK pabrik"
                   value={regNik}
                   onChange={(e) => setRegNik(e.target.value)}
                   className="w-full rounded-xl bg-purple-950/60 border border-purple-700/60 px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-400 font-mono"
@@ -457,11 +424,13 @@ export const LoginPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-purple-200 mb-1">Nama Lengkap Karyawan</label>
+                <label className="block text-xs font-semibold text-purple-200 mb-1">
+                  Nama Lengkap & Gelar
+                </label>
                 <input
                   type="text"
                   required
-                  placeholder="Contoh: Michael, S.Farm"
+                  placeholder="Contoh: Budi Santoso, S.Farm"
                   value={regName}
                   onChange={(e) => setRegName(e.target.value)}
                   className="w-full rounded-xl bg-purple-950/60 border border-purple-700/60 px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-400 font-semibold"
@@ -470,47 +439,115 @@ export const LoginPage: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-purple-200 mb-1">Departemen</label>
+                  <label className="block text-xs font-semibold text-purple-200 mb-1">Departemen Utama</label>
                   <select
                     value={regDept}
                     onChange={(e) => setRegDept(e.target.value as Department)}
                     className="w-full rounded-xl bg-purple-950/60 border border-purple-700/60 px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-400"
                   >
-                    <option value="rnd">RnD (Research & Dev)</option>
-                    <option value="ppic">PPIC (Planning)</option>
-                    <option value="quality">Quality (QA/QC)</option>
+                    <option value="rnd">RnD (Formulasi & Bahan)</option>
+                    <option value="ppic">PPIC (Perencanaan & MRP)</option>
+                    <option value="quality">Quality (QA/QC Lab)</option>
                     <option value="warehouse">Warehouse (Gudang)</option>
+                    <option value="production">Produksi (Operasional Pabrik)</option>
                     <option value="procurement">Procurement (Purchasing)</option>
                     <option value="sales">Sales (Penjualan)</option>
-                    <option value="management">Management</option>
-                    <option value="admin">IT / Admin</option>
+                    <option value="management">Management / Direksi</option>
+                    <option value="admin">IT / Super Admin</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-purple-200 mb-1">Tingkat Role</label>
+                  <label className="block text-xs font-semibold text-purple-200 mb-1">Tingkat Jabatan / Role</label>
                   <select
                     value={regRole}
                     onChange={(e) => setRegRole(e.target.value as Role)}
                     className="w-full rounded-xl bg-purple-950/60 border border-purple-700/60 px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-400"
                   >
-                    <option value="staff">Staff</option>
-                    <option value="operator">Operator</option>
-                    <option value="supervisor">Supervisor</option>
-                    <option value="manager">Manager</option>
-                    <option value="admin">Admin</option>
+                    <option value="staff">Staff (Input & Draft)</option>
+                    <option value="operator">Operator (Pelaksana Lapangan)</option>
+                    <option value="supervisor">Supervisor (Review & Verifikasi)</option>
+                    <option value="manager">Manager (Approval & Otoritas Penuh)</option>
+                    <option value="admin">Admin (Akses Seluruh Sistem)</option>
                   </select>
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-purple-200 mb-1">Password</label>
+                <label className="block text-xs font-semibold text-purple-200 mb-1">
+                  Kata Sandi (Password Akun)
+                </label>
                 <input
-                  type="text"
+                  type="password"
+                  required
+                  placeholder="Masukkan password akun"
                   value={regPassword}
                   onChange={(e) => setRegPassword(e.target.value)}
                   className="w-full rounded-xl bg-purple-950/60 border border-purple-700/60 px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-400"
                 />
+              </div>
+
+              {/* Kondisi Khusus: Akses Modul Tambahan (Exception Overlay) */}
+              <div className="pt-2 border-t border-purple-900/60">
+                <label className="block text-xs font-bold text-purple-300 mb-1">
+                  Kondisi Khusus: Izin Akses Lintas Modul (Opsional)
+                </label>
+                <p className="text-[11px] text-purple-300/70 mb-2 leading-relaxed">
+                  Secara default, karyawan hanya dapat membuka modul departemen utamanya. Centang modul di bawah jika karyawan ini memiliki penugasan khusus di departemen lain:
+                </p>
+
+                <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                  {(['rnd', 'ppic', 'quality', 'warehouse', 'procurement', 'sales'] as Department[])
+                    .filter((d) => d !== regDept)
+                    .map((deptId) => {
+                      const perm = regSpecificAccess.find((p) => p.moduleId === deptId);
+                      const isChecked = !!perm;
+                      const deptName =
+                        deptId === 'rnd'
+                          ? 'RnD (Research & Dev)'
+                          : deptId === 'ppic'
+                          ? 'PPIC (Planning & Batching)'
+                          : deptId === 'quality'
+                          ? 'Quality (QC/QA Lab)'
+                          : deptId === 'warehouse'
+                          ? 'Warehouse (Gudang)'
+                          : deptId === 'procurement'
+                          ? 'Procurement (PO Bahan)'
+                          : 'Sales (Pesanan)';
+
+                      return (
+                        <div
+                          key={deptId}
+                          className="flex items-center justify-between p-2 rounded-xl bg-purple-950/40 border border-purple-800/40 text-xs"
+                        >
+                          <label className="flex items-center gap-2 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => toggleSpecificModule(deptId)}
+                              className="rounded border-purple-700 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                            />
+                            <span className={isChecked ? 'text-white font-semibold' : 'text-purple-300/70'}>
+                              {deptName}
+                            </span>
+                          </label>
+
+                          {isChecked && (
+                            <select
+                              value={perm?.accessLevel || 'read'}
+                              onChange={(e) =>
+                                updateSpecificLevel(deptId, e.target.value as 'read' | 'write')
+                              }
+                              className="bg-purple-900/80 border border-purple-700 rounded-lg px-2 py-0.5 text-[10px] text-purple-200 focus:outline-none"
+                            >
+                              <option value="read">Hanya Lihat (Read-Only)</option>
+                              <option value="write">Lihat & Edit (Read/Write)</option>
+                            </select>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-purple-900/60 mt-4">
@@ -523,9 +560,9 @@ export const LoginPage: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white shadow-sm transition-colors cursor-pointer"
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-md shadow-purple-900/50 transition-colors cursor-pointer"
                 >
-                  Simpan Karyawan
+                  Daftarkan Akun Karyawan
                 </button>
               </div>
             </form>

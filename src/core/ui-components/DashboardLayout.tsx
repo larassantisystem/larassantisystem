@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import { canAccessModule } from '../auth/permissionGuard';
 import { Department } from '../../types';
 import {
   FlaskConical,
@@ -62,8 +63,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   activeSubTab,
   onSelectSubTab,
 }) => {
-  const { user, logout, switchUser } = useAuth();
-  const [showSwitchMenu, setShowSwitchMenu] = useState(false);
+  const { user, logout } = useAuth();
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
   
   // Track which accordion departments are expanded
   const [expandedDepts, setExpandedDepts] = useState<Record<string, boolean>>({
@@ -168,6 +169,16 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     },
   ];
 
+  // Filter menu berdasarkan hak akses Silo Departemen & Specific Access
+  const visibleDepartments = departments.filter((dept) => canAccessModule(user, dept.id));
+
+  // Redirect pengaman jika user berada di tab yang tidak diizinkan
+  useEffect(() => {
+    if (activeTab !== 'dashboard' && !canAccessModule(user, activeTab)) {
+      onSelectTab('dashboard');
+    }
+  }, [activeTab, user, onSelectTab]);
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans">
       {/* Crisp Light Top Navigation Bar */}
@@ -189,10 +200,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
         {/* User Info & Actions */}
         <div className="flex items-center gap-2.5">
-          {/* User Profile Pill / Quick Switcher */}
+          {/* User Profile Pill */}
           <div className="relative">
             <button
-              onClick={() => setShowSwitchMenu(!showSwitchMenu)}
+              onClick={() => setShowProfileMenu(!showProfileMenu)}
               className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-purple-50/80 border border-purple-200/90 hover:bg-purple-100/70 transition-all text-xs text-slate-800 font-semibold cursor-pointer shadow-xs"
             >
               <div className="w-6 h-6 rounded-lg bg-purple-700 text-white flex items-center justify-center font-bold text-[10px]">
@@ -203,66 +214,78 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   {user?.name?.split(',')[0]}
                 </div>
                 <div className="text-[9px] text-purple-700 font-mono font-bold mt-0.5 uppercase">
-                  {user?.department} • {user?.nik}
+                  {user?.department} • {user?.role} ({user?.nik})
                 </div>
               </div>
             </button>
 
-            {showSwitchMenu && (
-              <div className="absolute right-0 mt-2 w-72 rounded-2xl bg-white border border-slate-200 shadow-xl p-2 z-50 animate-in fade-in zoom-in-95 duration-100">
-                <div className="px-3 py-2 border-b border-slate-100 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
-                  Ganti Akun Karyawan (Demo Switch):
+            {/* Profile Popover Menu */}
+            {showProfileMenu && (
+              <div className="absolute right-0 mt-2 w-80 rounded-2xl bg-white border border-slate-200 shadow-xl p-3 z-50 animate-in fade-in zoom-in-95 duration-100">
+                <div className="px-2 py-1.5 border-b border-slate-100 mb-2">
+                  <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">
+                    Kredensial Sesi Karyawan
+                  </span>
+                  <div className="mt-1">
+                    <h4 className="text-xs font-bold text-slate-900">{user?.name}</h4>
+                    <p className="text-[11px] font-mono text-purple-700 font-semibold mt-0.5">
+                      NIK: {user?.nik}
+                    </p>
+                  </div>
                 </div>
-                <div className="space-y-1 mt-1">
+
+                <div className="space-y-1.5 text-xs text-slate-600 px-2 py-1">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-slate-500">Departemen:</span>
+                    <span className="font-bold text-slate-800 uppercase">{user?.department}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-slate-500">Tingkat Jabatan:</span>
+                    <span className="font-bold text-purple-700 uppercase bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                      {user?.role}
+                    </span>
+                  </div>
+                  <div className="pt-2 border-t border-slate-100">
+                    <span className="text-[10px] font-bold text-slate-500 block mb-1">
+                      Kondisi Khusus (Akses Lintas Modul):
+                    </span>
+                    {user?.role === 'admin' ? (
+                      <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 inline-block">
+                        Super User (Semua Modul Terbuka)
+                      </span>
+                    ) : user?.specificAccess && user.specificAccess.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {user.specificAccess.map((perm) => (
+                          <span
+                            key={perm.moduleId}
+                            className="text-[9px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded"
+                          >
+                            +{perm.moduleId.toUpperCase()} ({perm.accessLevel})
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-[10px] text-slate-400 italic">
+                        Terbatas pada modul {user?.department?.toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between">
+                  <span className="text-[9px] text-slate-400 flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                    CPKB Verified
+                  </span>
                   <button
-                    onClick={() => { switchUser('admin'); setShowSwitchMenu(false); onSelectTab('dashboard'); }}
-                    className="w-full text-left px-2.5 py-2 rounded-xl hover:bg-purple-50 text-xs text-slate-700 flex items-center justify-between transition-colors cursor-pointer"
+                    onClick={() => {
+                      setShowProfileMenu(false);
+                      logout();
+                    }}
+                    className="text-[11px] font-bold text-rose-600 hover:text-rose-700 flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
                   >
-                    <div>
-                      <span className="font-bold text-slate-900 block">Super User Admin</span>
-                      <span className="text-[10px] text-slate-500">IT & Production Head</span>
-                    </div>
-                    <span className="text-[10px] font-mono text-purple-700 font-bold bg-purple-50 px-2 py-0.5 rounded border border-purple-200">admin</span>
-                  </button>
-                  <button
-                    onClick={() => { switchUser('2001'); setShowSwitchMenu(false); onSelectTab('rnd'); }}
-                    className="w-full text-left px-2.5 py-2 rounded-xl hover:bg-purple-50 text-xs text-slate-700 flex items-center justify-between transition-colors cursor-pointer"
-                  >
-                    <div>
-                      <span className="font-bold text-slate-900 block">Dr. apt. Maya Sari</span>
-                      <span className="text-[10px] text-slate-500">Formulator RnD</span>
-                    </div>
-                    <span className="text-[10px] font-mono text-purple-700 font-bold bg-purple-50 px-2 py-0.5 rounded border border-purple-200">2001</span>
-                  </button>
-                  <button
-                    onClick={() => { switchUser('3001'); setShowSwitchMenu(false); onSelectTab('ppic'); }}
-                    className="w-full text-left px-2.5 py-2 rounded-xl hover:bg-purple-50 text-xs text-slate-700 flex items-center justify-between transition-colors cursor-pointer"
-                  >
-                    <div>
-                      <span className="font-bold text-slate-900 block">Budi Santoso</span>
-                      <span className="text-[10px] text-slate-500">Planner PPIC</span>
-                    </div>
-                    <span className="text-[10px] font-mono text-purple-700 font-bold bg-purple-50 px-2 py-0.5 rounded border border-purple-200">3001</span>
-                  </button>
-                  <button
-                    onClick={() => { switchUser('4001'); setShowSwitchMenu(false); onSelectTab('quality'); }}
-                    className="w-full text-left px-2.5 py-2 rounded-xl hover:bg-purple-50 text-xs text-slate-700 flex items-center justify-between transition-colors cursor-pointer"
-                  >
-                    <div>
-                      <span className="font-bold text-slate-900 block">apt. Rina Kusuma</span>
-                      <span className="text-[10px] text-slate-500">QA / QC Lab</span>
-                    </div>
-                    <span className="text-[10px] font-mono text-purple-700 font-bold bg-purple-50 px-2 py-0.5 rounded border border-purple-200">4001</span>
-                  </button>
-                  <button
-                    onClick={() => { switchUser('5001'); setShowSwitchMenu(false); onSelectTab('warehouse'); }}
-                    className="w-full text-left px-2.5 py-2 rounded-xl hover:bg-purple-50 text-xs text-slate-700 flex items-center justify-between transition-colors cursor-pointer"
-                  >
-                    <div>
-                      <span className="font-bold text-slate-900 block">Agus Setiawan</span>
-                      <span className="text-[10px] text-slate-500">Kepala Gudang</span>
-                    </div>
-                    <span className="text-[10px] font-mono text-purple-700 font-bold bg-purple-50 px-2 py-0.5 rounded border border-purple-200">5001</span>
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Keluar Sesi</span>
                   </button>
                 </div>
               </div>
@@ -286,7 +309,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         {/* Department Sidebar Navigation (Accordion Format) */}
         <aside className="w-full md:w-64 border-b md:border-b-0 md:border-r border-slate-200 bg-white p-3 flex md:flex-col gap-1 overflow-x-auto md:overflow-y-auto shrink-0 shadow-xs scrollbar-none items-center md:items-stretch">
           <div className="hidden md:block px-3 py-1.5 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">
-            Menu Manufaktur CPKB
+            Menu Otoritas ({visibleDepartments.length} Modul)
           </div>
 
           {/* Home button */}
@@ -313,7 +336,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           <div className="hidden md:block my-1 border-t border-slate-100"></div>
 
           {/* Accordion Department Menus */}
-          {departments.map((dept) => {
+          {visibleDepartments.map((dept) => {
             const isDeptActive = activeTab === dept.id;
             const isExpanded = !!expandedDepts[dept.id];
             const hasSubItems = dept.subItems && dept.subItems.length > 0;
