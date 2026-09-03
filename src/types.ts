@@ -51,13 +51,21 @@ export interface RawMaterial {
   code: string;
   name: string;
   chemicalName: string;
-  category: 'active' | 'excipient' | 'preservative' | 'emulsifier' | 'solvent';
+  category: string; // Keep for backward-compatibility (e.g. primary or joined)
+  categories?: string[]; // Multiple selected categories
+  otherCategorySpecification?: string; // Specification if 'other' / 'Lain-lain' is selected
   storageConditions: string;
   sdsDocNumber: string;
+  sdsFileUrl?: string; // Google Drive file URL or preview URL
+  sdsFileName?: string; // Name of uploaded SDS file
+  sdsDriveId?: string; // Google Drive document ID
   approvedSubstitutes: string[];
+  isSingleSpecificMaterial?: boolean; // True if explicitly marked as no approved substitutes
   supplierLeadTimeDays?: number;
   manufacturer?: string;
   qcParameters: QCParameter[];
+  lastModifiedBy?: string;
+  lastModifiedAt?: string;
 }
 
 export interface PackagingMaterial {

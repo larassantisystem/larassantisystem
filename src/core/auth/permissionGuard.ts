@@ -46,16 +46,42 @@ export function getModuleAccessLevel(
   if (!user) return 'none';
   if (user.role === 'admin') return 'write';
 
-  // Periksa kondisi khusus terlebih dahulu jika bukan departemennya
-  if (user.department !== targetModule) {
-    if (user.department === 'management') return 'read';
-    const specific = user.specificAccess?.find((p) => p.moduleId === targetModule);
+  // 1. Tier 2: Pengecekan Kondisi Khusus (Specific Access Override selalu diprioritaskan)
+  if (user.specificAccess && user.specificAccess.length > 0) {
+    const specific = user.specificAccess.find((p) => p.moduleId === targetModule);
     if (specific) return specific.accessLevel;
-    return 'none';
   }
 
-  // Jika departemen sama, level write diberikan untuk staff/spv/manager
-  return 'write';
+  // 2. Default Silo: Jika departemen user cocok dengan modul yang dituju -> write
+  if (user.department === targetModule) return 'write';
+
+  // 3. Manajemen level Direksi dapat memantau seluruh modul operasional -> read
+  if (user.department === 'management') return 'read';
+
+  // 4. Divisi Produksi: Terintegrasi dengan jadwal PPIC dan Gudang Material -> read
+  if (user.department === 'production' && (targetModule === 'ppic' || targetModule === 'warehouse')) {
+    return 'read';
+  }
+
+  return 'none';
+}
+
+/**
+ * Pengecekan cepat apakah user memiliki hak tulis/ubah pada modul tertentu
+ */
+export function canWriteModule(user: UserProfile | null, targetModule: Department): boolean {
+  if (!user) return false;
+  if (user.role === 'admin') return true;
+  return getModuleAccessLevel(user, targetModule) === 'write';
+}
+
+/**
+ * Pengecekan cepat apakah user dalam mode akses hanya baca (Read-Only) pada modul tertentu
+ */
+export function isReadOnlyModule(user: UserProfile | null, targetModule: Department): boolean {
+  if (!user) return false;
+  if (user.role === 'admin') return false;
+  return getModuleAccessLevel(user, targetModule) === 'read';
 }
 
 /**

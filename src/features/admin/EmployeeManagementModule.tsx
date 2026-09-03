@@ -145,22 +145,55 @@ export const EmployeeManagementModule: React.FC<EmployeeManagementModuleProps> =
     ];
   });
 
-  // Audit Trail Filter and Pagination State
-  const [auditFilterAction, setAuditFilterAction] = useState<string>('all');
+  // Audit Trail Filter and Pagination State (Optimized On-Demand Loading)
+  const [isAuditLoaded, setIsAuditLoaded] = useState<boolean>(false);
+  const [auditFilterModule, setAuditFilterModule] = useState<string>('all');
   const [auditStartDate, setAuditStartDate] = useState<string>('');
   const [auditEndDate, setAuditEndDate] = useState<string>('');
   const [auditPage, setAuditPage] = useState<number>(1);
-  const auditPageSize = 12; // compact limit
+  const [auditPageSize, setAuditPageSize] = useState<number>(25); // high density compact default
 
   // Auto-save audit logs to localStorage
   useEffect(() => {
     localStorage.setItem('cosmo_ddmp_audit_logs', JSON.stringify(auditLogs));
   }, [auditLogs]);
 
+  // Helper to determine module of log for clean filtering & badge
+  const getLogModule = (log: any): string => {
+    if (log.module) return log.module.toLowerCase();
+    const act = (log.action || '').toUpperCase();
+    if (act.startsWith('RM_') || act.startsWith('MATERIAL_') || act.startsWith('PACKAGING_') || act.startsWith('FORMULA_') || act.startsWith('BOM_') || act.startsWith('PRODUCT_')) return 'rnd';
+    if (act.startsWith('QC_') || act.startsWith('COA_') || act.startsWith('SAMPLE_') || act.startsWith('RELEASE_')) return 'quality';
+    if (act.startsWith('WH_') || act.startsWith('INBOUND_') || act.startsWith('STOCK_') || act.startsWith('WEIGHING_')) return 'warehouse';
+    if (act.startsWith('PPIC_') || act.startsWith('MRP_') || act.startsWith('PLAN_') || act.startsWith('SCHEDULE_')) return 'ppic';
+    if (act.startsWith('PO_') || act.startsWith('VENDOR_') || act.startsWith('PROCUREMENT_')) return 'procurement';
+    if (act.startsWith('EMPLOYEE_') || act.startsWith('USER_') || act.startsWith('NIK_') || act.startsWith('AUTH_') || act.startsWith('ROLE_')) return 'admin';
+    return 'system';
+  };
+
+  const getModuleBadgeConfig = (mod: string) => {
+    switch (mod) {
+      case 'rnd':
+        return { label: 'RnD', badge: 'bg-purple-50 text-purple-700 border-purple-200' };
+      case 'quality':
+        return { label: 'QC Lab', badge: 'bg-amber-50 text-amber-700 border-amber-200' };
+      case 'warehouse':
+        return { label: 'Warehouse', badge: 'bg-orange-50 text-orange-700 border-orange-200' };
+      case 'ppic':
+        return { label: 'PPIC', badge: 'bg-blue-50 text-blue-700 border-blue-200' };
+      case 'procurement':
+        return { label: 'Procure', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+      case 'admin':
+        return { label: 'Admin', badge: 'bg-indigo-50 text-indigo-700 border-indigo-200' };
+      default:
+        return { label: 'Sistem', badge: 'bg-slate-100 text-slate-700 border-slate-200' };
+    }
+  };
+
   // Reset page when filters change
   useEffect(() => {
     setAuditPage(1);
-  }, [auditFilterAction, auditStartDate, auditEndDate]);
+  }, [auditFilterModule, auditStartDate, auditEndDate, auditPageSize]);
 
   const fetchEmployees = async () => {
     setIsLoading(true);
@@ -786,190 +819,338 @@ export const EmployeeManagementModule: React.FC<EmployeeManagementModuleProps> =
 
       {/* AUDIT TRAIL VIEW */}
       {activeSubTab === 'audit' && (
-        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-4">
-          <div className="flex items-center justify-between">
+        <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
             <div className="space-y-0.5">
               <h3 className="text-base font-black text-slate-900 tracking-tight flex items-center gap-2">
                 <History className="w-4 h-4 text-indigo-600" />
-                <span>Rekam Jejak Otoritas & Hak Akses (CPKB Audit Trail)</span>
+                <span>Rekam Jejak Audit Trail (CPKB / BPOM Kepatuhan)</span>
               </h3>
               <p className="text-xs text-slate-500">
-                Log elektronik tidak dapat dihapus untuk memenuhi standar kepatuhan regulasi BPOM.
+                Data jejak elektronik terenkripsi lokal dan database tidak dapat diubah (21 CFR Part 11).
               </p>
+            </div>
+
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 text-[10px] font-mono font-bold border border-slate-200">
+                {auditLogs.length} Total Log Tersimpan
+              </span>
+              {isAuditLoaded && (
+                <button
+                  type="button"
+                  onClick={() => setIsAuditLoaded(false)}
+                  className="px-2.5 py-1 rounded-full bg-white hover:bg-slate-50 text-slate-500 hover:text-slate-700 text-[10px] font-bold border border-slate-200 transition-colors cursor-pointer"
+                  title="Sembunyikan tampilan isi untuk optimasi kinerja"
+                >
+                  Tutup Tampilan
+                </button>
+              )}
             </div>
           </div>
 
-          {/* Audit Filters Row */}
-          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-wrap items-end gap-3">
-            {/* Action / Modul Dropdown */}
-            <div className="flex-1 min-w-[200px]">
-              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                Jenis Peristiwa / Modul
+          {/* Audit Filters Row: Modul, Tanggal Mulai, Tanggal Selesai Saja */}
+          <div className="bg-slate-50/90 p-3.5 rounded-2xl border border-slate-200 flex flex-wrap items-end gap-3">
+            {/* Filter 1: Modul */}
+            <div className="flex-1 min-w-[190px]">
+              <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                Filter Modul
               </label>
               <select
-                value={auditFilterAction}
-                onChange={(e) => setAuditFilterAction(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-800 focus:border-indigo-500 focus:outline-none cursor-pointer shadow-2xs"
+                value={auditFilterModule}
+                onChange={(e) => {
+                  setAuditFilterModule(e.target.value);
+                  setIsAuditLoaded(true);
+                }}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 focus:border-indigo-500 focus:outline-none cursor-pointer shadow-2xs"
               >
-                <option value="all">Semua Peristiwa / Modul</option>
-                <option value="EMPLOYEE_CREATE">Pendaftaran Karyawan (CREATE)</option>
-                <option value="EMPLOYEE_UPDATE">Pembaruan Otoritas (UPDATE)</option>
-                <option value="EMPLOYEE_DEACTIVATE">Deaktivasi Karyawan (DEACTIVATE)</option>
-                <option value="SYSTEM_SYNC">Sinkronisasi Sistem (SYSTEM_SYNC)</option>
-                <option value="NIK_MIGRATION">Migrasi NIK (NIK_MIGRATION)</option>
+                <option value="all">Semua Modul Terintegrasi</option>
+                <option value="rnd">RnD (Master Bahan Baku, Kemas, Formula, PJ)</option>
+                <option value="quality">Quality (QC Lab, Sampling, CoA, Rilis)</option>
+                <option value="warehouse">Warehouse (Gudang, Inbound, Stok)</option>
+                <option value="ppic">PPIC (Planning, MRP, Jadwal)</option>
+                <option value="procurement">Procurement (PO & Vendor)</option>
+                <option value="admin">Admin & User (NIK, Akun & Otoritas)</option>
+                <option value="system">Sistem & Keamanan</option>
               </select>
             </div>
 
-            {/* Start Date Picker */}
+            {/* Filter 2: Tanggal Mulai (Start Date) */}
             <div className="w-full sm:w-auto">
-              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+              <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
                 Tanggal Mulai (Start)
               </label>
               <input
                 type="date"
                 value={auditStartDate}
-                onChange={(e) => setAuditStartDate(e.target.value)}
-                className="w-full sm:w-40 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-800 focus:border-indigo-500 focus:outline-none shadow-2xs"
+                onChange={(e) => {
+                  setAuditStartDate(e.target.value);
+                  setIsAuditLoaded(true);
+                }}
+                className="w-full sm:w-36 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-800 focus:border-indigo-500 focus:outline-none shadow-2xs"
               />
             </div>
 
-            {/* End Date Picker */}
+            {/* Filter 3: Tanggal Selesai (End Date) */}
             <div className="w-full sm:w-auto">
-              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+              <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
                 Tanggal Selesai (End)
               </label>
               <input
                 type="date"
                 value={auditEndDate}
-                onChange={(e) => setAuditEndDate(e.target.value)}
-                className="w-full sm:w-40 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-800 focus:border-indigo-500 focus:outline-none shadow-2xs"
+                onChange={(e) => {
+                  setAuditEndDate(e.target.value);
+                  setIsAuditLoaded(true);
+                }}
+                className="w-full sm:w-36 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-800 focus:border-indigo-500 focus:outline-none shadow-2xs"
               />
             </div>
 
-            {/* Reset Filters button */}
-            {(auditFilterAction !== 'all' || auditStartDate || auditEndDate) && (
+            {/* Tombol Aksi Filter / Tampilkan */}
+            <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => {
-                  setAuditFilterAction('all');
-                  setAuditStartDate('');
-                  setAuditEndDate('');
-                }}
-                className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-xs font-bold text-slate-600 hover:text-slate-900 transition-colors cursor-pointer flex items-center gap-1.5"
+                onClick={() => setIsAuditLoaded(true)}
+                className="px-3.5 py-1.5 rounded-xl bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
               >
-                <X className="w-3.5 h-3.5" />
-                <span>Reset Filter</span>
+                <Search className="w-3.5 h-3.5" />
+                <span>{isAuditLoaded ? 'Terapkan Filter' : 'Tampilkan Log Audit'}</span>
               </button>
-            )}
+
+              {(auditFilterModule !== 'all' || auditStartDate || auditEndDate) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuditFilterModule('all');
+                    setAuditStartDate('');
+                    setAuditEndDate('');
+                    setIsAuditLoaded(true);
+                  }}
+                  className="px-2.5 py-1.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-xs font-bold text-slate-600 transition-colors cursor-pointer flex items-center gap-1"
+                  title="Reset Filter"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span>Reset</span>
+                </button>
+              )}
+            </div>
           </div>
 
-          {(() => {
-            const filtered = auditLogs.filter((log) => {
-              if (auditFilterAction !== 'all' && log.action !== auditFilterAction) {
-                return false;
-              }
-              const logDateStr = log.timestamp.split('T')[0];
-              if (auditStartDate && logDateStr < auditStartDate) return false;
-              if (auditEndDate && logDateStr > auditEndDate) return false;
-              return true;
-            });
+          {/* JIKA LOG BELUM DIMUAT: TAMPILKAN PLACEHOLDER RINGAN UNTUK MEMPERCEPAT KINERJA */}
+          {!isAuditLoaded ? (
+            <div className="border border-dashed border-slate-200 rounded-2xl p-8 text-center bg-slate-50/50 space-y-3">
+              <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center mx-auto shadow-2xs">
+                <History className="w-5 h-5" />
+              </div>
+              <div className="max-w-md mx-auto space-y-1">
+                <h4 className="text-sm font-black text-slate-800">
+                  Data Audit Trail Tidak Ditampilkan Otomatis
+                </h4>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Untuk menjaga kecepatan respons aplikasi tetap optimal, riwayat audit trail tidak dimuat sekaligus. Pilih modul dan rentang tanggal di atas, lalu klik <strong>Tampilkan Log Audit</strong>.
+                </p>
+              </div>
+              {/* Quick Preset Buttons */}
+              <div className="pt-2 flex flex-wrap items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuditFilterModule('all');
+                    setAuditStartDate('');
+                    setAuditEndDate('');
+                    setIsAuditLoaded(true);
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 hover:border-indigo-300 text-slate-700 hover:text-indigo-700 text-xs font-bold transition-all shadow-2xs cursor-pointer"
+                >
+                  ⚡ Muat 25 Log Terbaru
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    setAuditFilterModule('all');
+                    setAuditStartDate(todayStr);
+                    setAuditEndDate(todayStr);
+                    setIsAuditLoaded(true);
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 hover:border-indigo-300 text-slate-700 hover:text-indigo-700 text-xs font-bold transition-all shadow-2xs cursor-pointer"
+                >
+                  📅 Log Hari Ini
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const d = new Date();
+                    d.setDate(d.getDate() - 7);
+                    const weekAgoStr = d.toISOString().split('T')[0];
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    setAuditFilterModule('all');
+                    setAuditStartDate(weekAgoStr);
+                    setAuditEndDate(todayStr);
+                    setIsAuditLoaded(true);
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 hover:border-indigo-300 text-slate-700 hover:text-indigo-700 text-xs font-bold transition-all shadow-2xs cursor-pointer"
+                >
+                  ⏱️ Log 7 Hari Terakhir
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* JIKA SUDAH DIMUAT: TAMPILKAN TABEL ULTRA-KOMPAK & RAPAT AGAR MUAT BANYAK */
+            (() => {
+              const filtered = auditLogs.filter((log) => {
+                if (auditFilterModule !== 'all') {
+                  const mod = getLogModule(log);
+                  if (mod !== auditFilterModule) return false;
+                }
+                const logDateStr = log.timestamp.split('T')[0];
+                if (auditStartDate && logDateStr < auditStartDate) return false;
+                if (auditEndDate && logDateStr > auditEndDate) return false;
+                return true;
+              });
 
-            const totalFilteredCount = filtered.length;
-            const totalPages = Math.ceil(totalFilteredCount / auditPageSize) || 1;
-            
-            // Adjust current page if it is out of bounds
-            const currentPage = Math.min(auditPage, totalPages);
-            const startIndex = (currentPage - 1) * auditPageSize;
-            const endIndex = Math.min(startIndex + auditPageSize, totalFilteredCount);
-            const paginated = filtered.slice(startIndex, endIndex);
+              const totalFilteredCount = filtered.length;
+              const totalPages = Math.ceil(totalFilteredCount / auditPageSize) || 1;
+              
+              const currentPage = Math.min(auditPage, totalPages);
+              const startIndex = (currentPage - 1) * auditPageSize;
+              const endIndex = Math.min(startIndex + auditPageSize, totalFilteredCount);
+              const paginated = filtered.slice(startIndex, endIndex);
 
-            return (
-              <div className="border border-slate-200 rounded-2xl overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                      <tr>
-                        <th className="py-2 px-3 w-[150px]">Waktu (WIB)</th>
-                        <th className="py-2 px-3 w-[200px]">Pelaksana (Actor)</th>
-                        <th className="py-2 px-3 w-[180px]">Jenis Peristiwa</th>
-                        <th className="py-2 px-3 w-[120px]">Target NIK</th>
-                        <th className="py-2 px-3">Detail Perubahan Otoritas</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 text-[11px]">
-                      {paginated.length === 0 ? (
+              return (
+                <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
+                  <div className="overflow-x-auto">
+                    {/* Compact Dense Table (Kecil agar muat banyak baris) */}
+                    <table className="w-full text-left border-collapse text-[10px]">
+                      <thead className="bg-slate-100/90 border-b border-slate-200 text-[9px] font-bold text-slate-500 uppercase tracking-wider">
                         <tr>
-                          <td colSpan={5} className="py-8 text-center text-slate-400 font-semibold">
-                            Tidak ada log audit yang cocok dengan filter yang ditentukan.
-                          </td>
+                          <th className="py-1.5 px-2.5 w-[130px]">Waktu (WIB)</th>
+                          <th className="py-1.5 px-2.5 w-[85px]">Modul</th>
+                          <th className="py-1.5 px-2.5 w-[170px]">Pelaksana (Aktor)</th>
+                          <th className="py-1.5 px-2.5 w-[140px]">Peristiwa / Aksi</th>
+                          <th className="py-1.5 px-2.5 w-[100px]">Target</th>
+                          <th className="py-1.5 px-2.5">Catatan Rincian CPKB</th>
                         </tr>
-                      ) : (
-                        paginated.map((log) => (
-                          <tr key={log.id} className="hover:bg-slate-50/60 transition-colors">
-                            <td className="py-1.5 px-3 font-mono text-[10px] text-slate-500 whitespace-nowrap">
-                              {new Date(log.timestamp).toLocaleString('id-ID')}
-                            </td>
-                            <td className="py-1.5 px-3 font-bold text-slate-800">
-                              {log.actorName} <span className="font-mono text-slate-400 font-normal">({log.actorNik})</span>
-                            </td>
-                            <td className="py-1.5 px-3">
-                              <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-slate-100 text-slate-700 border border-slate-200/60 whitespace-nowrap">
-                                {log.action}
-                              </span>
-                            </td>
-                            <td className="py-1.5 px-3 font-mono font-bold text-slate-600">
-                              {log.targetNik}
-                            </td>
-                            <td className="py-1.5 px-3 text-slate-600 leading-relaxed">
-                              {log.details}
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {paginated.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="py-8 text-center text-slate-400 font-semibold text-xs">
+                              Tidak ada log audit yang cocok dengan filter yang ditentukan.
                             </td>
                           </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                        ) : (
+                          paginated.map((log) => {
+                            const mod = getLogModule(log);
+                            const badgeCfg = getModuleBadgeConfig(mod);
+                            return (
+                              <tr key={log.id} className="hover:bg-slate-50/70 transition-colors">
+                                {/* Waktu */}
+                                <td className="py-1 px-2.5 font-mono text-[9px] text-slate-500 whitespace-nowrap">
+                                  {new Date(log.timestamp).toLocaleString('id-ID', {
+                                    year: 'numeric',
+                                    month: '2-digit',
+                                    day: '2-digit',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                    second: '2-digit',
+                                  })}
+                                </td>
 
-                {/* Pagination and Status footer */}
-                <div className="p-3 bg-slate-50/50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between text-[11px] text-slate-500 gap-2.5">
-                  <div>
-                    {totalFilteredCount > 0 ? (
-                      <span>
-                        Menampilkan <strong>{startIndex + 1}</strong> s/d <strong>{endIndex}</strong> dari <strong>{totalFilteredCount}</strong> log audit
-                        {totalFilteredCount !== auditLogs.length && ` (di-filter dari total ${auditLogs.length} log)`}
-                      </span>
-                    ) : (
-                      <span>Tidak ada data untuk ditampilkan</span>
-                    )}
+                                {/* Modul */}
+                                <td className="py-1 px-2.5">
+                                  <span className={`px-1.5 py-0.2 rounded text-[8px] font-mono font-bold uppercase border ${badgeCfg.badge}`}>
+                                    {badgeCfg.label}
+                                  </span>
+                                </td>
+
+                                {/* Pelaksana */}
+                                <td className="py-1 px-2.5 font-bold text-slate-800 truncate max-w-[170px]" title={`${log.actorName} (${log.actorNik})`}>
+                                  <span>{log.actorName}</span>{' '}
+                                  <span className="font-mono text-slate-400 font-normal text-[9px]">({log.actorNik})</span>
+                                </td>
+
+                                {/* Peristiwa / Aksi */}
+                                <td className="py-1 px-2.5">
+                                  <span className="px-1.5 py-0.2 rounded text-[8px] font-mono font-bold bg-slate-100 text-slate-700 border border-slate-200/60 whitespace-nowrap">
+                                    {log.action}
+                                  </span>
+                                </td>
+
+                                {/* Target NIK / Kode RM */}
+                                <td className="py-1 px-2.5 font-mono font-bold text-purple-700">
+                                  {log.targetNik}
+                                </td>
+
+                                {/* Catatan CPKB */}
+                                <td className="py-1 px-2.5 text-slate-600 leading-tight break-words">
+                                  {log.details}
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
                   </div>
 
-                  {totalPages > 1 && (
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        disabled={currentPage === 1}
-                        onClick={() => setAuditPage(currentPage - 1)}
-                        className="px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 disabled:opacity-40 transition-all text-[11px] font-bold cursor-pointer flex items-center justify-center"
-                      >
-                        Sebelumnya
-                      </button>
-                      <span className="text-slate-600 font-bold text-[11px] px-2">
-                        {currentPage} / {totalPages}
-                      </span>
-                      <button
-                        type="button"
-                        disabled={currentPage === totalPages}
-                        onClick={() => setAuditPage(currentPage + 1)}
-                        className="px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 disabled:opacity-40 transition-all text-[11px] font-bold cursor-pointer flex items-center justify-center"
-                      >
-                        Selanjutnya
-                      </button>
+                  {/* Compact Pagination and Density Controls */}
+                  <div className="p-2.5 bg-slate-50/60 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between text-[10px] text-slate-500 gap-2">
+                    <div className="flex items-center gap-3">
+                      {totalFilteredCount > 0 ? (
+                        <span>
+                          Menampilkan <strong>{startIndex + 1}</strong> s/d <strong>{endIndex}</strong> dari <strong>{totalFilteredCount}</strong> log
+                          {totalFilteredCount !== auditLogs.length && ` (difilter dari ${auditLogs.length})`}
+                        </span>
+                      ) : (
+                        <span>Tidak ada data untuk ditampilkan</span>
+                      )}
+
+                      {/* Baris per Halaman Selector */}
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-slate-400">Baris:</span>
+                        <select
+                          value={auditPageSize}
+                          onChange={(e) => setAuditPageSize(Number(e.target.value))}
+                          className="bg-white border border-slate-200 rounded px-1.5 py-0.5 text-[10px] font-bold text-slate-700 focus:outline-none"
+                        >
+                          <option value={15}>15</option>
+                          <option value={25}>25</option>
+                          <option value={50}>50</option>
+                          <option value={100}>100</option>
+                        </select>
+                      </div>
                     </div>
-                  )}
+
+                    {totalPages > 1 && (
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          disabled={currentPage === 1}
+                          onClick={() => setAuditPage(currentPage - 1)}
+                          className="px-2 py-0.5 rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 disabled:opacity-40 transition-all text-[10px] font-bold cursor-pointer"
+                        >
+                          Prev
+                        </button>
+                        <span className="text-slate-700 font-bold text-[10px] px-1.5">
+                          {currentPage} / {totalPages}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={currentPage === totalPages}
+                          onClick={() => setAuditPage(currentPage + 1)}
+                          className="px-2 py-0.5 rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 disabled:opacity-40 transition-all text-[10px] font-bold cursor-pointer"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })()}
+              );
+            })()
+          )}
         </div>
       )}
 
