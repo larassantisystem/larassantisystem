@@ -9,9 +9,14 @@ export const authService = {
 
   login: async (nik: string, password: string): Promise<{ user: UserProfile | null; error: string | null }> => {
     const cleanNik = nik.trim();
-    const constructEmail = (nik: string) => {
-      if (nik.toLowerCase() === 'admin') return 'admin@larassanti.co.id';
-      return `LMS${nik}@larassanti.co.id`;
+    const constructEmail = (rawNik: string) => {
+      const clean = rawNik.trim();
+      if (clean.toLowerCase() === 'admin' || clean.toLowerCase() === 'admin@larassanti.co.id') {
+        return 'admin@larassanti.co.id';
+      }
+      if (clean.includes('@')) return clean.toLowerCase();
+      const formattedNik = clean.toUpperCase().startsWith('LMS') ? clean.toUpperCase() : `LMS${clean.toUpperCase()}`;
+      return `${formattedNik}@larassanti.co.id`;
     };
     const dummyEmail = constructEmail(cleanNik);
 
@@ -143,9 +148,10 @@ export const authService = {
     role: UserProfile['role'];
     password?: string;
   }): Promise<{ success: boolean; error?: string }> => {
-    const cleanNik = employee.nik.trim();
+    const rawNik = employee.nik.trim();
+    const cleanNik = rawNik.toLowerCase() === 'admin' ? 'admin' : (rawNik.toUpperCase().startsWith('LMS') ? rawNik.toUpperCase() : `LMS${rawNik.toUpperCase()}`);
     const password = employee.password || 'password123';
-    const email = cleanNik.toLowerCase() === 'admin' ? 'admin@larassanti.co.id' : `LMS${cleanNik}@larassanti.co.id`;
+    const email = cleanNik === 'admin' ? 'admin@larassanti.co.id' : `${cleanNik}@larassanti.co.id`;
 
     // 1. Try to register in Supabase Auth if configured
     if (isSupabaseConfigured && supabase) {

@@ -32,19 +32,23 @@ export interface AuthState {
   isLoading: boolean;
 }
 
+export interface QCParameter {
+  name: string;
+  specification: string;
+}
+
 export interface RawMaterial {
   id: string;
   code: string;
   name: string;
   chemicalName: string;
   category: 'active' | 'excipient' | 'preservative' | 'emulsifier' | 'solvent';
-  phMin: number;
-  phMax: number;
   storageConditions: string;
   sdsDocNumber: string;
   approvedSubstitutes: string[];
-  specGrade: string;
   supplierLeadTimeDays?: number;
+  manufacturer?: string;
+  qcParameters: QCParameter[];
 }
 
 export interface PackagingMaterial {
@@ -74,4 +78,35 @@ export interface BulkFormulation {
   targetViscosity: string;
   gravityTarget: number;
   mixingInstructions: string;
+}
+
+export interface VariantPackagingItem {
+  packagingCode: string; // e.g. K0001
+  quantityPerUnit: number;
+  type: 'primary' | 'secondary' | 'tertiary';
+}
+
+export interface ProductVariant {
+  id: string;
+  productId: string; // references Product.id or code
+  variantCode: string; // e.g. PJ0001-V1
+  variantName: string; // e.g. "Botol Pipet 20ml"
+  netVolumeGrams: number;
+  bulkFormulaCode: string; // links to BulkFormulation code (e.g. FORM-001)
+  packagingBom: VariantPackagingItem[];
+  bpomNumber?: string;
+  barcode?: string;
+  description?: string;
+  createdAt?: string;
+}
+
+export interface Product {
+  id: string;
+  code: string; // Format PJ0001, PJ0002 dst
+  name: string; // e.g. "Brightening Glow Serum"
+  category: string; // e.g. "Skincare - Face Serum"
+  brand: string; // e.g. "Larassanti Skin"
+  description: string;
+  variants: ProductVariant[];
+  createdAt?: string;
 }

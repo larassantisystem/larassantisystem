@@ -87,13 +87,13 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
               onClick={() => {
                 setIsAddingPM(true);
                 setEditingPM(null);
-                setPmCode(`PM-${packagingMaterials.length + 201}`);
+                setPmCode(`K${String(packagingMaterials.length + 1).padStart(4, '0')}`);
                 setPmName('');
               }}
               className="px-4 py-2 rounded-xl bg-purple-700 hover:bg-purple-800 text-xs font-bold text-white flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm"
             >
               <Plus className="w-4 h-4" />
-              <span>Tambah Kemasan</span>
+              <span>Tambah Bahan Kemas (K0001)</span>
             </button>
           )}
         </div>

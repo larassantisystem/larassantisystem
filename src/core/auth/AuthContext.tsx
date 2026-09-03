@@ -24,9 +24,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = async (nik: string, pass: string) => {
-    setIsLoading(true);
     const { user: loggedInUser, error } = await authService.login(nik, pass);
-    setIsLoading(false);
     if (loggedInUser) {
       setUser(loggedInUser);
       return { success: true };
@@ -35,10 +33,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
-    setIsLoading(true);
     await authService.logout();
     setUser(null);
-    setIsLoading(false);
   };
 
   const switchUser = async (nik: string) => {

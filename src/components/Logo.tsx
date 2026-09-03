@@ -3,52 +3,94 @@ import React from 'react';
 interface LogoProps {
   className?: string;
   size?: 'sm' | 'md' | 'lg';
-  variant?: 'light' | 'dark' | 'auto';
+  showText?: boolean;
+  variant?: 'light' | 'dark';
 }
 
-export const Logo: React.FC<LogoProps> = ({ className = '', size = 'md', variant = 'auto' }) => {
-  const dimensions = {
-    sm: { container: 'w-10 h-10', svg: 'w-6 h-6' },
-    md: { container: 'w-16 h-16', svg: 'w-10 h-10' },
-    lg: { container: 'w-24 h-24', svg: 'w-14 h-14' },
+export const Logo: React.FC<LogoProps> = ({
+  className = '',
+  size = 'md',
+  showText = false,
+  variant = 'light',
+}) => {
+  const iconSizes = {
+    sm: 'w-7 h-7',
+    md: 'w-10 h-10',
+    lg: 'w-12 h-12',
   };
 
-  const current = dimensions[size];
+  const isDark = variant === 'dark';
 
   return (
-    <div className={`flex flex-col items-center justify-center ${className}`}>
-      {/* Luxury Golden / Purple Cosmetic Flask & Lotus Emblem */}
-      <div className={`${current.container} rounded-2xl bg-gradient-to-tr from-white to-purple-50 border-2 border-amber-400 shadow-md shadow-purple-950/20 flex items-center justify-center relative overflow-hidden group transition-all duration-300 hover:scale-105 hover:shadow-lg hover:border-amber-300`}>
-        {/* Subtle background glow */}
-        <div className="absolute inset-0 bg-radial from-purple-100/40 to-transparent"></div>
-        
-        {/* Symmetrical Cosmetic Droplet, Flask & Petal Emblem */}
-        <svg 
-          className={`${current.svg} text-purple-700 relative z-10`} 
-          fill="none" 
-          viewBox="0 0 24 24" 
-          stroke="currentColor" 
-          strokeWidth="1.8"
+    <div className={`flex items-center gap-3 ${className}`}>
+      {/* Authentic Lotus Flower Icon (3-Petal Symmetrical Blossom) */}
+      <div className="relative shrink-0 flex items-center justify-center">
+        <svg
+          className={`${iconSizes[size]} drop-shadow-xs`}
+          viewBox="0 0 48 48"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
         >
-          {/* Vertical axis line */}
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v18" className="stroke-purple-300" />
-          
-          {/* Outer elegant cosmetic petals */}
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5c4.5 0 6.5 3 6.5 7.5s-2 7-6.5 7" className="stroke-purple-800" />
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5C7.5 4.5 5.5 7.5 5.5 12s2 7 6.5 7" className="stroke-purple-800" />
-          
-          {/* Inner droplet / active formulation core */}
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 8.5c2 0 2.8 1.5 2.8 3.5S13.5 15.5 12 15.5" className="stroke-purple-600" />
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 8.5c-2 0-2.8 1.5-2.8 3.5S10.5 15.5 12 15.5" className="stroke-purple-600" />
-          
-          {/* Gold Core Sparkle Dot */}
-          <circle cx="12" cy="12" r="1.5" className="fill-amber-500 stroke-amber-500" />
+          {/* Center Main Petal */}
+          <path
+            d="M24 6C24 6 17 18 17 28C17 33.5 20 37 24 37C28 37 31 33.5 31 28C31 18 24 6 24 6Z"
+            fill="url(#lotus-center)"
+          />
+          {/* Left Petal */}
+          <path
+            d="M19 14C19 14 7 21 7 30C7 35.5 12 38 16.5 38C21 38 23 33.5 23 30C23 23 19 14 19 14Z"
+            fill="url(#lotus-left)"
+          />
+          {/* Right Petal */}
+          <path
+            d="M29 14C29 14 41 21 41 30C41 35.5 36 38 31.5 38C27 38 25 33.5 25 30C25 23 29 14 29 14Z"
+            fill="url(#lotus-right)"
+          />
+          {/* Base Calyx Accent */}
+          <path
+            d="M14 36C18 39 30 39 34 36C31 41 17 41 14 36Z"
+            fill="#a855f7"
+          />
+          <defs>
+            <linearGradient id="lotus-center" x1="24" y1="6" x2="24" y2="37" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#c084fc" />
+              <stop offset="1" stopColor="#7e22ce" />
+            </linearGradient>
+            <linearGradient id="lotus-left" x1="7" y1="14" x2="23" y2="38" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#e879f9" />
+              <stop offset="1" stopColor="#9333ea" />
+            </linearGradient>
+            <linearGradient id="lotus-right" x1="41" y1="14" x2="25" y2="38" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#e879f9" />
+              <stop offset="1" stopColor="#9333ea" />
+            </linearGradient>
+          </defs>
         </svg>
-        
-        {/* Gold Luxury Trim Accent Line */}
-        <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500"></div>
       </div>
+
+      {showText && (
+        <div className="flex flex-col">
+          <div className="flex items-baseline gap-1">
+            <span
+              className={`text-base sm:text-2xl font-serif font-black tracking-tight italic ${
+                isDark ? 'text-white' : 'text-slate-900'
+              }`}
+            >
+              Larassanti
+            </span>
+            <span className="text-[9px] sm:text-[11px] font-sans font-black tracking-wider text-purple-400 uppercase">
+              SYSTEM
+            </span>
+          </div>
+          <span
+            className={`text-[8px] sm:text-[9px] font-sans font-bold tracking-widest uppercase hidden sm:block ${
+              isDark ? 'text-purple-200/70' : 'text-slate-500'
+            }`}
+          >
+            PT. LARASSANTI MAKMUR SEJAHTERA
+          </span>
+        </div>
+      )}
     </div>
   );
 };
-

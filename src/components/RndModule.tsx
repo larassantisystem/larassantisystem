@@ -1,151 +1,257 @@
 import React, { useState, useEffect } from 'react';
-import { RawMaterial, PackagingMaterial, BulkFormulation } from '../types';
+import { RawMaterial, PackagingMaterial, BulkFormulation, Product, ProductVariant } from '../types';
 import { RndMaterialsTab } from './rnd/RndMaterialsTab';
 import { RndPackagingTab } from './rnd/RndPackagingTab';
+import { RndProductsTab } from './rnd/RndProductsTab';
 import { RndFormulaTab } from './rnd/RndFormulaTab';
 import { RndBomCalculatorTab } from './rnd/RndBomCalculatorTab';
+import { productService } from '../features/rnd/products/productService';
 import {
   FlaskConical,
   Layers,
   Sliders,
   FileSpreadsheet,
+  PackageCheck,
   CheckCircle2,
-  Database
+  Database,
+  Boxes
 } from 'lucide-react';
 
-export const RndModule: React.FC = () => {
-  const [activeSubTab, setActiveSubTab] = useState<'materials' | 'packaging' | 'formula' | 'bom-calculator'>('materials');
+interface RndModuleProps {
+  activeSubTab?: 'materials' | 'packaging' | 'products' | 'formula' | 'bom-calculator';
+  onSelectSubTab?: (subTab: 'materials' | 'packaging' | 'products' | 'formula' | 'bom-calculator') => void;
+}
 
-  // --- RAW MATERIALS STATE ---
+export const RndModule: React.FC<RndModuleProps> = ({
+  activeSubTab: externalSubTab,
+  onSelectSubTab: setExternalSubTab,
+}) => {
+  const [internalSubTab, setInternalSubTab] = useState<'materials' | 'packaging' | 'products' | 'formula' | 'bom-calculator'>('products');
+  
+  const activeSubTab = externalSubTab || internalSubTab;
+  const setActiveSubTab = (tab: 'materials' | 'packaging' | 'products' | 'formula' | 'bom-calculator') => {
+    if (setExternalSubTab) {
+      setExternalSubTab(tab);
+    } else {
+      setInternalSubTab(tab);
+    }
+  };
+
+  // --- RAW MATERIALS STATE (B0001 dst) ---
   const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>([]);
-  // --- PACKAGING MATERIALS STATE ---
+  // --- PACKAGING MATERIALS STATE (K0001 dst) ---
   const [packagingMaterials, setPackagingMaterials] = useState<PackagingMaterial[]>([]);
+  // --- PRODUCTS STATE (PJ0001 dst & Multi-Variants) ---
+  const [products, setProducts] = useState<Product[]>([]);
   // --- FORMULATIONS STATE ---
   const [formulations, setFormulations] = useState<BulkFormulation[]>([]);
   const [selectedFormulation, setSelectedFormulation] = useState<BulkFormulation | null>(null);
 
   // Initial Data Seeding
   useEffect(() => {
-    // 1. Raw Materials
-    const savedRM = localStorage.getItem('lsm_raw_materials');
+    // 1. Raw Materials (B0001 dst)
+    const savedRM = localStorage.getItem('lsm_raw_materials_b');
     if (savedRM) {
-      setRawMaterials(JSON.parse(savedRM));
+      try {
+        const parsed = JSON.parse(savedRM) as any[];
+        const migrated = parsed.map((item) => {
+          if (!item.qcParameters) {
+            return {
+              id: item.id || `rm-${Date.now()}-${Math.random()}`,
+              code: item.code,
+              name: item.name,
+              chemicalName: item.chemicalName,
+              category: item.category || 'active',
+              storageConditions: item.storageConditions || 'Suhu ruang (15-25°C), kedap udara',
+              sdsDocNumber: item.sdsDocNumber || 'SDS-N/A',
+              approvedSubstitutes: item.approvedSubstitutes || [],
+              manufacturer: item.manufacturer || 'General Manufacturer',
+              qcParameters: [
+                { name: 'Bentuk', specification: item.category === 'solvent' ? 'Cairan Jernih' : 'Bubuk Kristal' },
+                { name: 'Warna', specification: item.category === 'solvent' ? 'Jernih tidak berwarna' : 'Putih' },
+                { name: 'Bau', specification: 'Khas lemah' },
+                { name: 'pH', specification: item.phMin !== undefined ? `${item.phMin.toFixed(1)} - ${item.phMax.toFixed(1)}` : '5.5 - 7.5' },
+                { name: 'Kelarutan', specification: 'Mudah larut dalam air' },
+                { name: 'Densitas', specification: '1.2 g/cm³' },
+                { name: 'Viskositas', specification: item.category === 'solvent' ? '1.0 - 5.0 cPs' : 'N/A' }
+              ]
+            };
+          } else {
+            // Check if Viskositas is missing, and if so add it
+            const hasViscosity = item.qcParameters.some((p: any) => p.name.toLowerCase() === 'viskositas');
+            if (!hasViscosity) {
+              return {
+                ...item,
+                qcParameters: [
+                  ...item.qcParameters,
+                  { name: 'Viskositas', specification: item.category === 'solvent' ? '1.0 - 5.0 cPs' : 'N/A' }
+                ]
+              };
+            }
+          }
+          return item;
+        });
+        setRawMaterials(migrated);
+        localStorage.setItem('lsm_raw_materials_b', JSON.stringify(migrated));
+      } catch (e) {
+        localStorage.removeItem('lsm_raw_materials_b');
+      }
     } else {
       const defaultRM: RawMaterial[] = [
         {
           id: 'rm-1',
-          code: 'RM-101',
+          code: 'B0001',
           name: 'Niacinamide (Vitamin B3)',
           chemicalName: 'Pyridine-3-carboxamide',
           category: 'active',
-          phMin: 5.5,
-          phMax: 6.5,
           storageConditions: 'Suhu Dingin (2-8°C), wadah tertutup rapat',
-          sdsDocNumber: 'SDS-LSM-101',
-          approvedSubstitutes: ['RM-102'],
-          specGrade: 'Cosmetic Grade USP',
+          sdsDocNumber: 'SDS-LMS-B0001',
+          approvedSubstitutes: ['B0002'],
+          manufacturer: 'DSM Nutritional Products',
+          qcParameters: [
+            { name: 'Bentuk', specification: 'Bubuk Kristal' },
+            { name: 'Warna', specification: 'Putih' },
+            { name: 'Bau', specification: 'Tidak berbau' },
+            { name: 'pH', specification: '5.5 - 6.5 (solusi 5%)' },
+            { name: 'Kelarutan', specification: 'Mudah larut dalam air' },
+            { name: 'Densitas', specification: '1.40 g/cm³' },
+            { name: 'Viskositas', specification: 'N/A (Padat)' }
+          ]
         },
         {
           id: 'rm-2',
-          code: 'RM-102',
+          code: 'B0002',
           name: 'Zinc PCA',
           chemicalName: 'Zinc Pyrrolidone Carboxylate',
           category: 'active',
-          phMin: 5.0,
-          phMax: 6.0,
           storageConditions: 'Suhu Ruang Terkontrol (15-25°C)',
-          sdsDocNumber: 'SDS-LSM-102',
-          approvedSubstitutes: ['RM-101'],
-          specGrade: 'Pharma Grade Pure',
+          sdsDocNumber: 'SDS-LMS-B0002',
+          approvedSubstitutes: ['B0001'],
+          manufacturer: 'Ajinomoto Co., Inc.',
+          qcParameters: [
+            { name: 'Bentuk', specification: 'Bubuk' },
+            { name: 'Warna', specification: 'Putih sampai krem' },
+            { name: 'Bau', specification: 'Khas lemah' },
+            { name: 'pH', specification: '5.0 - 6.0 (solusi 10%)' },
+            { name: 'Kelarutan', specification: 'Larut dalam air dan etanol' },
+            { name: 'Densitas', specification: '1.35 g/cm³' },
+            { name: 'Viskositas', specification: 'N/A (Padat)' }
+          ]
         },
         {
           id: 'rm-3',
-          code: 'RM-103',
+          code: 'B0003',
           name: 'Hyaluronic Acid 1% Solution',
           chemicalName: 'Sodium Hyaluronate',
           category: 'active',
-          phMin: 6.0,
-          phMax: 7.5,
           storageConditions: 'Suhu Ruang (20-25°C)',
-          sdsDocNumber: 'SDS-LSM-103',
-          approvedSubstitutes: ['RM-104'],
-          specGrade: 'Cosmetic Grade USP',
+          sdsDocNumber: 'SDS-LMS-B0003',
+          approvedSubstitutes: ['B0004'],
+          manufacturer: 'Contipro a.s.',
+          qcParameters: [
+            { name: 'Bentuk', specification: 'Cairan Kental (Gel)' },
+            { name: 'Warna', specification: 'Jernih tidak berwarna' },
+            { name: 'Bau', specification: 'Tidak berbau' },
+            { name: 'pH', specification: '6.0 - 7.5' },
+            { name: 'Kelarutan', specification: 'Larut dalam air' },
+            { name: 'Densitas', specification: '1.01 g/cm³' },
+            { name: 'Viskositas', specification: '1,000 - 5,000 cPs' }
+          ]
         },
         {
           id: 'rm-4',
-          code: 'RM-104',
+          code: 'B0004',
           name: 'Glycerin Pure Vegetable',
           chemicalName: 'Propane-1,2,3-triol',
           category: 'excipient',
-          phMin: 5.5,
-          phMax: 7.0,
           storageConditions: 'Suhu Ruang (15-30°C)',
-          sdsDocNumber: 'SDS-LSM-104',
-          approvedSubstitutes: ['RM-103'],
-          specGrade: 'Pharma Grade USP',
+          sdsDocNumber: 'SDS-LMS-B0004',
+          approvedSubstitutes: ['B0003'],
+          manufacturer: 'Wilmar International',
+          qcParameters: [
+            { name: 'Bentuk', specification: 'Cairan Jernih Kental' },
+            { name: 'Warna', specification: 'Jernih tidak berwarna' },
+            { name: 'Bau', specification: 'Tidak berbau / Khas lemah' },
+            { name: 'pH', specification: '5.5 - 7.0' },
+            { name: 'Kelarutan', specification: 'Bercampur dengan air' },
+            { name: 'Densitas', specification: '1.26 g/cm³' },
+            { name: 'Viskositas', specification: '900 - 1,200 cPs (25°C)' }
+          ]
         },
         {
           id: 'rm-5',
-          code: 'RM-105',
+          code: 'B0005',
           name: 'Phenoxyethanol (Preservative)',
           chemicalName: '2-Phenoxyethanol',
           category: 'preservative',
-          phMin: 4.0,
-          phMax: 8.5,
           storageConditions: 'Suhu Ruang (20-25°C)',
-          sdsDocNumber: 'SDS-LSM-105',
+          sdsDocNumber: 'SDS-LMS-B0005',
           approvedSubstitutes: [],
-          specGrade: 'Cosmetic Preservative Grade',
+          manufacturer: 'Clariant SE',
+          qcParameters: [
+            { name: 'Bentuk', specification: 'Cairan Berminyak' },
+            { name: 'Warna', specification: 'Jernih tidak berwarna' },
+            { name: 'Bau', specification: 'Bau khas mawar' },
+            { name: 'pH', specification: '4.0 - 8.5' },
+            { name: 'Kelarutan', specification: 'Sedikit larut air, larut dalam alkohol' },
+            { name: 'Densitas', specification: '1.11 g/cm³' },
+            { name: 'Viskositas', specification: '20 - 40 cPs' }
+          ]
         },
         {
           id: 'rm-6',
-          code: 'RM-106',
+          code: 'B0006',
           name: 'Purified Water (Aqua Demin)',
           chemicalName: 'Hydrogen Oxide',
           category: 'solvent',
-          phMin: 6.5,
-          phMax: 7.5,
           storageConditions: 'Suhu Ruang (20-25°C)',
-          sdsDocNumber: 'SDS-LSM-106',
+          sdsDocNumber: 'SDS-LMS-B0006',
           approvedSubstitutes: [],
-          specGrade: 'Purified Water USP',
+          manufacturer: 'PT. Brataco',
+          qcParameters: [
+            { name: 'Bentuk', specification: 'Cairan Cair' },
+            { name: 'Warna', specification: 'Jernih tidak berwarna' },
+            { name: 'Bau', specification: 'Tidak berbau' },
+            { name: 'pH', specification: '6.5 - 7.5' },
+            { name: 'Kelarutan', specification: 'Sangat bercampur air' },
+            { name: 'Densitas', specification: '1.00 g/cm³' },
+            { name: 'Viskositas', specification: '0.89 cPs (Suhu ruang)' }
+          ]
         },
         {
           id: 'rm-7',
-          code: 'RM-107',
+          code: 'B0007',
           name: 'Cetyl Alcohol NF',
           chemicalName: 'Hexadecan-1-ol',
           category: 'emulsifier',
-          phMin: 5.5,
-          phMax: 7.5,
           storageConditions: 'Suhu Ruang Terkontrol (15-25°C)',
-          sdsDocNumber: 'SDS-LSM-107',
+          sdsDocNumber: 'SDS-LMS-B0007',
           approvedSubstitutes: [],
-          specGrade: 'USP Emulsifying Wax',
+          manufacturer: 'BASF SE',
+          qcParameters: [
+            { name: 'Bentuk', specification: 'Serpihan / Lilin Padat' },
+            { name: 'Warna', specification: 'Putih bersih' },
+            { name: 'Bau', specification: 'Bau khas lemah' },
+            { name: 'pH', specification: '5.5 - 7.5' },
+            { name: 'Kelarutan', specification: 'Tidak larut air, larut dalam minyak hangat' },
+            { name: 'Densitas', specification: '0.81 g/cm³' },
+            { name: 'Viskositas', specification: 'N/A (Padat)' }
+          ]
         },
       ];
       setRawMaterials(defaultRM);
-      localStorage.setItem('lsm_raw_materials', JSON.stringify(defaultRM));
+      localStorage.setItem('lsm_raw_materials_b', JSON.stringify(defaultRM));
     }
 
-    // 2. Packaging Materials
-    const savedPM = localStorage.getItem('lsm_packaging_materials');
+    // 2. Packaging Materials (K0001 dst)
+    const savedPM = localStorage.getItem('lsm_packaging_materials_k');
     if (savedPM) {
       setPackagingMaterials(JSON.parse(savedPM));
     } else {
       const defaultPM: PackagingMaterial[] = [
         {
           id: 'pm-1',
-          code: 'PM-201',
-          name: 'Luxury Acrylic Gold Jar 10g',
-          type: 'primary',
-          unitCapacityGrams: 10,
-          materialSpec: 'PMMA Double-walled Gold Painted with Inner Lid',
-          artworkVersion: 'v1.2 (BPOM Verified)',
-        },
-        {
-          id: 'pm-2',
-          code: 'PM-202',
+          code: 'K0001',
           name: 'Luxury Acrylic Gold Jar 20g',
           type: 'primary',
           unitCapacityGrams: 20,
@@ -153,8 +259,17 @@ export const RndModule: React.FC = () => {
           artworkVersion: 'v1.2 (BPOM Verified)',
         },
         {
+          id: 'pm-2',
+          code: 'K0002',
+          name: 'Airless Pump Bottle 50ml Glossy',
+          type: 'primary',
+          unitCapacityGrams: 50,
+          materialSpec: 'PP/SAN Airless Dispenser Pump Gold Accent',
+          artworkVersion: 'v2.0 (BPOM Verified)',
+        },
+        {
           id: 'pm-3',
-          code: 'PM-203',
+          code: 'K0003',
           name: 'Cosmetic Squeeze Tube 50g',
           type: 'primary',
           unitCapacityGrams: 50,
@@ -163,8 +278,8 @@ export const RndModule: React.FC = () => {
         },
         {
           id: 'pm-4',
-          code: 'PM-204',
-          name: 'Premium Gold Carton Box (10g/20g)',
+          code: 'K0004',
+          name: 'Premium Gold Carton Box',
           type: 'secondary',
           unitCapacityGrams: 0,
           materialSpec: 'Art Paper 350gsm with Hot Gold Foil Embellishment',
@@ -172,8 +287,8 @@ export const RndModule: React.FC = () => {
         },
         {
           id: 'pm-5',
-          code: 'PM-205',
-          name: 'Master Outer Box Corrugated (24 units)',
+          code: 'K0005',
+          name: 'Master Outer Box Corrugated (24-50 units)',
           type: 'tertiary',
           unitCapacityGrams: 0,
           materialSpec: 'Double Wall Kraft Carton B-Flute',
@@ -181,11 +296,16 @@ export const RndModule: React.FC = () => {
         },
       ];
       setPackagingMaterials(defaultPM);
-      localStorage.setItem('lsm_packaging_materials', JSON.stringify(defaultPM));
+      localStorage.setItem('lsm_packaging_materials_k', JSON.stringify(defaultPM));
     }
 
-    // 3. Formulations
-    const savedFormulas = localStorage.getItem('lsm_formulations');
+    // 3. Products & Multi-Variants (PJ0001, PJ0002)
+    productService.getProducts().then((res) => {
+      setProducts(res);
+    });
+
+    // 4. Formulations (using B0001-B0007)
+    const savedFormulas = localStorage.getItem('lsm_formulations_v2');
     if (savedFormulas) {
       const parsed = JSON.parse(savedFormulas);
       setFormulations(parsed);
@@ -198,12 +318,12 @@ export const RndModule: React.FC = () => {
           name: 'Luxury Brightening Facial Cream (Gold Series)',
           bulkQuantityKg: 100,
           ingredients: [
-            { rawMaterialCode: 'RM-106', percentage: 74 },
-            { rawMaterialCode: 'RM-107', percentage: 10 },
-            { rawMaterialCode: 'RM-104', percentage: 8 },
-            { rawMaterialCode: 'RM-101', percentage: 5 },
-            { rawMaterialCode: 'RM-102', percentage: 2 },
-            { rawMaterialCode: 'RM-105', percentage: 1 },
+            { rawMaterialCode: 'B0006', percentage: 74 },
+            { rawMaterialCode: 'B0007', percentage: 10 },
+            { rawMaterialCode: 'B0004', percentage: 8 },
+            { rawMaterialCode: 'B0001', percentage: 5 },
+            { rawMaterialCode: 'B0002', percentage: 2 },
+            { rawMaterialCode: 'B0005', percentage: 1 },
           ],
           targetPh: 5.8,
           phTolerance: 0.3,
@@ -218,11 +338,11 @@ export const RndModule: React.FC = () => {
           name: 'Deep Hydrating Serum Booster',
           bulkQuantityKg: 100,
           ingredients: [
-            { rawMaterialCode: 'RM-106', percentage: 80 },
-            { rawMaterialCode: 'RM-103', percentage: 10 },
-            { rawMaterialCode: 'RM-104', percentage: 6 },
-            { rawMaterialCode: 'RM-101', percentage: 3 },
-            { rawMaterialCode: 'RM-105', percentage: 1 },
+            { rawMaterialCode: 'B0006', percentage: 80 },
+            { rawMaterialCode: 'B0003', percentage: 10 },
+            { rawMaterialCode: 'B0004', percentage: 6 },
+            { rawMaterialCode: 'B0001', percentage: 3 },
+            { rawMaterialCode: 'B0005', percentage: 1 },
           ],
           targetPh: 6.2,
           phTolerance: 0.2,
@@ -234,7 +354,7 @@ export const RndModule: React.FC = () => {
       ];
       setFormulations(defaultFormulas);
       setSelectedFormulation(defaultFormulas[0]);
-      localStorage.setItem('lsm_formulations', JSON.stringify(defaultFormulas));
+      localStorage.setItem('lsm_formulations_v2', JSON.stringify(defaultFormulas));
     }
   }, []);
 
@@ -247,13 +367,13 @@ export const RndModule: React.FC = () => {
       updated = [newRM, ...rawMaterials];
     }
     setRawMaterials(updated);
-    localStorage.setItem('lsm_raw_materials', JSON.stringify(updated));
+    localStorage.setItem('lsm_raw_materials_b', JSON.stringify(updated));
   };
 
   const handleDeleteRM = (id: string) => {
     const updated = rawMaterials.filter((r) => r.id !== id);
     setRawMaterials(updated);
-    localStorage.setItem('lsm_raw_materials', JSON.stringify(updated));
+    localStorage.setItem('lsm_raw_materials_b', JSON.stringify(updated));
   };
 
   const handleSavePM = (newPM: PackagingMaterial) => {
@@ -265,21 +385,76 @@ export const RndModule: React.FC = () => {
       updated = [newPM, ...packagingMaterials];
     }
     setPackagingMaterials(updated);
-    localStorage.setItem('lsm_packaging_materials', JSON.stringify(updated));
+    localStorage.setItem('lsm_packaging_materials_k', JSON.stringify(updated));
   };
 
   const handleDeletePM = (id: string) => {
     const updated = packagingMaterials.filter((p) => p.id !== id);
     setPackagingMaterials(updated);
-    localStorage.setItem('lsm_packaging_materials', JSON.stringify(updated));
+    localStorage.setItem('lsm_packaging_materials_k', JSON.stringify(updated));
   };
 
   const handleSaveFormula = (newFormula: BulkFormulation) => {
-    const updated = [newFormula, ...formulations];
+    const exists = formulations.some((f) => f.id === newFormula.id);
+    let updated: BulkFormulation[];
+    if (exists) {
+      updated = formulations.map((f) => (f.id === newFormula.id ? newFormula : f));
+    } else {
+      updated = [newFormula, ...formulations];
+    }
     setFormulations(updated);
     setSelectedFormulation(newFormula);
-    localStorage.setItem('lsm_formulations', JSON.stringify(updated));
+    localStorage.setItem('lsm_formulations_v2', JSON.stringify(updated));
   };
+
+  // --- PRODUCTS & VARIANTS HANDLERS ---
+  const handleSaveProduct = (newProd: Product) => {
+    const exists = products.some((p) => p.id === newProd.id);
+    let updated: Product[];
+    if (exists) {
+      updated = products.map((p) => (p.id === newProd.id ? newProd : p));
+    } else {
+      updated = [newProd, ...products];
+    }
+    setProducts(updated);
+    productService.saveProducts(updated);
+  };
+
+  const handleDeleteProduct = (productId: string) => {
+    const updated = products.filter((p) => p.id !== productId);
+    setProducts(updated);
+    productService.saveProducts(updated);
+  };
+
+  const handleSaveVariant = (productId: string, variant: ProductVariant) => {
+    const updated = products.map((prod) => {
+      if (prod.id !== productId) return prod;
+      const vExists = prod.variants.some((v) => v.id === variant.id);
+      let newVariants: ProductVariant[];
+      if (vExists) {
+        newVariants = prod.variants.map((v) => (v.id === variant.id ? variant : v));
+      } else {
+        newVariants = [...prod.variants, variant];
+      }
+      return { ...prod, variants: newVariants };
+    });
+    setProducts(updated);
+    productService.saveProducts(updated);
+  };
+
+  const handleDeleteVariant = (productId: string, variantId: string) => {
+    const updated = products.map((prod) => {
+      if (prod.id !== productId) return prod;
+      return {
+        ...prod,
+        variants: prod.variants.filter((v) => v.id !== variantId),
+      };
+    });
+    setProducts(updated);
+    productService.saveProducts(updated);
+  };
+
+  const totalVariantsCount = products.reduce((sum, p) => sum + p.variants.length, 0);
 
   return (
     <div className="space-y-6 font-sans">
@@ -291,30 +466,46 @@ export const RndModule: React.FC = () => {
               Master Data CPKB / GMP
             </span>
             <span className="text-slate-400 text-xs">•</span>
-            <span className="text-xs text-slate-500 font-medium">Spesifikasi Teknis & Dynamic BOM</span>
+            <span className="text-xs text-slate-500 font-medium">Pengkodean B0001, K0001, PJ0001 & Dynamic BOM</span>
           </div>
           <h1 className="text-xl font-black text-slate-800 tracking-tight">
             Research & Development (RnD Master Data)
           </h1>
           <p className="text-xs text-slate-500 mt-1 max-w-2xl leading-relaxed">
-            Pusat master data bahan baku (Raw Material), kemasan (Packaging Material), standarisasi formulasi bulk, dan kalkulator kebutuhan material yang terverifikasi standar mutu kosmetik BPOM.
+            Pusat master data Bahan Baku (<span className="font-mono font-bold text-purple-700">B0001 dst</span>), Bahan Kemas (<span className="font-mono font-bold text-purple-700">K0001 dst</span>), Produk Jadi Multi-Varian (<span className="font-mono font-bold text-purple-700">PJ0001 dst</span>), standarisasi formulasi bulk, dan kalkulator kebutuhan material yang terverifikasi BPOM.
           </p>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="px-4 py-2 rounded-2xl bg-purple-50/70 border border-purple-100 text-center">
-            <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Formulasi</span>
-            <span className="text-lg font-black text-purple-700 font-mono">{formulations.length} Master</span>
+        <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+          <div className="px-3.5 py-2 rounded-2xl bg-purple-50/70 border border-purple-100 text-center">
+            <span className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Produk (PJ)</span>
+            <span className="text-base font-black text-purple-700 font-mono">{products.length} ({totalVariantsCount} Varian)</span>
           </div>
-          <div className="px-4 py-2 rounded-2xl bg-slate-50 border border-slate-200 text-center">
-            <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Bahan RM</span>
-            <span className="text-lg font-black text-slate-800 font-mono">{rawMaterials.length} Item</span>
+          <div className="px-3.5 py-2 rounded-2xl bg-slate-50 border border-slate-200 text-center">
+            <span className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Bahan Baku (B)</span>
+            <span className="text-base font-black text-slate-800 font-mono">{rawMaterials.length} Item</span>
+          </div>
+          <div className="px-3.5 py-2 rounded-2xl bg-slate-50 border border-slate-200 text-center">
+            <span className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Bahan Kemas (K)</span>
+            <span className="text-base font-black text-slate-800 font-mono">{packagingMaterials.length} Item</span>
           </div>
         </div>
       </div>
 
       {/* Sub-Tab Navigation */}
       <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
+        <button
+          onClick={() => setActiveSubTab('products')}
+          className={`px-4 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl border transition-all cursor-pointer flex items-center gap-2 ${
+            activeSubTab === 'products'
+              ? 'bg-purple-700 border-purple-700 text-white shadow-sm'
+              : 'border-slate-200 bg-white text-slate-600 hover:text-purple-700 hover:bg-purple-50/50'
+          }`}
+        >
+          <PackageCheck className="w-4 h-4" />
+          <span>Produk Jadi & Varian (PJ0001)</span>
+        </button>
+
         <button
           onClick={() => setActiveSubTab('materials')}
           className={`px-4 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl border transition-all cursor-pointer flex items-center gap-2 ${
@@ -324,7 +515,7 @@ export const RndModule: React.FC = () => {
           }`}
         >
           <FlaskConical className="w-4 h-4" />
-          <span>Bahan Baku (Raw Materials)</span>
+          <span>Bahan Baku (B0001)</span>
         </button>
 
         <button
@@ -336,7 +527,7 @@ export const RndModule: React.FC = () => {
           }`}
         >
           <Layers className="w-4 h-4" />
-          <span>Kemasan (Packaging)</span>
+          <span>Bahan Kemas (K0001)</span>
         </button>
 
         <button
@@ -360,11 +551,23 @@ export const RndModule: React.FC = () => {
           }`}
         >
           <FileSpreadsheet className="w-4 h-4" />
-          <span>Dynamic BOM & Multi-Packaging Calculator</span>
+          <span>Dynamic BOM Calculator</span>
         </button>
       </div>
 
       {/* Sub-Tab Panels */}
+      {activeSubTab === 'products' && (
+        <RndProductsTab
+          products={products}
+          formulations={formulations}
+          packagingMaterials={packagingMaterials}
+          onSaveProduct={handleSaveProduct}
+          onDeleteProduct={handleDeleteProduct}
+          onSaveVariant={handleSaveVariant}
+          onDeleteVariant={handleDeleteVariant}
+        />
+      )}
+
       {activeSubTab === 'materials' && (
         <RndMaterialsTab
           rawMaterials={rawMaterials}
@@ -403,3 +606,4 @@ export const RndModule: React.FC = () => {
     </div>
   );
 };
+
