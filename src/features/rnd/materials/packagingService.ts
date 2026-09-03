@@ -39,15 +39,40 @@ export const packagingService = {
   getPackagingMaterials: async (): Promise<PackagingMaterial[]> => {
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data, error } = await supabase
-          .from('packaging_materials')
-          .select('*')
-          .order('code', { ascending: true });
+        let allData: any[] = [];
+        let from = 0;
+        const step = 1000;
+        let hasMore = true;
+        let fetchError = false;
 
-        if (error) {
-          console.error('[Supabase Audit] Error fetching packaging_materials:', error);
-        } else if (data) {
-          const mapped: PackagingMaterial[] = data.map((p: any) => ({
+        // Fetch in batches of 1000 to bypass Supabase PostgREST default max-rows limit (1000 items)
+        while (hasMore) {
+          const { data, error } = await supabase
+            .from('packaging_materials')
+            .select('*')
+            .order('code', { ascending: true })
+            .range(from, from + step - 1);
+
+          if (error) {
+            console.error('[Supabase Audit] Error fetching packaging_materials batch:', error);
+            fetchError = true;
+            break;
+          }
+
+          if (data && data.length > 0) {
+            allData = allData.concat(data);
+            if (data.length < step) {
+              hasMore = false;
+            } else {
+              from += step;
+            }
+          } else {
+            hasMore = false;
+          }
+        }
+
+        if (!fetchError && (allData.length > 0 || from === 0)) {
+          const mapped: PackagingMaterial[] = allData.map((p: any) => ({
             id: p.id,
             code: p.code,
             specNumber: p.spec_number || p.specNumber || `SP-BK-${p.code}`,

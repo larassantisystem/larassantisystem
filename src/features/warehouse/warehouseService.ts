@@ -3,57 +3,7 @@ import { supabase, isSupabaseConfigured } from '../../core/auth/supabaseClient';
 
 const WAREHOUSE_GRN_STORAGE_KEY = 'lsm_warehouse_grn_v1';
 
-const defaultGrnRecords: GrnRecord[] = [
-  {
-    id: 'grn-001',
-    grnNumber: 'GRN-202609-001',
-    materialType: 'raw',
-    materialId: 'mat-001',
-    materialCode: 'B0002',
-    materialName: 'Calsium Carbonate',
-    manufacturer: 'PT. Petrona Pacific Chemical',
-    distributor: 'PT Kimia Farma Trading & Distribution',
-    poNumber: 'PO-2026-0881',
-    deliveryNoteNumber: 'SJ-88912',
-    batchNumber: 'BN-2026-X81',
-    receivedDate: '2026-09-03',
-    expiryDate: '2028-09-03',
-    quantityReceived: 500,
-    unit: 'kg',
-    containerCount: 20,
-    containerType: 'Drum Fiber (Sealed)',
-    storageLocation: 'Warehouse Karantina Bahan Baku (Rak K-01)',
-    storageConditions: 'Suhu Ruang Terkendali (15 - 25°C)',
-    qcStatus: 'QUARANTINE',
-    qcParametersCount: 3,
-    receivedBy: 'Staf Gudang Logistik',
-    createdAt: new Date('2026-09-03T08:30:00Z').toISOString(),
-  },
-  {
-    id: 'grn-002',
-    grnNumber: 'GRN-202609-002',
-    materialType: 'packaging',
-    materialId: 'pack-001',
-    materialCode: 'K0004',
-    materialName: 'Pot Lem Putih 250 g',
-    manufacturer: 'PD Surya Abadi',
-    distributor: 'PD Surya Abadi',
-    poNumber: 'PO-2026-0885',
-    deliveryNoteNumber: 'SJ-99201',
-    batchNumber: 'LOT-SA-2026-09',
-    receivedDate: '2026-09-03',
-    quantityReceived: 2500,
-    unit: 'pcs',
-    containerCount: 10,
-    containerType: 'Karton Box (Double Plastic Wrap)',
-    storageLocation: 'Warehouse Karantina Bahan Kemas (Area BK-01)',
-    storageConditions: 'Suhu Ruang Terkendali (15 - 25°C)',
-    qcStatus: 'QUARANTINE',
-    qcParametersCount: 9,
-    receivedBy: 'Staf Gudang Logistik',
-    createdAt: new Date('2026-09-03T09:15:00Z').toISOString(),
-  },
-];
+const defaultGrnRecords: GrnRecord[] = [];
 
 export const warehouseService = {
   getGrnRecords: async (): Promise<GrnRecord[]> => {
@@ -119,9 +69,33 @@ export const warehouseService = {
     record: Omit<GrnRecord, 'id' | 'createdAt' | 'grnNumber'>
   ): Promise<GrnRecord> => {
     const existing = await warehouseService.getGrnRecords();
-    const nextSeq = String(existing.length + 1).padStart(3, '0');
-    const todayStr = new Date().toISOString().slice(0, 7).replace('-', '');
-    const grnNumber = `GRN-${todayStr}-${nextSeq}`;
+
+    // Format: GRN-BB-YYMMDD-XX atau GRN-BK-YYMMDD-XX
+    // YYMMDD derived from receivedDate (e.g. 2026-09-03 -> 260903)
+    const dateParts = (record.receivedDate || new Date().toISOString().slice(0, 10)).split('-');
+    const yy = dateParts[0].length === 4 ? dateParts[0].slice(2) : dateParts[0];
+    const mm = (dateParts[1] || '01').padStart(2, '0');
+    const dd = (dateParts[2] || '01').padStart(2, '0');
+    const dateCode = `${yy}${mm}${dd}`;
+
+    const typePrefix = record.materialType === 'raw' ? 'GRN-BB' : 'GRN-BK';
+    const targetPrefix = `${typePrefix}-${dateCode}-`;
+
+    // Cari urutan tertinggi penerimaan barang pada tanggal & jenis tersebut (reset per hari)
+    let maxSeq = 0;
+    existing.forEach((r) => {
+      if (r.grnNumber && r.grnNumber.startsWith(targetPrefix)) {
+        const parts = r.grnNumber.split('-');
+        const lastPart = parts[parts.length - 1];
+        const num = parseInt(lastPart, 10);
+        if (!isNaN(num) && num > maxSeq) {
+          maxSeq = num;
+        }
+      }
+    });
+
+    const nextSeq = String(maxSeq + 1).padStart(2, '0');
+    const grnNumber = `${targetPrefix}${nextSeq}`;
 
     const newRecord: GrnRecord = {
       ...record,
@@ -169,6 +143,49 @@ export const warehouseService = {
     const updated = [newRecord, ...existing];
     localStorage.setItem(WAREHOUSE_GRN_STORAGE_KEY, JSON.stringify(updated));
     return newRecord;
+  },
+
+  updateGrnRecord: async (
+    id: string,
+    updatedData: Partial<GrnRecord>
+  ): Promise<GrnRecord> => {
+    const existing = await warehouseService.getGrnRecords();
+    const index = existing.findIndex((item) => item.id === id);
+    if (index === -1) {
+      throw new Error('Catatan GRN tidak ditemukan');
+    }
+
+    const updatedRecord: GrnRecord = {
+      ...existing[index],
+      ...updatedData,
+    };
+
+    existing[index] = updatedRecord;
+    localStorage.setItem(WAREHOUSE_GRN_STORAGE_KEY, JSON.stringify(existing));
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const payload: any = {};
+        if (updatedData.batchNumber !== undefined) payload.batch_number = updatedData.batchNumber;
+        if (updatedData.distributor !== undefined) payload.distributor = updatedData.distributor;
+        if (updatedData.manufacturer !== undefined) payload.manufacturer = updatedData.manufacturer;
+        if (updatedData.quantityReceived !== undefined) payload.quantity_received = updatedData.quantityReceived;
+        if (updatedData.unit !== undefined) payload.unit = updatedData.unit;
+        if (updatedData.containerCount !== undefined) payload.container_count = updatedData.containerCount;
+        if (updatedData.containerType !== undefined) payload.container_type = updatedData.containerType;
+        if (updatedData.expiryDate !== undefined) payload.expiry_date = updatedData.expiryDate;
+        if (updatedData.storageLocation !== undefined) payload.storage_location = updatedData.storageLocation;
+        if (updatedData.storageConditions !== undefined) payload.storage_conditions = updatedData.storageConditions;
+        if (updatedData.deliveryNoteNumber !== undefined) payload.delivery_note_number = updatedData.deliveryNoteNumber;
+        if (updatedData.poNumber !== undefined) payload.po_number = updatedData.poNumber;
+
+        await supabase.from('warehouse_grn').update(payload).eq('id', id);
+      } catch (e) {
+        console.warn('Failed to update Supabase record:', e);
+      }
+    }
+
+    return updatedRecord;
   },
 
   deleteGrnRecord: async (id: string): Promise<boolean> => {

@@ -1,0 +1,369 @@
+import React, { useState, useEffect } from 'react';
+import {
+  X,
+  Save,
+  Package,
+  Building2,
+  Calendar,
+  Layers,
+  Thermometer,
+  ShieldCheck,
+  AlertTriangle,
+  Lock,
+  Boxes,
+  FileText,
+} from 'lucide-react';
+import { GrnRecord } from '../types/grnTypes';
+
+interface GrnEditModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  record: GrnRecord | null;
+  onSave: (id: string, updatedData: Partial<GrnRecord>) => Promise<void>;
+}
+
+export const GrnEditModal: React.FC<GrnEditModalProps> = ({
+  isOpen,
+  onClose,
+  record,
+  onSave,
+}) => {
+  const [formData, setFormData] = useState<Partial<GrnRecord>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  useEffect(() => {
+    if (record) {
+      setFormData({
+        manufacturer: record.manufacturer || '',
+        distributor: record.distributor || '',
+        batchNumber: record.batchNumber || '',
+        deliveryNoteNumber: record.deliveryNoteNumber || '',
+        poNumber: record.poNumber || '',
+        quantityReceived: record.quantityReceived,
+        unit: record.unit || (record.materialType === 'raw' ? 'kg' : 'pcs'),
+        containerCount: record.containerCount || 1,
+        containerType: record.containerType || '',
+        receivedDate: record.receivedDate || '',
+        expiryDate: record.expiryDate || '',
+        storageLocation: record.storageLocation || '',
+        storageConditions: record.storageConditions || '',
+      });
+      setErrorMsg('');
+    }
+  }, [record]);
+
+  if (!isOpen || !record) return null;
+
+  const isLocked = record.qcStatus === 'PASSED' || record.qcStatus === 'REJECTED';
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isLocked) {
+      onClose();
+      return;
+    }
+
+    if (!formData.batchNumber || formData.batchNumber.trim() === '') {
+      setErrorMsg('No. Batch Vendor / Produsen wajib diisi.');
+      return;
+    }
+
+    if (!formData.quantityReceived || formData.quantityReceived <= 0) {
+      setErrorMsg('Kuantitas terima harus lebih besar dari 0.');
+      return;
+    }
+
+    if (!formData.containerCount || formData.containerCount <= 0) {
+      setErrorMsg('Jumlah kemasan/koli harus lebih besar dari 0.');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      setErrorMsg('');
+      await onSave(record.id, formData);
+      onClose();
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Gagal menyimpan perubahan GRN');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-200">
+      <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-6 max-h-[92vh] flex flex-col animate-in zoom-in-95 duration-200">
+        {/* Modal Header */}
+        <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-orange-500/20 text-orange-400 rounded-xl border border-orange-500/30">
+              <Package className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-base leading-tight">
+                  {isLocked ? 'Detail Data Penerimaan (Terkunci)' : 'Edit Penerimaan Barang (GRN)'}
+                </h3>
+                <span className="font-mono text-xs font-bold px-2.5 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-400/30">
+                  {record.grnNumber}
+                </span>
+              </div>
+              <p className="text-xs text-slate-400">
+                {record.materialCode} - {record.materialName} ({record.materialType === 'raw' ? 'Bahan Baku' : 'Bahan Kemas'})
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Lock or Revert Alert Banner */}
+        {isLocked && (
+          <div className="bg-slate-100 border-b border-slate-200 p-4 text-xs text-slate-700 flex items-start gap-2.5 shrink-0">
+            <Lock className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
+            <div>
+              <span className="font-bold">Data Penerimaan Terkunci (Audit Trail CPKB):</span>
+              <p className="text-[11px] text-slate-600 mt-0.5">
+                Lot ini telah selesai melewati tahapan otorisasi QC (Status: {record.qcStatus}). Data penerimaan gudang tidak dapat diubah untuk menjaga integritas data mutu.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {record.qcStatus === 'REVERTED_TO_WAREHOUSE' && (
+          <div className="bg-amber-50 border-b border-amber-200 p-4 text-xs text-amber-900 flex items-start gap-2.5 shrink-0">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <span className="font-bold">Penerimaan Dikembalikan (Revert) oleh Tim QC:</span>
+              <p className="text-[11px] text-amber-800 mt-0.5">
+                Silakan perbaiki data di bawah ini sesuai instruksi sebelum disampling ulang.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Form Body */}
+        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4 grow text-xs text-slate-800">
+          {errorMsg && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 font-bold">
+              {errorMsg}
+            </div>
+          )}
+
+          {/* Row 1: Produsen & Pemasok */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Produsen (Manufacturer) <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                disabled={isLocked}
+                value={formData.manufacturer || ''}
+                onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value })}
+                className="w-full p-2.5 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-orange-500 focus:outline-hidden disabled:opacity-60"
+                required
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Pemasok / Distributor <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                disabled={isLocked}
+                value={formData.distributor || ''}
+                onChange={(e) => setFormData({ ...formData, distributor: e.target.value })}
+                className="w-full p-2.5 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-orange-500 focus:outline-hidden disabled:opacity-60"
+                required
+              />
+            </div>
+          </div>
+
+          {/* Row 2: No. Batch Vendor, No. SJ, No. PO */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                No. Batch Vendor <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                disabled={isLocked}
+                value={formData.batchNumber || ''}
+                onChange={(e) => setFormData({ ...formData, batchNumber: e.target.value })}
+                className="w-full p-2.5 border border-slate-300 rounded-xl font-mono font-bold bg-slate-50 focus:bg-white focus:ring-2 focus:ring-orange-500 focus:outline-hidden disabled:opacity-60"
+                required
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">No. Surat Jalan (SJ)</label>
+              <input
+                type="text"
+                disabled={isLocked}
+                value={formData.deliveryNoteNumber || ''}
+                onChange={(e) => setFormData({ ...formData, deliveryNoteNumber: e.target.value })}
+                className="w-full p-2.5 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-orange-500 focus:outline-hidden disabled:opacity-60"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">No. Purchase Order (PO)</label>
+              <input
+                type="text"
+                disabled={isLocked}
+                value={formData.poNumber || ''}
+                onChange={(e) => setFormData({ ...formData, poNumber: e.target.value })}
+                className="w-full p-2.5 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-orange-500 focus:outline-hidden disabled:opacity-60"
+              />
+            </div>
+          </div>
+
+          {/* Row 3: Qty, Satuan, Koli, Jenis Kemasan */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Kuantitas Terima <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                step="0.001"
+                min="0.001"
+                disabled={isLocked}
+                value={formData.quantityReceived || ''}
+                onChange={(e) => setFormData({ ...formData, quantityReceived: parseFloat(e.target.value) || 0 })}
+                className="w-full p-2.5 border border-slate-300 rounded-xl font-mono font-bold bg-slate-50 focus:bg-white focus:ring-2 focus:ring-orange-500 focus:outline-hidden disabled:opacity-60"
+                required
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Satuan</label>
+              <select
+                disabled={isLocked}
+                value={formData.unit || 'kg'}
+                onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                className="w-full p-2.5 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-orange-500 focus:outline-hidden disabled:opacity-60 font-semibold"
+              >
+                {record.materialType === 'raw' ? (
+                  <>
+                    <option value="kg">Kilogram (kg)</option>
+                    <option value="g">Gram (g)</option>
+                    <option value="L">Liter (L)</option>
+                    <option value="mL">Mililiter (mL)</option>
+                  </>
+                ) : (
+                  <>
+                    <option value="pcs">Pieces (pcs)</option>
+                    <option value="set">Set</option>
+                    <option value="roll">Roll</option>
+                    <option value="box">Box</option>
+                  </>
+                )}
+              </select>
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Jumlah Koli/Wadah <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                min="1"
+                disabled={isLocked}
+                value={formData.containerCount || 1}
+                onChange={(e) => setFormData({ ...formData, containerCount: parseInt(e.target.value, 10) || 1 })}
+                className="w-full p-2.5 border border-slate-300 rounded-xl font-mono font-bold bg-slate-50 focus:bg-white focus:ring-2 focus:ring-orange-500 focus:outline-hidden disabled:opacity-60"
+                required
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Jenis Kemasan</label>
+              <input
+                type="text"
+                disabled={isLocked}
+                value={formData.containerType || ''}
+                onChange={(e) => setFormData({ ...formData, containerType: e.target.value })}
+                placeholder="Contoh: Drum Fiber"
+                className="w-full p-2.5 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-orange-500 focus:outline-hidden disabled:opacity-60"
+              />
+            </div>
+          </div>
+
+          {/* Row 4: Tanggal Penerimaan & Tanggal Kedaluwarsa */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Tanggal Penerimaan <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="date"
+                disabled={isLocked}
+                value={formData.receivedDate || ''}
+                onChange={(e) => setFormData({ ...formData, receivedDate: e.target.value })}
+                className="w-full p-2.5 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-orange-500 focus:outline-hidden disabled:opacity-60"
+                required
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Tanggal Kedaluwarsa (ED)</label>
+              <input
+                type="date"
+                disabled={isLocked}
+                value={formData.expiryDate || ''}
+                onChange={(e) => setFormData({ ...formData, expiryDate: e.target.value })}
+                className="w-full p-2.5 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-orange-500 focus:outline-hidden disabled:opacity-60"
+              />
+            </div>
+          </div>
+
+          {/* Row 5: Lokasi & Kondisi Simpan */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Lokasi Karantina Gudang</label>
+              <input
+                type="text"
+                disabled={isLocked}
+                value={formData.storageLocation || ''}
+                onChange={(e) => setFormData({ ...formData, storageLocation: e.target.value })}
+                className="w-full p-2.5 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-orange-500 focus:outline-hidden disabled:opacity-60"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Kondisi Penyimpanan</label>
+              <input
+                type="text"
+                disabled={isLocked}
+                value={formData.storageConditions || ''}
+                onChange={(e) => setFormData({ ...formData, storageConditions: e.target.value })}
+                className="w-full p-2.5 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-orange-500 focus:outline-hidden disabled:opacity-60"
+              />
+            </div>
+          </div>
+
+          {/* Footer Actions */}
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+            >
+              {isLocked ? 'Tutup' : 'Batal'}
+            </button>
+            {!isLocked && (
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="px-5 py-2.5 text-xs font-bold text-white bg-orange-600 hover:bg-orange-700 active:scale-98 rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <Save className="w-4 h-4" />
+                <span>{isSubmitting ? 'Menyimpan...' : 'Simpan Perubahan'}</span>
+              </button>
+            )}
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};

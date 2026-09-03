@@ -911,7 +911,7 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
                     >
                       {/* Nomor Urut */}
                       <td className="py-3.5 px-3 text-center font-mono text-slate-400 font-bold text-xs">
-                        {idx + 1}
+                        {indexOfFirstItem + idx + 1}
                       </td>
 
                       {/* Kode & No. Spesifikasi */}

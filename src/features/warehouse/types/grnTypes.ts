@@ -1,6 +1,6 @@
 export type GrnMaterialType = 'raw' | 'packaging';
 
-export type GrnQcStatus = 'QUARANTINE' | 'PASSED' | 'REJECTED';
+export type GrnQcStatus = 'QUARANTINE' | 'PASSED' | 'PASSED_WITH_DEVIATION' | 'RELEASED' | 'REJECTED';
 
 export interface GrnRecord {
   id: string;
@@ -24,6 +24,11 @@ export interface GrnRecord {
   storageConditions: string;
   qcStatus: GrnQcStatus;
   qcParametersCount?: number;
+  sealCondition?: string;
+  packagingCondition?: string;
+  coaAttachment?: string;
+  msdsAttachment?: string;
+  halalAttachment?: string;
   receivedBy: string;
   createdAt: string;
   notes?: string;

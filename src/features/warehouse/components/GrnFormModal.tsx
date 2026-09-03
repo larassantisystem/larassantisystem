@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   PackagePlus,
   X,
@@ -12,6 +12,10 @@ import {
   Thermometer,
   ShieldCheck,
   AlertTriangle,
+  Upload,
+  Camera,
+  FileText,
+  FileCheck,
 } from 'lucide-react';
 import { RawMaterial, PackagingMaterial } from '../../../types';
 import { GrnMaterialType, GrnRecord } from '../types/grnTypes';
@@ -40,7 +44,7 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
   const [materialType, setMaterialType] = useState<GrnMaterialType>('raw');
   const [selectedMaterial, setSelectedMaterial] = useState<any | null>(null);
 
-  // Form Fields
+  // Form Fields - PO, Delivery Note, Batch (all optional)
   const [distributor, setDistributor] = useState('');
   const [poNumber, setPoNumber] = useState('');
   const [deliveryNoteNumber, setDeliveryNoteNumber] = useState('');
@@ -54,6 +58,23 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
   const [containerType, setContainerType] = useState('Drum Fiber (Sealed)');
   const [storageLocation, setStorageLocation] = useState('Warehouse Karantina Bahan Baku (Rak K-01)');
   const [storageConditions, setStorageConditions] = useState('Suhu Ruang Terkendali (15 - 25°C)');
+
+  // Quality documents
+  const [coaFileName, setCoaFileName] = useState<string>('');
+  const [msdsFileName, setMsdsFileName] = useState<string>('');
+  const [halalFileName, setHalalFileName] = useState<string>('');
+  const coaInputRef = useRef<HTMLInputElement>(null);
+  const coaCameraRef = useRef<HTMLInputElement>(null);
+  const msdsInputRef = useRef<HTMLInputElement>(null);
+  const msdsCameraRef = useRef<HTMLInputElement>(null);
+  const halalInputRef = useRef<HTMLInputElement>(null);
+  const halalCameraRef = useRef<HTMLInputElement>(null);
+
+  // Physical inspection & staff
+  const [sealCondition, setSealCondition] = useState('✓ UTUH & TERSEGEL RESMI');
+  const [packagingCondition, setPackagingCondition] = useState('✓ BAIK & BERSIH');
+  const [receivedByStaff, setReceivedByStaff] = useState(userName || 'Mcmikecoc');
+  const [additionalNotes, setAdditionalNotes] = useState('');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -71,7 +92,7 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
       setUnit('pcs');
       setContainerType('Karton Box (Double Plastic Wrap)');
       setStorageLocation('Warehouse Karantina Bahan Kemas (Area BK-01)');
-      setStorageConditions('Suhu Ruang Terkendali (15 - 25°C)');
+      setStorageConditions('Suhu Ruang (15 - 30°C)');
       setDistributor('');
     }
   }, [materialType]);
@@ -99,13 +120,31 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
       setFormError('Nama pemasok / distributor wajib diisi.');
       return;
     }
-    if (!deliveryNoteNumber.trim()) {
-      setFormError('Nomor surat jalan (Delivery Note) wajib diisi.');
-      return;
-    }
     if (!quantityReceived || Number(quantityReceived) <= 0) {
       setFormError('Jumlah kuantitas yang diterima harus lebih besar dari 0.');
       return;
+    }
+
+    // Tanggal kedatangan minimal hari berjalan
+    if (!receivedDate) {
+      setFormError('Tanggal kedatangan / diterima di warehouse wajib diisi.');
+      return;
+    }
+    if (receivedDate < todayStr) {
+      setFormError(`Tanggal kedatangan tidak boleh lebih kecil dari hari berjalan (${todayStr}).`);
+      return;
+    }
+
+    // Tanggal kadaluarsa tidak boleh lebih kecil dari tanggal terima (Bahan Baku)
+    if (materialType === 'raw') {
+      if (!expiryDate) {
+        setFormError('Tanggal kedaluwarsa (Expired Date) wajib diisi untuk Bahan Baku.');
+        return;
+      }
+      if (expiryDate < receivedDate) {
+        setFormError('Tanggal kedaluwarsa tidak boleh lebih kecil dari tanggal terima.');
+        return;
+      }
     }
 
     const resolvedManufacturer =
@@ -122,9 +161,9 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
         materialName: selectedMaterial.name,
         manufacturer: resolvedManufacturer,
         distributor: distributor.trim(),
-        poNumber: poNumber.trim() || `PO-${todayStr.slice(0, 4)}-${Math.floor(1000 + Math.random() * 9000)}`,
-        deliveryNoteNumber: deliveryNoteNumber.trim(),
-        batchNumber: batchNumber.trim() || `BN-${todayStr.replace(/-/g, '')}-01`,
+        poNumber: poNumber.trim() || '-',
+        deliveryNoteNumber: deliveryNoteNumber.trim() || '-',
+        batchNumber: batchNumber.trim() || '-',
         receivedDate,
         expiryDate: materialType === 'raw' ? expiryDate : undefined,
         quantityReceived: Number(quantityReceived),
@@ -135,7 +174,13 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
         storageConditions,
         qcStatus: 'QUARANTINE',
         qcParametersCount: selectedMaterial.qcParametersCount || 3,
-        receivedBy: userName,
+        sealCondition,
+        packagingCondition,
+        coaAttachment: coaFileName || undefined,
+        msdsAttachment: msdsFileName || undefined,
+        halalAttachment: halalFileName || undefined,
+        receivedBy: receivedByStaff || userName,
+        notes: additionalNotes.trim() || undefined,
       });
 
       onClose();
@@ -151,6 +196,77 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto bg-slate-900/60 backdrop-blur-xs">
       <div className="bg-white w-full max-w-4xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[95vh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
+        {/* Hidden inputs for document uploads */}
+        <input
+          type="file"
+          ref={coaInputRef}
+          className="hidden"
+          accept=".pdf,.png,.jpg,.jpeg"
+          onChange={(e) => {
+            if (e.target.files && e.target.files[0]) {
+              setCoaFileName(e.target.files[0].name);
+            }
+          }}
+        />
+        <input
+          type="file"
+          ref={coaCameraRef}
+          className="hidden"
+          accept="image/*"
+          capture="environment"
+          onChange={(e) => {
+            if (e.target.files && e.target.files[0]) {
+              setCoaFileName(e.target.files[0].name);
+            }
+          }}
+        />
+        <input
+          type="file"
+          ref={msdsInputRef}
+          className="hidden"
+          accept=".pdf,.png,.jpg,.jpeg"
+          onChange={(e) => {
+            if (e.target.files && e.target.files[0]) {
+              setMsdsFileName(e.target.files[0].name);
+            }
+          }}
+        />
+        <input
+          type="file"
+          ref={msdsCameraRef}
+          className="hidden"
+          accept="image/*"
+          capture="environment"
+          onChange={(e) => {
+            if (e.target.files && e.target.files[0]) {
+              setMsdsFileName(e.target.files[0].name);
+            }
+          }}
+        />
+        <input
+          type="file"
+          ref={halalInputRef}
+          className="hidden"
+          accept=".pdf,.png,.jpg,.jpeg"
+          onChange={(e) => {
+            if (e.target.files && e.target.files[0]) {
+              setHalalFileName(e.target.files[0].name);
+            }
+          }}
+        />
+        <input
+          type="file"
+          ref={halalCameraRef}
+          className="hidden"
+          accept="image/*"
+          capture="environment"
+          onChange={(e) => {
+            if (e.target.files && e.target.files[0]) {
+              setHalalFileName(e.target.files[0].name);
+            }
+          }}
+        />
+
         {/* Modal Header */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
           <div className="flex items-center gap-3">
@@ -320,11 +436,11 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
               </div>
             </div>
 
-            {/* PO, Delivery Note, and Batch Number */}
+            {/* PO, Delivery Note, and Batch Number (Semua Opsional / Boleh Kosong) */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="text-xs font-bold text-slate-700 block mb-1.5">
-                  No. Purchase Order (PO)
+                  No. Purchase Order (PO) <span className="text-slate-400 font-normal">(Opsional)</span>
                 </label>
                 <input
                   type="text"
@@ -337,15 +453,14 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
 
               <div>
                 <label className="text-xs font-bold text-slate-700 block mb-1.5">
-                  No. Surat Jalan (Delivery Note) <span className="text-rose-500">*</span>
+                  No. Surat Jalan (Delivery Note) <span className="text-slate-400 font-normal">(Opsional)</span>
                 </label>
                 <input
                   type="text"
                   value={deliveryNoteNumber}
                   onChange={(e) => setDeliveryNoteNumber(e.target.value)}
-                  placeholder="SJ-88912"
+                  placeholder="Contoh: SJ-88912 (Boleh kosong)"
                   className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                  required
                 />
               </div>
 
@@ -363,8 +478,8 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
               </div>
             </div>
 
-            {/* Dates Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+            {/* Dates Row: Minimal Hari Berjalan & Tanggal Kadaluarsa */}
+            <div className={`grid grid-cols-1 ${materialType === 'raw' ? 'sm:grid-cols-2' : ''} gap-4 pt-1`}>
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-xs font-bold text-slate-700">
@@ -377,42 +492,40 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
                 <div className="relative">
                   <input
                     type="date"
+                    min={todayStr}
                     value={receivedDate}
-                    onChange={(e) => setReceivedDate(e.target.value)}
+                    onChange={(e) => {
+                      setReceivedDate(e.target.value);
+                      if (materialType === 'raw' && expiryDate < e.target.value) {
+                        setExpiryDate(e.target.value);
+                      }
+                    }}
                     className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                     required
                   />
                 </div>
                 <p className="text-[11px] text-slate-400 mt-1">
-                  *Tanggal kedatangan tidak boleh lebih kecil dari hari ini.
+                  *Tanggal kedatangan tidak boleh lebih kecil dari hari ini ({todayStr}).
                 </p>
               </div>
 
-              {materialType === 'raw' ? (
+              {/* Tanggal Kedaluwarsa: Hanya untuk Bahan Baku, Hilangkan sepenuhnya untuk Bahan Kemas */}
+              {materialType === 'raw' && (
                 <div>
                   <label className="text-xs font-bold text-slate-700 block mb-1.5">
                     Tanggal Kedaluwarsa (Expired Date) <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="date"
+                    min={receivedDate || todayStr}
                     value={expiryDate}
                     onChange={(e) => setExpiryDate(e.target.value)}
                     className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                     required
                   />
                   <p className="text-[11px] text-slate-400 mt-1">
-                    Diperhitungkan dari masa simpan standar (24 bulan).
+                    *Tanggal kadaluarsa tidak boleh lebih kecil dari tanggal terima.
                   </p>
-                </div>
-              ) : (
-                <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200 flex items-start gap-2.5">
-                  <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-                  <div className="text-xs">
-                    <span className="font-bold text-blue-900 block">Tidak Perlu Tanggal Kedaluwarsa</span>
-                    <p className="text-[11px] text-blue-700 mt-0.5 leading-relaxed">
-                      Penerimaan Bahan Kemas (Packaging) tidak memerlukan pencatatan Expired Date.
-                    </p>
-                  </div>
                 </div>
               )}
             </div>
@@ -473,20 +586,31 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
                 />
               </div>
 
-              {/* Container Type */}
+              {/* Wadah / Keterangan (Bahan Baku) vs Keterangan (Bahan Kemas) */}
               <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1.5">Jenis Wadah Luar</label>
-                <select
+                <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                  {materialType === 'raw' ? 'Wadah / Keterangan' : 'Keterangan'}
+                </label>
+                <input
+                  type="text"
+                  list="container-suggestions"
                   value={containerType}
                   onChange={(e) => setContainerType(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                >
-                  <option value="Drum Fiber (Sealed)">Drum Fiber (Sealed)</option>
-                  <option value="Karton Box (Double Plastic Wrap)">Karton Box (Double Plastic Wrap)</option>
-                  <option value="Jerigen HDPE">Jerigen HDPE</option>
-                  <option value="Sak Kertas Kraft">Sak Kertas Kraft</option>
-                  <option value="Palletized Shrink Wrap">Palletized Shrink Wrap</option>
-                </select>
+                  placeholder={
+                    materialType === 'raw'
+                      ? 'Drum Fiber (Sealed)'
+                      : 'Karton Box (Double Plastic Wrap)'
+                  }
+                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                />
+                <datalist id="container-suggestions">
+                  <option value="Drum Fiber (Sealed)" />
+                  <option value="Karton Box (Double Plastic Wrap)" />
+                  <option value="Jerigen HDPE" />
+                  <option value="Sak Kertas Kraft" />
+                  <option value="Palletized Shrink Wrap" />
+                  <option value="Plastik Klip Ziplock" />
+                </datalist>
               </div>
             </div>
 
@@ -522,6 +646,238 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
             </div>
           </div>
 
+          {/* Section 4: DOKUMEN MUTU (Bahan Baku: COA, MSDS, Halal | Bahan Kemas: Bebas Lampiran) */}
+          {materialType === 'raw' ? (
+            <div className="p-5 rounded-2xl border border-slate-200/90 bg-white space-y-4 shadow-2xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-emerald-600" />
+                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                    4. DOKUMEN MUTU BAHAN BAKU (COA WAJIB, MSDS & HALAL)
+                  </h3>
+                </div>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[11px] font-bold w-fit">
+                  *CoA Produsen Wajib Ada
+                </span>
+              </div>
+              <p className="text-xs text-slate-500">
+                Sertifikat Analisis (CoA) wajib dilampirkan. Anda dapat mengunggah file dokumen atau memotret langsung dengan kamera HP.
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {/* CoA Card */}
+                <div className="p-4 rounded-2xl border-2 border-amber-300 bg-amber-50/20 flex flex-col justify-between gap-3">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <FileCheck className="w-4 h-4 text-blue-600" />
+                        <span className="text-xs font-black text-slate-800">CoA Produsen</span>
+                      </div>
+                      <span className="text-[10px] font-extrabold text-rose-600 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-md">
+                        * (Wajib)
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">
+                      {coaFileName ? (
+                        <span className="font-semibold text-emerald-700 break-all">
+                          ✓ File: {coaFileName}
+                        </span>
+                      ) : (
+                        'Lampirkan Sertifikat Analisis (CoA) asli dari produsen untuk pengujian QC.'
+                      )}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => coaInputRef.current?.click()}
+                      className="flex-1 py-1.5 px-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs"
+                    >
+                      <Upload className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Pilih File</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => coaCameraRef.current?.click()}
+                      className="flex-1 py-1.5 px-2.5 rounded-xl border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs"
+                    >
+                      <Camera className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Foto HP</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* MSDS Card */}
+                <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/30 flex flex-col justify-between gap-3">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <ShieldCheck className="w-4 h-4 text-amber-600" />
+                        <span className="text-xs font-black text-slate-800">MSDS (Safety Data)</span>
+                      </div>
+                      <span className="text-[10px] font-semibold text-slate-400">
+                        (Opsional)
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">
+                      {msdsFileName ? (
+                        <span className="font-semibold text-emerald-700 break-all">
+                          ✓ File: {msdsFileName}
+                        </span>
+                      ) : (
+                        'Lembar Data Keselamatan Bahan Kimia (MSDS).'
+                      )}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => msdsInputRef.current?.click()}
+                      className="flex-1 py-1.5 px-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs"
+                    >
+                      <Upload className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Pilih File</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => msdsCameraRef.current?.click()}
+                      className="flex-1 py-1.5 px-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs"
+                    >
+                      <Camera className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Foto HP</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Halal Card */}
+                <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/30 flex flex-col justify-between gap-3">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        <span className="text-xs font-black text-slate-800">Sertifikat Halal</span>
+                      </div>
+                      <span className="text-[10px] font-semibold text-slate-400">
+                        (Opsional)
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">
+                      {halalFileName ? (
+                        <span className="font-semibold text-emerald-700 break-all">
+                          ✓ File: {halalFileName}
+                        </span>
+                      ) : (
+                        'Sertifikat Halal MUI / BPJPH / Luar Negeri.'
+                      )}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => halalInputRef.current?.click()}
+                      className="flex-1 py-1.5 px-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs"
+                    >
+                      <Upload className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Pilih File</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => halalCameraRef.current?.click()}
+                      className="flex-1 py-1.5 px-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs"
+                    >
+                      <Camera className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Foto HP</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* Bahan Kemas: Bebas Lampiran Dokumen Mutu Card */
+            <div className="p-5 rounded-2xl border border-blue-200 bg-blue-50/70 flex items-start gap-3 shadow-2xs">
+              <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0 mt-0.5">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
+              <div className="text-xs">
+                <h4 className="font-black text-blue-950">
+                  Bahan Kemas: Bebas Lampiran Dokumen Mutu (Tanpa COA, MSDS, Halal)
+                </h4>
+                <p className="text-[11px] text-blue-800 mt-1 leading-relaxed">
+                  Sesuai prosedur operasional standar, penerimaan Bahan Kemas (wadah, botol, tutup, kardus, leaflet) tidak memerlukan lampiran COA, MSDS, maupun Sertifikat Halal. Pemeriksaan akan dilakukan secara sampling dimensi dan visual oleh tim QC.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Section 5: KONDISI FISIK WADAH & VERIFIKASI PETUGAS */}
+          <div className="p-5 rounded-2xl border border-slate-200/90 bg-white space-y-4 shadow-2xs">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-600" />
+              <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                5. KONDISI FISIK WADAH & VERIFIKASI PETUGAS
+              </h3>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                  Kondisi Segel Wadah
+                </label>
+                <select
+                  value={sealCondition}
+                  onChange={(e) => setSealCondition(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                >
+                  <option value="✓ UTUH & TERSEGEL RESMI">✓ UTUH & TERSEGEL RESMI</option>
+                  <option value="RUSAK / TIDAK TERSEGEL">RUSAK / TIDAK TERSEGEL</option>
+                  <option value="SEGEL TERBUKA">SEGEL TERBUKA</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                  Kondisi Fisik Kemasan Luar
+                </label>
+                <select
+                  value={packagingCondition}
+                  onChange={(e) => setPackagingCondition(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                >
+                  <option value="✓ BAIK & BERSIH">✓ BAIK & BERSIH</option>
+                  <option value="KOTOR / BERDEBU">KOTOR / BERDEBU</option>
+                  <option value="CACAT / PENYOK / BOCOR">CACAT / PENYOK / BOCOR</option>
+                  <option value="BASAH / LEMBAB">BASAH / LEMBAB</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                  Petugas Penerima Werehouse <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={receivedByStaff}
+                  onChange={(e) => setReceivedByStaff(e.target.value)}
+                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-semibold"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                  Catatan Tambahan Werehouse
+                </label>
+                <input
+                  type="text"
+                  value={additionalNotes}
+                  onChange={(e) => setAdditionalNotes(e.target.value)}
+                  placeholder="Kondisi palet, catatan kebersihan armada, dsb."
+                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                />
+              </div>
+            </div>
+          </div>
+
           {/* Action Buttons Footer */}
           <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3 shrink-0">
             <button
@@ -540,8 +896,8 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
                   : 'bg-blue-600 hover:bg-blue-700 shadow-blue-600/20'
               } disabled:opacity-50`}
             >
-              <ShieldCheck className="w-4 h-4" />
-              <span>{isSubmitting ? 'Menyimpan...' : 'Simpan & Registrasi Karantina CPKB'}</span>
+              <Check className="w-4 h-4" />
+              <span>{isSubmitting ? 'Menyimpan...' : 'Simpan Penerimaan & Masuk Karantina Werehouse'}</span>
             </button>
           </div>
         </form>
@@ -549,3 +905,4 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
     </div>
   );
 };
+

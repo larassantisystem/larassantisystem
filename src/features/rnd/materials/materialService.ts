@@ -39,15 +39,40 @@ export const materialService = {
   getMaterials: async (): Promise<RawMaterial[]> => {
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data, error } = await supabase
-          .from('raw_materials')
-          .select('*')
-          .order('code', { ascending: true });
+        let allData: any[] = [];
+        let from = 0;
+        const step = 1000;
+        let hasMore = true;
+        let fetchError = false;
 
-        if (error) {
-          console.error('[Supabase Audit] Error fetching raw_materials:', error);
-        } else if (data) {
-          const mapped: RawMaterial[] = data.map((m: any) => ({
+        // Fetch in batches of 1000 to bypass Supabase PostgREST default max-rows limit (1000 items)
+        while (hasMore) {
+          const { data, error } = await supabase
+            .from('raw_materials')
+            .select('*')
+            .order('code', { ascending: true })
+            .range(from, from + step - 1);
+
+          if (error) {
+            console.error('[Supabase Audit] Error fetching raw_materials batch:', error);
+            fetchError = true;
+            break;
+          }
+
+          if (data && data.length > 0) {
+            allData = allData.concat(data);
+            if (data.length < step) {
+              hasMore = false;
+            } else {
+              from += step;
+            }
+          } else {
+            hasMore = false;
+          }
+        }
+
+        if (!fetchError && (allData.length > 0 || from === 0)) {
+          const mapped: RawMaterial[] = allData.map((m: any) => ({
             id: m.id,
             code: m.code,
             specNumber: m.spec_number || m.specNumber || `SP-BB-${m.code}`,

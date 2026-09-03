@@ -30,14 +30,23 @@ import {
   ClipboardList,
   History,
   FileText,
-  Factory
+  Factory,
+  Scale,
+  Clock,
 } from 'lucide-react';
 import { Logo } from '../../components/Logo';
+import { GlobalNotificationCenter } from '../notifications/GlobalNotificationCenter';
+import {
+  departmentNotificationService,
+  DepartmentNotificationCounts,
+} from '../notifications/departmentNotificationService';
+import { NotificationBadge } from './NotificationBadge';
 
 export interface SubMenuItem {
   id: string;
   label: string;
   icon?: React.ReactNode;
+  subItems?: SubMenuItem[];
 }
 
 export interface DepartmentConfig {
@@ -66,24 +75,61 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 }) => {
   const { user, logout } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [counts, setCounts] = useState<DepartmentNotificationCounts>({
+    all: 0,
+    warehouse: 0,
+    quality: 0,
+    ppic: 0,
+    production: 0,
+    procurement: 0,
+    sales: 0,
+    rnd: 0,
+    admin: 0,
+  });
+
+  const refreshNotificationCounts = async () => {
+    try {
+      const c = await departmentNotificationService.getCounts();
+      setCounts(c);
+    } catch (e) {
+      console.error('Error fetching notification counts:', e);
+    }
+  };
+
+  useEffect(() => {
+    refreshNotificationCounts();
+    const timer = setInterval(refreshNotificationCounts, 10000);
+    return () => clearInterval(timer);
+  }, []);
   
   // Track which accordion departments are expanded
   const [expandedDepts, setExpandedDepts] = useState<Record<string, boolean>>({
-    rnd: true,
+    rnd: false,
     ppic: false,
     quality: false,
     warehouse: false,
+    production: false,
     procurement: false,
     sales: false,
     admin: false
   });
 
+  // Track which layer-1 sub-groups are expanded
+  const [expandedSubItems, setExpandedSubItems] = useState<Record<string, boolean>>({
+    'quality-incoming': false,
+    'quality-ipc': false,
+    'quality-retained-stability': false,
+    'quality-doc-control': false,
+  });
+
   const toggleAccordion = (deptId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setExpandedDepts((prev) => ({
-      ...prev,
-      [deptId]: !prev[deptId],
-    }));
+    setExpandedDepts((prev) => {
+      const wasExpanded = !!prev[deptId];
+      const next: Record<string, boolean> = {};
+      next[deptId] = !wasExpanded;
+      return next;
+    });
   };
 
   const departments: DepartmentConfig[] = [
@@ -116,24 +162,58 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       id: 'quality',
       name: 'Quality (QA/QC)',
       shortName: 'QC Lab',
-      description: 'Sampling, Lab, Karantina & CoA',
+      description: 'Sampling, Lab, Karantina & Laporan',
       icon: <CheckCircle2 className="w-4 h-4 text-amber-700" />,
       subItems: [
-        { id: 'sampling', label: 'Sampling & Karantina', icon: <FlaskConical className="w-3.5 h-3.5" /> },
-        { id: 'coa', label: 'Sertifikat Analisis (CoA)', icon: <FileText className="w-3.5 h-3.5" /> },
-        { id: 'release', label: 'Otorisasi Rilis CPKB', icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
+        {
+          id: 'incoming',
+          label: '📥 1. Incoming (Bahan Masuk)',
+          subItems: [
+            { id: 'queue', label: '1.1 Antrean Karantina', icon: <Clock className="w-3.5 h-3.5 text-amber-500" /> },
+            { id: 'testing', label: '1.2 Pengujian Lab', icon: <FlaskConical className="w-3.5 h-3.5 text-teal-600" /> },
+            { id: 'approval', label: '1.3 Otorisasi Manager', icon: <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" /> },
+            { id: 'archive', label: '1.4 Arsip Laporan & Lot', icon: <FileText className="w-3.5 h-3.5 text-emerald-600" /> },
+          ]
+        },
+        {
+          id: 'ipc',
+          label: '⚙️ 2. In-Process Control (IPC)',
+          subItems: [
+            { id: 'ipc-bulk', label: '2.1 Sediaan Ruahan (Bulk)', icon: <Sliders className="w-3.5 h-3.5 text-blue-600" /> },
+            { id: 'ipc-rework', label: '2.2 Uji Rework', icon: <FlaskConical className="w-3.5 h-3.5 text-orange-500" /> },
+          ]
+        },
+        {
+          id: 'retained-stability',
+          label: '🧪 3. Retained & Stability',
+          subItems: [
+            { id: 'retained', label: '3.1 Retained Sample', icon: <Package className="w-3.5 h-3.5 text-teal-700" /> },
+            { id: 'stability', label: '3.2 Stability Study', icon: <CalendarDays className="w-3.5 h-3.5 text-purple-700" /> },
+          ]
+        },
+        {
+          id: 'doc-control',
+          label: '📑 4. Document Control & Keluhan',
+          subItems: [
+            { id: 'sop', label: '4.1 Daftar SOP Aktif', icon: <FileText className="w-3.5 h-3.5 text-slate-700" /> },
+            { id: 'capa', label: '4.2 Riwayat Deviasi & CAPA', icon: <ClipboardList className="w-3.5 h-3.5 text-rose-600" /> },
+            { id: 'complaints', label: '4.3 Complaint Handling', icon: <Info className="w-3.5 h-3.5 text-blue-600" /> },
+          ]
+        }
       ]
     },
     {
       id: 'warehouse',
       name: 'Warehouse (Gudang)',
       shortName: 'Gudang',
-      description: 'Penerimaan Material & FEFO',
+      description: 'Penerimaan Material, Stok BB & Kemas, FEFO',
       icon: <Package className="w-4 h-4 text-orange-700" />,
       subItems: [
-        { id: 'inbound', label: 'Penerimaan Raw Material', icon: <Package className="w-3.5 h-3.5" /> },
-        { id: 'weighing', label: 'Penimbangan FEFO Bersih', icon: <Sliders className="w-3.5 h-3.5" /> },
-        { id: 'finished-goods', label: 'Stok Produk Jadi (PJ)', icon: <PackageCheck className="w-3.5 h-3.5" /> },
+        { id: 'inbound', label: '1. Penerimaan Barang (GRN)', icon: <Package className="w-3.5 h-3.5" /> },
+        { id: 'stock-raw', label: '2. Stock Bahan Baku (BB)', icon: <FlaskConical className="w-3.5 h-3.5 text-teal-700" /> },
+        { id: 'stock-packaging', label: '3. Stock Bahan Kemas (BK)', icon: <Layers className="w-3.5 h-3.5 text-purple-700" /> },
+        { id: 'weighing', label: '4. Penimbangan FEFO Bersih', icon: <Scale className="w-3.5 h-3.5" /> },
+        { id: 'finished-goods', label: '5. Stok Produk Jadi (PJ)', icon: <PackageCheck className="w-3.5 h-3.5" /> },
       ]
     },
     {
@@ -191,6 +271,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     }
   }, [activeTab, user, onSelectTab]);
 
+  const handleNotificationNavigate = (dept: Department, subTab?: string) => {
+    onSelectTab(dept);
+    if (subTab && onSelectSubTab) {
+      onSelectSubTab(subTab);
+    }
+  };
+
   return (
     <div className="h-screen bg-slate-50 text-slate-800 flex flex-col font-sans overflow-hidden">
       {/* Crisp Light Top Navigation Bar (Fixed / Shrink-0) */}
@@ -212,6 +299,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
         {/* User Info & Actions */}
         <div className="flex items-center gap-2.5">
+          {/* Universal Department Notification Center Dropdown */}
+          <GlobalNotificationCenter onNavigate={handleNotificationNavigate} />
+
           {/* User Profile Pill */}
           <div className="relative">
             <button
@@ -320,8 +410,11 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
         {/* Department Sidebar Navigation (Accordion Format) - Fixed in place, scrollable internally */}
         <aside className="w-full md:w-64 border-b md:border-b-0 md:border-r border-slate-200 bg-white p-3 flex md:flex-col gap-1 overflow-x-auto md:overflow-y-auto shrink-0 shadow-xs scrollbar-none items-center md:items-stretch h-auto md:h-full">
-          <div className="hidden md:block px-3 py-1.5 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">
-            Menu Otoritas ({visibleDepartments.length} Modul)
+          <div className="hidden md:flex items-center justify-between px-3 py-1.5 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">
+            <span>Menu Otoritas</span>
+            {counts.all > 0 && (
+              <NotificationBadge count={`${counts.all} Tugas`} variant="danger" size="sm" pulse={true} />
+            )}
           </div>
 
           {/* Home button */}
@@ -347,11 +440,12 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
           <div className="hidden md:block my-1 border-t border-slate-100"></div>
 
-          {/* Accordion Department Menus */}
+          {/* Accordion Department Menus with Departmental Notification Badges */}
           {visibleDepartments.map((dept) => {
             const isDeptActive = activeTab === dept.id;
             const isExpanded = !!expandedDepts[dept.id];
             const hasSubItems = dept.subItems && dept.subItems.length > 0;
+            const deptCount = (counts as any)[dept.id] || 0;
 
             return (
               <div key={dept.id} className="w-auto md:w-full shrink-0 flex flex-col">
@@ -359,8 +453,15 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 <div
                   onClick={() => {
                     onSelectTab(dept.id);
-                    if (hasSubItems && !isExpanded) {
-                      setExpandedDepts((prev) => ({ ...prev, [dept.id]: true }));
+                    if (hasSubItems) {
+                      setExpandedDepts((prev) => {
+                        const wasExpanded = !!prev[dept.id];
+                        const next: Record<string, boolean> = {};
+                        next[dept.id] = !wasExpanded;
+                        return next;
+                      });
+                    } else {
+                      setExpandedDepts({});
                     }
                   }}
                   className={`flex items-center justify-between gap-2 md:gap-2.5 px-3 py-2 md:py-2 rounded-xl text-xs font-bold transition-all text-left w-auto md:w-full cursor-pointer select-none ${
@@ -375,11 +476,27 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                     }`}>
                       {dept.icon}
                     </div>
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 flex items-center justify-between">
                       <div className="md:hidden text-[11px] font-bold whitespace-nowrap">{dept.shortName}</div>
                       <div className="hidden md:block truncate font-bold text-xs">{dept.name}</div>
                     </div>
                   </div>
+
+                  {/* Department Notification Badge */}
+                  {deptCount > 0 && (
+                    <NotificationBadge
+                      count={deptCount}
+                      variant={
+                        dept.id === 'quality'
+                          ? 'warning'
+                          : dept.id === 'warehouse'
+                          ? 'purple'
+                          : 'danger'
+                      }
+                      size="sm"
+                      pulse={true}
+                    />
+                  )}
 
                   {/* Accordion Toggle Icon (Desktop) */}
                   {hasSubItems && (
@@ -402,6 +519,68 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 {hasSubItems && isExpanded && (
                   <div className="hidden md:flex flex-col gap-0.5 pl-6 pr-1 py-1 mt-0.5 border-l-2 border-purple-100 ml-4 space-y-0.5 animate-in fade-in slide-in-from-top-1 duration-150">
                     {dept.subItems!.map((sub) => {
+                      const hasNestedItems = sub.subItems && sub.subItems.length > 0;
+                      const isSubExpanded = !!expandedSubItems[`${dept.id}-${sub.id}`];
+
+                      if (hasNestedItems) {
+                        return (
+                          <div key={sub.id} className="flex flex-col gap-0.5 mt-1.5 first:mt-0">
+                            {/* Layer 1 Collapsible Sub-Group Header */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setExpandedSubItems(prev => ({
+                                  ...prev,
+                                  [`${dept.id}-${sub.id}`]: !prev[`${dept.id}-${sub.id}`]
+                                }));
+                              }}
+                              className="flex items-center justify-between px-2 py-1 rounded-lg text-[10px] font-extrabold uppercase tracking-wider text-slate-500 hover:text-purple-700 hover:bg-purple-50/50 transition-all text-left cursor-pointer w-full select-none"
+                            >
+                              <span className="truncate">{sub.label}</span>
+                              {isSubExpanded ? (
+                                <ChevronDown className="w-3 h-3 text-purple-700" />
+                              ) : (
+                                <ChevronRight className="w-3 h-3 text-slate-400" />
+                              )}
+                            </button>
+
+                            {/* Layer 2 Items */}
+                            {isSubExpanded && (
+                              <div className="flex flex-col gap-0.5 pl-2.5 border-l border-slate-200 ml-2 py-1 space-y-0.5">
+                                {sub.subItems!.map((nested) => {
+                                  const isNestedActive = isDeptActive && activeSubTab === nested.id;
+                                  return (
+                                    <button
+                                      key={nested.id}
+                                      type="button"
+                                      onClick={() => {
+                                        onSelectTab(dept.id);
+                                        if (onSelectSubTab) {
+                                          onSelectSubTab(nested.id);
+                                        }
+                                      }}
+                                      className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition-all text-left cursor-pointer w-full ${
+                                        isNestedActive
+                                          ? 'bg-purple-700 text-white font-bold shadow-xs'
+                                          : 'text-slate-600 hover:text-purple-700 hover:bg-purple-50/60'
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                                        <span className={isNestedActive ? 'text-white' : 'text-slate-400'}>
+                                          {nested.icon}
+                                        </span>
+                                        <span className="truncate">{nested.label}</span>
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      // Standard single-layer SubItem (for non-Quality departments)
                       const isSubActive = isDeptActive && activeSubTab === sub.id;
                       return (
                         <button
@@ -412,16 +591,18 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                               onSelectSubTab(sub.id);
                             }
                           }}
-                          className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all text-left cursor-pointer w-full ${
+                          className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all text-left cursor-pointer w-full ${
                             isSubActive
                               ? 'bg-purple-700 text-white font-bold shadow-xs'
                               : 'text-slate-600 hover:text-purple-700 hover:bg-purple-50'
                           }`}
                         >
-                          <span className={isSubActive ? 'text-white' : 'text-slate-400'}>
-                            {sub.icon}
-                          </span>
-                          <span className="truncate">{sub.label}</span>
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <span className={isSubActive ? 'text-white' : 'text-slate-400'}>
+                              {sub.icon}
+                            </span>
+                            <span className="truncate">{sub.label}</span>
+                          </div>
                         </button>
                       );
                     })}
@@ -440,4 +621,3 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     </div>
   );
 };
-

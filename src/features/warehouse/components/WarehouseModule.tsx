@@ -11,15 +11,23 @@ import {
   FlaskConical,
   Boxes,
   Truck,
+  MinusCircle,
+  Scale,
 } from 'lucide-react';
 import { RawMaterial, PackagingMaterial } from '../../../types';
 import { materialService } from '../../rnd/materials/materialService';
 import { packagingService } from '../../rnd/materials/packagingService';
 import { warehouseService } from '../warehouseService';
+import { stockService } from '../stockService';
 import { GrnRecord, GrnStats } from '../types/grnTypes';
 import { GrnFormModal } from './GrnFormModal';
 import { GrnTable } from './GrnTable';
+import { QuarantineLabelModal } from './QuarantineLabelModal';
+import { StockRawMaterialPage } from './StockRawMaterialPage';
+import { StockPackagingPage } from './StockPackagingPage';
+import { LocationRelocationPage } from './LocationRelocationPage';
 import { useAuth } from '../../../core/auth/AuthContext';
+import { MapPin, ArrowRightLeft } from 'lucide-react';
 
 interface WarehouseModuleProps {
   activeSubTab?: string;
@@ -42,8 +50,9 @@ export const WarehouseModule: React.FC<WarehouseModuleProps> = ({
   const [grnRecords, setGrnRecords] = useState<GrnRecord[]>([]);
   const [isLoadingGrn, setIsLoadingGrn] = useState(true);
 
-  // Modal state
+  // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [quarantineRecordToPrint, setQuarantineRecordToPrint] = useState<GrnRecord | null>(null);
 
   // Sync subTab prop
   useEffect(() => {
@@ -79,11 +88,27 @@ export const WarehouseModule: React.FC<WarehouseModuleProps> = ({
   const handleSaveGrn = async (recordData: Omit<GrnRecord, 'id' | 'createdAt' | 'grnNumber'>) => {
     const saved = await warehouseService.saveGrnRecord(recordData);
     setGrnRecords((prev) => [saved, ...prev]);
+    // Synchronize stock lots
+    await stockService.getStockLots();
+    // Buka dialog cetak label karantina otomatis
+    setQuarantineRecordToPrint(saved);
+  };
+
+  const handleUpdateGrn = async (id: string, updatedData: Partial<GrnRecord>) => {
+    const updated = await warehouseService.updateGrnRecord(id, updatedData);
+    setGrnRecords((prev) => prev.map((r) => (r.id === id ? updated : r)));
+    await stockService.getStockLots();
   };
 
   const handleDeleteGrn = async (id: string) => {
     await warehouseService.deleteGrnRecord(id);
     setGrnRecords((prev) => prev.filter((r) => r.id !== id));
+    await stockService.getStockLots();
+  };
+
+  const handleTabChange = (tabId: string) => {
+    setCurrentTab(tabId);
+    if (onSelectSubTab) onSelectSubTab(tabId);
   };
 
   return (
@@ -101,11 +126,11 @@ export const WarehouseModule: React.FC<WarehouseModuleProps> = ({
                   Warehouse & Logistik CPKB
                 </h1>
                 <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
-                  Sistem GRN Aktif
+                  Sistem GRN & Stok Aktif
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                Penerimaan barang masuk (Raw Material & Kemasan), verifikasi koli, dan penempatan karantina awal CPKB.
+                Penerimaan barang, pemisahan stok bahan baku & bahan kemas, kartu stok FEFO, dan rekonsiliasi opname.
               </p>
             </div>
           </div>
@@ -115,7 +140,7 @@ export const WarehouseModule: React.FC<WarehouseModuleProps> = ({
             <button
               onClick={loadData}
               title="Muat ulang data"
-              className="p-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-500 hover:text-slate-900 transition-colors"
+              className="p-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-500 hover:text-slate-900 transition-colors cursor-pointer"
             >
               <RefreshCw className="w-4 h-4" />
             </button>
@@ -152,82 +177,54 @@ export const WarehouseModule: React.FC<WarehouseModuleProps> = ({
             </div>
           </div>
 
-          <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200/80">
-            <div className="flex items-center justify-between text-[11px] font-bold text-emerald-800">
-              <span>Lolos Uji (Rilis)</span>
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+          <div className="p-3.5 rounded-2xl bg-teal-50/70 border border-teal-200/80">
+            <div className="flex items-center justify-between text-[11px] font-bold text-teal-800">
+              <span>Bahan Baku (B)</span>
+              <FlaskConical className="w-3.5 h-3.5 text-teal-600" />
             </div>
-            <div className="text-xl font-black text-emerald-900 mt-1">
-              {stats.passedQC} <span className="text-xs font-semibold text-emerald-600">Siap Pakai</span>
+            <div className="text-xl font-black text-teal-900 mt-1">
+              {rawMaterials.length} <span className="text-xs font-semibold text-teal-600">Master BB</span>
             </div>
           </div>
 
-          <div className="p-3.5 rounded-2xl bg-blue-50/70 border border-blue-200/80">
-            <div className="flex items-center justify-between text-[11px] font-bold text-blue-800">
+          <div className="p-3.5 rounded-2xl bg-purple-50/70 border border-purple-200/80">
+            <div className="flex items-center justify-between text-[11px] font-bold text-purple-800">
               <span>Bahan Kemas (K)</span>
-              <Layers className="w-3.5 h-3.5 text-blue-600" />
+              <Layers className="w-3.5 h-3.5 text-purple-600" />
             </div>
-            <div className="text-xl font-black text-blue-900 mt-1">
-              {stats.packagingCount} <span className="text-xs font-semibold text-blue-600">Lot Masuk</span>
+            <div className="text-xl font-black text-purple-900 mt-1">
+              {packagingMaterials.length} <span className="text-xs font-semibold text-purple-600">Master BK</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Sub-Tab Navigation */}
-      <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
-        <button
-          onClick={() => {
-            setCurrentTab('inbound');
-            if (onSelectSubTab) onSelectSubTab('inbound');
-          }}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-            currentTab === 'inbound'
-              ? 'bg-slate-900 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}
-        >
-          <Package className="w-3.5 h-3.5" />
-          <span>Daftar Kedatangan Barang (GRN)</span>
-          <span className="ml-1 text-[10px] px-1.5 py-0.2 rounded-full bg-slate-800 text-slate-200">
-            {grnRecords.length}
-          </span>
-        </button>
-
-        <button
-          onClick={() => {
-            setCurrentTab('weighing');
-            if (onSelectSubTab) onSelectSubTab('weighing');
-          }}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-            currentTab === 'weighing'
-              ? 'bg-slate-900 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}
-        >
-          <FlaskConical className="w-3.5 h-3.5" />
-          <span>Penimbangan FEFO Bersih</span>
-        </button>
-
-        <button
-          onClick={() => {
-            setCurrentTab('finished-goods');
-            if (onSelectSubTab) onSelectSubTab('finished-goods');
-          }}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-            currentTab === 'finished-goods'
-              ? 'bg-slate-900 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}
-        >
-          <Boxes className="w-3.5 h-3.5" />
-          <span>Stok Produk Jadi (PJ)</span>
-        </button>
-      </div>
-
       {/* Main Tab Content */}
       {currentTab === 'inbound' && (
-        <GrnTable records={grnRecords} onDeleteRecord={handleDeleteGrn} />
+        <GrnTable
+          records={grnRecords}
+          onDeleteRecord={handleDeleteGrn}
+          onUpdateRecord={handleUpdateGrn}
+          onPrintLabel={(rec) => setQuarantineRecordToPrint(rec)}
+        />
+      )}
+
+      {currentTab === 'stock-raw' && (
+        <StockRawMaterialPage
+          onSwitchToPackaging={() => handleTabChange('stock-packaging')}
+          packagingCount={packagingMaterials.length}
+        />
+      )}
+
+      {currentTab === 'stock-packaging' && (
+        <StockPackagingPage
+          onSwitchToRaw={() => handleTabChange('stock-raw')}
+          rawCount={rawMaterials.length}
+        />
+      )}
+
+      {currentTab === 'relocation' && (
+        <LocationRelocationPage />
       )}
 
       {currentTab === 'weighing' && (
@@ -258,6 +255,13 @@ export const WarehouseModule: React.FC<WarehouseModuleProps> = ({
         packagingMaterials={packagingMaterials}
         onSave={handleSaveGrn}
         userName={user?.name || 'Staf Gudang Logistik'}
+      />
+
+      {/* Quarantine Label Print Modal */}
+      <QuarantineLabelModal
+        isOpen={!!quarantineRecordToPrint}
+        onClose={() => setQuarantineRecordToPrint(null)}
+        record={quarantineRecordToPrint}
       />
     </div>
   );

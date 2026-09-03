@@ -145,6 +145,10 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
   const [isSubmittingImport, setIsSubmittingImport] = useState(false);
   const excelFileInputRef = useRef<HTMLInputElement>(null);
 
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
+
   // Filtered PM
   const filteredPM = packagingMaterials.filter((pm) => {
     const matchesSearch =
@@ -157,6 +161,11 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
 
     return matchesSearch && matchesType;
   });
+
+  // Pagination slice
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = filteredPM.slice(indexOfFirstItem, indexOfLastItem);
 
   // Open Add Modal
   const openAddPMModal = () => {
@@ -706,7 +715,10 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
               type="text"
               placeholder="Cari kode PM (K0001), nama kemasan, supplier, satuan..."
               value={searchPM}
-              onChange={(e) => setSearchPM(e.target.value)}
+              onChange={(e) => {
+                setSearchPM(e.target.value);
+                setCurrentPage(1);
+              }}
               className="w-full bg-white border border-slate-200 rounded-xl py-2 pl-10 pr-4 text-xs text-slate-800 placeholder-slate-400 focus:border-purple-600 focus:outline-none focus:ring-1 focus:ring-purple-600 shadow-xs"
             />
           </div>
@@ -714,7 +726,10 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
           {/* Type Filter */}
           <select
             value={selectedTypeFilter}
-            onChange={(e) => setSelectedTypeFilter(e.target.value)}
+            onChange={(e) => {
+              setSelectedTypeFilter(e.target.value);
+              setCurrentPage(1);
+            }}
             className="bg-white border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-700 font-semibold focus:outline-none focus:border-purple-600 shadow-xs"
           >
             <option value="all">Semua Tipe Kemasan</option>
@@ -722,6 +737,14 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
             <option value="secondary">Sekunder (Dus/Box)</option>
             <option value="tertiary">Tersier (Karton)</option>
           </select>
+
+          {/* Counter Badge */}
+          <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50 border border-purple-200 text-purple-800 text-xs font-mono font-bold whitespace-nowrap">
+            <span>Total: {packagingMaterials.length} Item</span>
+            {filteredPM.length !== packagingMaterials.length && (
+              <span className="text-[10px] text-purple-600">({filteredPM.length} hasil)</span>
+            )}
+          </div>
         </div>
 
         {/* Action Buttons: Add & Excel Import (Hanya untuk Write Access) */}
@@ -769,7 +792,7 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
-              {filteredPM.length === 0 ? (
+              {currentItems.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="py-12 text-center text-slate-400">
                     <Boxes className="w-10 h-10 mx-auto mb-2 text-slate-300" />
@@ -778,10 +801,10 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
                   </td>
                 </tr>
               ) : (
-                filteredPM.map((pm, idx) => (
+                currentItems.map((pm, idx) => (
                   <tr key={pm.id} className="hover:bg-purple-50/40 transition-colors">
                     <td className="py-3.5 px-3 text-center font-mono text-slate-400 font-bold text-xs">
-                      {idx + 1}
+                      {indexOfFirstItem + idx + 1}
                     </td>
                     <td className="py-3.5 px-4 font-mono">
                       <div className="font-bold text-purple-700">{pm.code}</div>
@@ -862,6 +885,20 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Pagination Controls */}
+        <div className="px-4 pb-2">
+          <Pagination
+            currentPage={currentPage}
+            totalItems={filteredPM.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+            onItemsPerPageChange={(items) => {
+              setItemsPerPage(items);
+              setCurrentPage(1);
+            }}
+          />
         </div>
       </div>
 
