@@ -339,15 +339,20 @@ export const RndBomCalculatorTab: React.FC<RndBomCalculatorTabProps> = ({
             </div>
 
             <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-              {bomResult.ingredientBOM.map((ing) => (
+              {bomResult.ingredientBOM.map((ing, idx) => (
                 <div
                   key={ing.code}
                   className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between hover:bg-purple-50/30 transition-colors"
                 >
-                  <div>
-                    <div className="font-bold text-slate-800 text-xs">{ing.name}</div>
-                    <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                      {ing.code} • Persentase: {ing.percentage.toFixed(2)}%
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-5 text-center font-mono font-bold text-[11px] text-slate-400 shrink-0">
+                      #{idx + 1}
+                    </span>
+                    <div>
+                      <div className="font-bold text-slate-800 text-xs">{ing.name}</div>
+                      <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                        {ing.code} • Persentase: {ing.percentage.toFixed(2)}%
+                      </div>
                     </div>
                   </div>
                   <div className="text-right">
@@ -376,15 +381,20 @@ export const RndBomCalculatorTab: React.FC<RndBomCalculatorTabProps> = ({
 
             {bomResult.packagingBOM.length > 0 ? (
               <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-                {bomResult.packagingBOM.map((pm) => (
+                {bomResult.packagingBOM.map((pm, idx) => (
                   <div
                     key={pm.code}
                     className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between hover:bg-purple-50/30 transition-colors"
                   >
-                    <div>
-                      <div className="font-bold text-slate-800 text-xs">{pm.name}</div>
-                      <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                        {pm.code} • Satuan: {pm.artwork}
+                    <div className="flex items-center gap-2.5">
+                      <span className="w-5 text-center font-mono font-bold text-[11px] text-slate-400 shrink-0">
+                        #{idx + 1}
+                      </span>
+                      <div>
+                        <div className="font-bold text-slate-800 text-xs">{pm.name}</div>
+                        <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                          {pm.code} • Satuan: {pm.artwork}
+                        </div>
                       </div>
                     </div>
                     <div className="text-right">

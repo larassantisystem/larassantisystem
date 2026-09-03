@@ -5,6 +5,7 @@ import { useAuth } from '../../core/auth/AuthContext';
 import { authService } from '../../core/auth/authService';
 import { canWriteModule, isReadOnlyModule } from '../../core/auth/permissionGuard';
 import { driveClient, DriveUploadedFile } from '../../core/drive-service/driveClient';
+import { ensureUUID, generateUUID } from '../../utils/uuid';
 import {
   FlaskConical,
   Search,
@@ -107,6 +108,13 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
   const [confirmPasswordError, setConfirmPasswordError] = useState<string | null>(null);
   const [isVerifyingPassword, setIsVerifyingPassword] = useState(false);
   const [successToast, setSuccessToast] = useState<string | null>(null);
+
+  // Delete with Active User Password states
+  const [rmToDelete, setRmToDelete] = useState<RawMaterial | null>(null);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [showDeletePassword, setShowDeletePassword] = useState(false);
+  const [deletePasswordError, setDeletePasswordError] = useState<string | null>(null);
+  const [isVerifyingDeletePassword, setIsVerifyingDeletePassword] = useState(false);
 
   // Import Excel states
   const [importTab, setImportTab] = useState<'file' | 'paste'>('file');
@@ -329,9 +337,6 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
     if (!sdsFile && !sdsFileUrl) {
       errors.push('Dokumen SDS wajib diunggah ke Google Drive (atau tautkan URL Google Drive resmi).');
     }
-    if (!rmLeadTime || Number(rmLeadTime) <= 0) {
-      errors.push('Lead Time Supplier (Hari) wajib diisi angka valid minimal 1 hari.');
-    }
     if (!rmStorage.trim()) {
       errors.push('Kondisi Penyimpanan wajib diisi.');
     }
@@ -354,6 +359,59 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
     setConfirmPassword('');
     setConfirmPasswordError(null);
     setShowLiveViewModal(true);
+  };
+
+  // Execute Delete after active user password confirmation
+  const handleConfirmDeleteRM = async () => {
+    if (!rmToDelete) return;
+    if (!deletePassword.trim()) {
+      setDeletePasswordError('Kata sandi otorisasi pengguna aktif wajib diisi.');
+      return;
+    }
+
+    setIsVerifyingDeletePassword(true);
+    setDeletePasswordError(null);
+
+    try {
+      const actorNik = user?.nik || 'admin';
+      const check = await authService.verifyPassword(actorNik, deletePassword);
+      if (!check.valid) {
+        setDeletePasswordError(check.error || 'Kata sandi tidak valid. Silakan periksa kembali.');
+        setIsVerifyingDeletePassword(false);
+        return;
+      }
+
+      // Execute parent deletion
+      onDeleteRM(rmToDelete.id);
+
+      // Record Audit Trail Log
+      try {
+        const rawAudit = localStorage.getItem('cosmo_ddmp_audit_logs');
+        const auditList = rawAudit ? JSON.parse(rawAudit) : [];
+        const newAuditLog = {
+          id: `aud-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          actorNik: actorNik,
+          actorName: user?.name || user?.username || 'ADMIN',
+          module: 'rnd',
+          action: 'RM_MASTER_DELETE',
+          targetNik: rmToDelete.code,
+          details: `Penghapusan Master Bahan Baku ${rmToDelete.code} (${rmToDelete.name}) dengan otorisasi kata sandi pengguna aktif.`,
+        };
+        localStorage.setItem('cosmo_ddmp_audit_logs', JSON.stringify([newAuditLog, ...auditList]));
+      } catch (auditErr) {
+        console.warn('Audit trail write failed:', auditErr);
+      }
+
+      setIsVerifyingDeletePassword(false);
+      setSuccessToast(`Bahan baku "${rmToDelete.code} - ${rmToDelete.name}" berhasil dihapus.`);
+      setRmToDelete(null);
+      setDeletePassword('');
+      setTimeout(() => setSuccessToast(null), 5000);
+    } catch (err: any) {
+      setDeletePasswordError(err.message || 'Terjadi kesalahan saat memverifikasi sandi.');
+      setIsVerifyingDeletePassword(false);
+    }
   };
 
   // Execute Save after Password confirmation
@@ -379,8 +437,9 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
       const primaryCategory = rmCategories[0] || 'active';
 
       const newOrUpdatedRM: RawMaterial = {
-        id: editingRM ? editingRM.id : `rm-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        id: editingRM ? ensureUUID(editingRM.id) : generateUUID(),
         code: rmCode.trim().toUpperCase(),
+        specNumber: `SP-BB-${rmCode.trim().toUpperCase()}`,
         name: rmName.trim(),
         chemicalName: rmChemName.trim(),
         category: primaryCategory,
@@ -664,8 +723,9 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
     }
 
     list.push({
-      id: `rm-bulk-${Date.now()}-${rowIndex}-${Math.random().toString(36).substr(2, 4)}`,
+      id: generateUUID(),
       code,
+      specNumber: `SP-BB-${code}`,
       name,
       chemicalName,
       category,
@@ -794,24 +854,24 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
         </div>
       </div>
 
-      {/* Main Table List (Streamlined & Clean without SDS/Storage columns) */}
+      {/* Main Table List (Streamlined & Clean without Lead Time) */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-slate-600 text-[10px] font-bold uppercase tracking-wider">
+                <th className="py-3 px-3 text-center w-12">No</th>
                 <th className="py-3 px-4">Kode RM</th>
                 <th className="py-3 px-4">Nama Dagang Bahan</th>
                 <th className="py-3 px-4">Kategori Fungsional</th>
                 <th className="py-3 px-4">Pabrikan (Manufacturer)</th>
-                <th className="py-3 px-4">Lead Time</th>
                 <th className="py-3 px-4">Parameter Acuan QC (RnD)</th>
                 <th className="py-3 px-4 text-right">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
               {filteredRM.length > 0 ? (
-                filteredRM.map((rm) => {
+                filteredRM.map((rm, idx) => {
                   const displayCategories = rm.categories && rm.categories.length > 0 ? rm.categories : [rm.category];
                   return (
                     <tr 
@@ -819,8 +879,16 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
                       className="hover:bg-purple-50/30 transition-colors cursor-pointer"
                       onClick={() => setSelectedRMForDetails(rm)}
                     >
-                      {/* Kode */}
-                      <td className="py-3.5 px-4 font-mono font-bold text-purple-700">{rm.code}</td>
+                      {/* Nomor Urut */}
+                      <td className="py-3.5 px-3 text-center font-mono text-slate-400 font-bold text-xs">
+                        {idx + 1}
+                      </td>
+
+                      {/* Kode & No. Spesifikasi */}
+                      <td className="py-3.5 px-4 font-mono">
+                        <div className="font-bold text-purple-700">{rm.code}</div>
+                        <div className="text-[10px] font-mono text-slate-500 font-semibold">{rm.specNumber || `SP-BB-${rm.code}`}</div>
+                      </td>
                       
                       {/* Nama */}
                       <td className="py-3.5 px-4 max-w-xs">
@@ -835,14 +903,14 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
                       {/* Kategori Fungsional (Multi-Badge Support) */}
                       <td className="py-3.5 px-4">
                         <div className="flex flex-wrap gap-1 max-w-[200px]">
-                          {displayCategories.map((catKey, idx) => {
+                          {displayCategories.map((catKey, cIdx) => {
                             const config = RAW_MATERIAL_CATEGORIES.find(c => c.id === catKey);
                             const label = catKey === 'other' && rm.otherCategorySpecification 
                               ? rm.otherCategorySpecification 
                               : (config ? config.label.split(' ')[0] : catKey);
                             return (
                               <span 
-                                key={idx} 
+                                key={cIdx} 
                                 className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border ${config ? config.badge : 'bg-purple-50 text-purple-700 border-purple-200'}`}
                               >
                                 {label}
@@ -855,13 +923,6 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
                       {/* Pabrikan */}
                       <td className="py-3.5 px-4 text-slate-600 font-semibold">
                         {rm.manufacturer || <span className="text-slate-400 italic font-normal">Tidak diisi</span>}
-                      </td>
-
-                      {/* Lead Time */}
-                      <td className="py-3.5 px-4 font-medium text-slate-600">
-                        <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-mono">
-                          {rm.supplierLeadTimeDays || 14} Hari
-                        </span>
                       </td>
                       
                       {/* QC Parameters Count */}
@@ -889,9 +950,13 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
                               <Edit2 className="w-3.5 h-3.5" />
                             </button>
                             <button
-                              onClick={() => onDeleteRM(rm.id)}
+                              onClick={() => {
+                                setRmToDelete(rm);
+                                setDeletePassword('');
+                                setDeletePasswordError(null);
+                              }}
                               className="p-1.5 rounded-lg bg-slate-50 border border-slate-200 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-700 text-slate-600 transition-colors cursor-pointer"
-                              title="Hapus bahan baku"
+                              title="Hapus bahan baku (Konfirmasi Kata Sandi)"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -1004,6 +1069,9 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-purple-600 font-mono font-bold uppercase"
                       placeholder="B0001"
                     />
+                    <div className="mt-1.5 text-[10px] font-mono text-purple-700 font-bold bg-purple-50 px-2 py-0.5 rounded border border-purple-200 inline-block">
+                      No. Spesifikasi: SP-BB-{rmCode.trim().toUpperCase() || 'B0001'}
+                    </div>
                   </div>
 
                   {/* Nama Dagang */}
@@ -1120,24 +1188,8 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
                     />
                   </div>
 
-                  {/* Lead Time Supplier */}
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
-                      Lead Time Supplier (Hari) <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      required
-                      min={1}
-                      value={rmLeadTime}
-                      onChange={(e) => setRmLeadTime(Number(e.target.value))}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-purple-600 font-mono"
-                      placeholder="14"
-                    />
-                  </div>
-
                   {/* Kondisi Penyimpanan */}
-                  <div className="md:col-span-1">
+                  <div className="md:col-span-2">
                     <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
                       Kondisi Penyimpanan <span className="text-rose-500">*</span>
                     </label>
@@ -1597,8 +1649,11 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <span className="block text-[10px] text-slate-400 font-bold uppercase">Kode Bahan Baku</span>
-                    <span className="font-mono font-bold text-purple-700 text-sm">{rmCode}</span>
+                    <span className="block text-[10px] text-slate-400 font-bold uppercase mb-1">Kode & No. Spesifikasi</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-purple-700 text-xs bg-purple-100 px-2 py-0.5 rounded">{rmCode}</span>
+                      <span className="font-mono font-bold text-indigo-700 text-xs bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded">SP-BB-{rmCode.trim().toUpperCase()}</span>
+                    </div>
                   </div>
                   <div>
                     <span className="block text-[10px] text-slate-400 font-bold uppercase">Nama Dagang Bahan</span>
@@ -1632,13 +1687,9 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
                       })}
                     </div>
                   </div>
-                  <div>
+                  <div className="col-span-2">
                     <span className="block text-[10px] text-slate-400 font-bold uppercase">Kondisi Penyimpanan</span>
                     <span className="text-slate-700">{rmStorage}</span>
-                  </div>
-                  <div>
-                    <span className="block text-[10px] text-slate-400 font-bold uppercase">Lead Time Suplier</span>
-                    <span className="font-bold text-slate-800 font-mono">{rmLeadTime} Hari</span>
                   </div>
                 </div>
 
@@ -1922,7 +1973,7 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
               {/* Petunjuk Format */}
               <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 text-[11px] text-slate-600 leading-relaxed">
                 <span className="font-extrabold text-slate-800 uppercase block mb-1">📋 Standar Format Kolom CPKB:</span>
-                Urutan kolom baku: <span className="font-mono text-purple-700 font-bold">Kode RM ➔ Nama Dagang ➔ Nama INCI ➔ Kategori ➔ Produsen ➔ Penyimpanan ➔ SDS Doc ➔ Substitusi ➔ Lead Time ➔ Param 1 ➔ Syarat 1...</span>
+                Urutan kolom baku: <span className="font-mono text-purple-700 font-bold">Kode RM ➔ Nama Dagang ➔ Nama INCI ➔ Kategori ➔ Produsen ➔ Penyimpanan ➔ SDS Doc ➔ Substitusi ➔ Param 1 ➔ Syarat 1...</span>
               </div>
 
               {/* Mode 1: Drag & Drop Zone */}
@@ -2023,11 +2074,11 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
                     <table className="w-full text-left border-collapse text-[10px]">
                       <thead className="bg-slate-50 sticky top-0 border-b border-slate-200">
                         <tr className="text-slate-600 font-bold uppercase">
-                          <th className="p-2.5 pl-3">Kode RM</th>
+                          <th className="p-2.5 pl-3 w-10 text-center">No</th>
+                          <th className="p-2.5">Kode RM</th>
                           <th className="p-2.5">Nama Dagang</th>
                           <th className="p-2.5">Kategori</th>
                           <th className="p-2.5">Produsen</th>
-                          <th className="p-2.5">Lead Time</th>
                           <th className="p-2.5">Substitusi</th>
                           <th className="p-2.5 pr-3">Parameter QC</th>
                         </tr>
@@ -2035,11 +2086,11 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
                       <tbody className="divide-y divide-slate-100 text-slate-600 bg-white font-medium">
                         {importPreview.map((rm, idx) => (
                           <tr key={idx} className="hover:bg-slate-50/50">
-                            <td className="p-2.5 pl-3 font-mono font-bold text-purple-700">{rm.code}</td>
+                            <td className="p-2.5 pl-3 text-center font-mono font-bold text-slate-400">{idx + 1}</td>
+                            <td className="p-2.5 font-mono font-bold text-purple-700">{rm.code}</td>
                             <td className="p-2.5 font-bold text-slate-800">{rm.name}</td>
                             <td className="p-2.5 uppercase text-[9px] font-bold text-purple-600">{rm.category}</td>
                             <td className="p-2.5">{rm.manufacturer}</td>
-                            <td className="p-2.5 font-mono">{rm.supplierLeadTimeDays || 14} Hari</td>
                             <td className="p-2.5 font-mono">
                               {rm.approvedSubstitutes.length > 0 ? rm.approvedSubstitutes.join(', ') : '-'}
                             </td>
@@ -2115,7 +2166,10 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-mono font-bold text-xs text-purple-700 bg-slate-100 px-2 py-0.5 rounded-md">
-                      {selectedRMForDetails.code}
+                      Kode: {selectedRMForDetails.code}
+                    </span>
+                    <span className="font-mono font-bold text-xs text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md">
+                      No. Spesifikasi: {selectedRMForDetails.specNumber || `SP-BB-${selectedRMForDetails.code}`}
                     </span>
                     {(selectedRMForDetails.categories && selectedRMForDetails.categories.length > 0
                       ? selectedRMForDetails.categories
@@ -2167,7 +2221,7 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
                     </span>
                   </div>
 
-                  <div>
+                  <div className="md:col-span-2">
                     <span className="block text-[10px] font-bold text-slate-400 uppercase">Dokumen SDS & Google Drive</span>
                     <div className="mt-0.5 flex flex-col gap-1">
                       <span className="font-mono font-bold text-slate-800">
@@ -2187,13 +2241,6 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
                         <span className="text-[10px] text-slate-400 italic">Tersimpan lokal (belum di Google Drive)</span>
                       )}
                     </div>
-                  </div>
-
-                  <div>
-                    <span className="block text-[10px] font-bold text-slate-400 uppercase">Lead Time Suplier</span>
-                    <span className="font-bold text-slate-800 mt-0.5 block">
-                      {selectedRMForDetails.supplierLeadTimeDays || 14} Hari
-                    </span>
                   </div>
 
                   <div className="md:col-span-2">
@@ -2269,6 +2316,138 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
                 className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-xs font-bold text-white transition-all cursor-pointer shadow-xs"
               >
                 Tutup Detail
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: KONFIRMASI DELETE DENGAN PASSWORD USER AKTIF      */}
+      {/* ======================================================== */}
+      {rmToDelete && (
+        <div className="fixed inset-0 z-60 overflow-y-auto flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity"
+            onClick={() => !isVerifyingDeletePassword && setRmToDelete(null)}
+          ></div>
+
+          <div className="relative bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl border border-slate-200 overflow-hidden animate-fadeIn">
+            {/* Close */}
+            <button
+              type="button"
+              disabled={isVerifyingDeletePassword}
+              onClick={() => setRmToDelete(null)}
+              className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Header */}
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-11 h-11 rounded-2xl bg-rose-100 flex items-center justify-center text-rose-600 shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900">
+                  Konfirmasi Hapus Bahan Baku
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  Otorisasi Keamanan CPKB & Jejak Audit
+                </p>
+              </div>
+            </div>
+
+            {/* Detail Item Info */}
+            <div className="p-3.5 bg-rose-50/70 border border-rose-200 rounded-2xl mb-4 space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 font-semibold">Kode Bahan:</span>
+                <span className="font-mono font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded text-xs">
+                  {rmToDelete.code}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 font-semibold">Nama Dagang:</span>
+                <span className="font-bold text-slate-800 text-right max-w-[200px] truncate">
+                  {rmToDelete.name}
+                </span>
+              </div>
+              {rmToDelete.manufacturer && (
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 font-semibold">Pabrikan:</span>
+                  <span className="text-slate-700">{rmToDelete.manufacturer}</span>
+                </div>
+              )}
+            </div>
+
+            <p className="text-[11px] text-slate-600 mb-4 leading-relaxed">
+              Tindakan ini permanen. Masukkan kata sandi akun pengguna aktif Anda (<span className="font-bold text-purple-800">{user?.name || user?.username || 'ADMIN'} - {user?.nik}</span>) untuk mengonfirmasi penghapusan.
+            </p>
+
+            {/* Password input */}
+            <div className="space-y-2 mb-4">
+              <label className="block text-[10px] font-extrabold text-slate-700 uppercase tracking-wide">
+                Kata Sandi Pengguna Aktif <span className="text-rose-500">*</span>
+              </label>
+              <div className="relative">
+                <input
+                  type={showDeletePassword ? 'text' : 'password'}
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleConfirmDeleteRM();
+                    }
+                  }}
+                  autoFocus
+                  placeholder="Masukkan kata sandi akun Anda..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-3.5 pr-10 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-rose-600 font-medium"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowDeletePassword(!showDeletePassword)}
+                  className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  {showDeletePassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+
+              {deletePasswordError && (
+                <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{deletePasswordError}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                disabled={isVerifyingDeletePassword}
+                onClick={() => setRmToDelete(null)}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={isVerifyingDeletePassword || !deletePassword.trim()}
+                onClick={handleConfirmDeleteRM}
+                className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:bg-slate-300 text-white text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-sm"
+              >
+                {isVerifyingDeletePassword ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Memverifikasi...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Konfirmasi Hapus</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

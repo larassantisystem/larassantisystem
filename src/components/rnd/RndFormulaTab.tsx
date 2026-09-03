@@ -117,7 +117,7 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
         </div>
 
         <div className="space-y-2">
-          {formulations.map((f) => (
+          {formulations.map((f, fIdx) => (
             <button
               key={f.id}
               onClick={() => {
@@ -131,7 +131,10 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="font-mono text-[10px] font-bold text-purple-700">{f.code}</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-mono text-[10px] font-bold text-slate-400">#{fIdx + 1}</span>
+                  <span className="font-mono text-[10px] font-bold text-purple-700 bg-purple-100/50 px-1.5 py-0.5 rounded">{f.code}</span>
+                </div>
                 <span className="text-[10px] text-slate-400 font-medium">Batch: {f.bulkQuantityKg} Kg</span>
               </div>
               <div className="font-bold text-xs text-slate-800 group-hover:text-purple-900 transition-colors leading-relaxed">
@@ -202,6 +205,9 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
               <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                 {fIngredients.map((ing, idx) => (
                   <div key={idx} className="flex gap-3 items-center bg-slate-50 p-2 rounded-xl border border-slate-200">
+                    <span className="w-6 text-center font-mono font-bold text-xs text-slate-400 shrink-0">
+                      #{idx + 1}
+                    </span>
                     <select
                       value={ing.rawMaterialCode}
                       onChange={(e) => handleUpdateIngredientRow(idx, 'rawMaterialCode', e.target.value)}
@@ -347,10 +353,15 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
                     const rm = rawMaterials.find((r) => r.code === ing.rawMaterialCode);
                     return (
                       <div key={i} className="p-3 flex items-center justify-between text-xs hover:bg-purple-50/40 transition-colors">
-                        <div>
-                          <div className="font-bold text-slate-800">{rm ? rm.name : ing.rawMaterialCode}</div>
-                          <div className="text-[10px] text-purple-700 font-mono">
-                            {ing.rawMaterialCode} • {rm ? rm.category : ''}
+                        <div className="flex items-center gap-2.5">
+                          <span className="w-5 text-center font-mono font-bold text-[11px] text-slate-400">
+                            #{i + 1}
+                          </span>
+                          <div>
+                            <div className="font-bold text-slate-800">{rm ? rm.name : ing.rawMaterialCode}</div>
+                            <div className="text-[10px] text-purple-700 font-mono">
+                              {ing.rawMaterialCode} • {rm ? rm.category : ''}
+                            </div>
                           </div>
                         </div>
                         <div className="text-right">

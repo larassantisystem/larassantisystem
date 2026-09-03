@@ -3,6 +3,7 @@ import { PackagingMaterial, QCParameter } from '../../types';
 import { useAuth } from '../../core/auth/AuthContext';
 import { canWriteModule } from '../../core/auth/permissionGuard';
 import { authService } from '../../core/auth/authService';
+import { ensureUUID, generateUUID } from '../../utils/uuid';
 import * as XLSX from 'xlsx';
 import {
   Layers,
@@ -21,6 +22,8 @@ import {
   ShieldCheck,
   Boxes,
   CloudUpload,
+  EyeOff,
+  RefreshCw,
 } from 'lucide-react';
 
 interface RndPackagingTabProps {
@@ -119,6 +122,13 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
   const [isVerifyingPassword, setIsVerifyingPassword] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [successToast, setSuccessToast] = useState<string | null>(null);
+
+  // Delete with Active User Password states
+  const [pmToDelete, setPmToDelete] = useState<PackagingMaterial | null>(null);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [showDeletePassword, setShowDeletePassword] = useState(false);
+  const [deletePasswordError, setDeletePasswordError] = useState<string | null>(null);
+  const [isVerifyingDeletePassword, setIsVerifyingDeletePassword] = useState(false);
 
   // Import states
   const [importMode, setImportMode] = useState<'paste' | 'drop'>('paste');
@@ -242,13 +252,15 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
       const cleanQcParams = pmQcParams.filter((p) => p.name.trim() !== '');
 
       const newOrUpdatedPM: PackagingMaterial = {
-        id: editingPM ? editingPM.id : `pm-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        id: editingPM ? ensureUUID(editingPM.id) : generateUUID(),
         code: pmCode.trim().toUpperCase(),
+        specNumber: `SP-BK-${pmCode.trim().toUpperCase()}`,
         name: pmName.trim(),
         type: pmType,
         unit: pmUnit,
         unitCapacityGrams: pmType === 'primary' ? Number(pmCapacity) || 0 : undefined,
         supplier: pmSupplier.trim(),
+        manufacturer: pmSupplier.trim(),
         storageConditions: pmStorage.trim(),
         qcParameters: cleanQcParams,
         lastModifiedBy: `${user?.name || 'ADMIN'} (${actorNik})`,
@@ -285,6 +297,59 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
     } catch (err: any) {
       setConfirmPasswordError(err.message || 'Terjadi kesalahan saat memverifikasi sandi.');
       setIsVerifyingPassword(false);
+    }
+  };
+
+  // Execute Delete after Active User Password Confirmation
+  const handleConfirmDeletePM = async () => {
+    if (!pmToDelete) return;
+    if (!deletePassword.trim()) {
+      setDeletePasswordError('Kata sandi otorisasi pengguna aktif wajib diisi.');
+      return;
+    }
+
+    setIsVerifyingDeletePassword(true);
+    setDeletePasswordError(null);
+
+    try {
+      const actorNik = user?.nik || 'admin';
+      const check = await authService.verifyPassword(actorNik, deletePassword);
+      if (!check.valid) {
+        setDeletePasswordError(check.error || 'Kata sandi tidak valid. Silakan periksa kembali.');
+        setIsVerifyingDeletePassword(false);
+        return;
+      }
+
+      // Execute parent deletion
+      onDeletePM(pmToDelete.id);
+
+      // Record Audit Trail Log
+      try {
+        const rawAudit = localStorage.getItem('cosmo_ddmp_audit_logs');
+        const auditList = rawAudit ? JSON.parse(rawAudit) : [];
+        const newAuditLog = {
+          id: `aud-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          actorNik: actorNik,
+          actorName: user?.name || user?.username || 'ADMIN',
+          module: 'rnd',
+          action: 'PM_MASTER_DELETE',
+          targetNik: pmToDelete.code,
+          details: `Penghapusan Master Bahan Kemas ${pmToDelete.code} (${pmToDelete.name}) dengan otorisasi kata sandi pengguna aktif.`,
+        };
+        localStorage.setItem('cosmo_ddmp_audit_logs', JSON.stringify([newAuditLog, ...auditList]));
+      } catch (auditErr) {
+        console.warn('Audit trail write failed:', auditErr);
+      }
+
+      setIsVerifyingDeletePassword(false);
+      setSuccessToast(`Bahan kemas "${pmToDelete.code} - ${pmToDelete.name}" berhasil dihapus.`);
+      setPmToDelete(null);
+      setDeletePassword('');
+      setTimeout(() => setSuccessToast(null), 5000);
+    } catch (err: any) {
+      setDeletePasswordError(err.message || 'Terjadi kesalahan saat memverifikasi sandi.');
+      setIsVerifyingDeletePassword(false);
     }
   };
 
@@ -473,8 +538,9 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
 
     importPreview.forEach((item) => {
       const newPM: PackagingMaterial = {
-        id: `pm-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        id: generateUUID(),
         code: item.code,
+        specNumber: `SP-BK-${item.code}`,
         name: item.name,
         type: item.type,
         unit: item.unit,
@@ -600,6 +666,7 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-slate-600 text-[10px] font-bold uppercase tracking-wider">
+                <th className="py-3 px-3 text-center w-12">No</th>
                 <th className="py-3 px-4">Kode PM</th>
                 <th className="py-3 px-4">Nama Kemasan</th>
                 <th className="py-3 px-4">Tipe Kemasan</th>
@@ -613,17 +680,21 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
             <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
               {filteredPM.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-slate-400">
+                  <td colSpan={9} className="py-12 text-center text-slate-400">
                     <Boxes className="w-10 h-10 mx-auto mb-2 text-slate-300" />
                     <p className="font-semibold text-slate-600">Tidak ada data bahan kemas yang cocok</p>
                     <p className="text-xs text-slate-400 mt-1">Coba gunakan kata kunci pencarian lain atau klik Tambah Bahan Kemas.</p>
                   </td>
                 </tr>
               ) : (
-                filteredPM.map((pm) => (
+                filteredPM.map((pm, idx) => (
                   <tr key={pm.id} className="hover:bg-purple-50/40 transition-colors">
-                    <td className="py-3.5 px-4 font-mono font-bold text-purple-700">
-                      {pm.code}
+                    <td className="py-3.5 px-3 text-center font-mono text-slate-400 font-bold text-xs">
+                      {idx + 1}
+                    </td>
+                    <td className="py-3.5 px-4 font-mono">
+                      <div className="font-bold text-purple-700">{pm.code}</div>
+                      <div className="text-[10px] font-mono text-slate-500 font-semibold">{pm.specNumber || `SP-BK-${pm.code}`}</div>
                     </td>
                     <td className="py-3.5 px-4">
                       <div className="font-bold text-slate-800">{pm.name}</div>
@@ -681,9 +752,13 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
                               <Edit2 className="w-3.5 h-3.5" />
                             </button>
                             <button
-                              onClick={() => onDeletePM(pm.id)}
+                              onClick={() => {
+                                setPmToDelete(pm);
+                                setDeletePassword('');
+                                setDeletePasswordError(null);
+                              }}
                               className="p-1.5 rounded-lg bg-slate-50 border border-slate-200 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-700 text-slate-600 transition-colors cursor-pointer"
-                              title="Hapus Kemasan"
+                              title="Hapus Kemasan (Konfirmasi Kata Sandi)"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -776,6 +851,9 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
                       placeholder="Contoh: K0001"
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-purple-600 font-mono font-bold"
                     />
+                    <div className="mt-1.5 text-[10px] font-mono text-purple-700 font-bold bg-purple-50 px-2 py-0.5 rounded border border-purple-200 inline-block">
+                      No. Spesifikasi: SP-BK-{pmCode.trim().toUpperCase() || 'K0001'}
+                    </div>
                   </div>
 
                   <div>
@@ -929,34 +1007,14 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
                       {pmQcParams.map((param, idx) => (
                         <tr key={idx} className="hover:bg-slate-50/50">
                           <td className="p-2 pl-3">
-                            <select
-                              value={STANDARD_QC_PARAM_NAMES.includes(param.name) ? param.name : 'custom'}
-                              onChange={(e) => {
-                                if (e.target.value !== 'custom') {
-                                  handleQcParamChange(idx, 'name', e.target.value);
-                                }
-                              }}
-                              className="w-full bg-slate-50 border border-slate-200 rounded-lg py-1 px-2 text-xs font-bold text-purple-900 focus:outline-none focus:bg-white focus:border-purple-600 mb-1"
-                            >
-                              <option value="" disabled>-- Pilih Parameter QC Standar --</option>
-                              {STANDARD_QC_PARAM_NAMES.map((nameOpt) => (
-                                <option key={nameOpt} value={nameOpt}>
-                                  {nameOpt}
-                                </option>
-                              ))}
-                              <option value="custom">-- Tulis Nama Custom / Lainnya --</option>
-                            </select>
-
-                            {(!STANDARD_QC_PARAM_NAMES.includes(param.name) || param.name === '') && (
-                              <input
-                                type="text"
-                                required
-                                value={param.name}
-                                onChange={(e) => handleQcParamChange(idx, 'name', e.target.value)}
-                                placeholder="Ketik nama parameter custom..."
-                                className="w-full bg-white border border-purple-300 rounded-lg py-1 px-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-purple-600"
-                              />
-                            )}
+                            <input
+                              type="text"
+                              required
+                              value={param.name}
+                              onChange={(e) => handleQcParamChange(idx, 'name', e.target.value)}
+                              placeholder="Ketik nama parameter QC (e.g. Bentuk, Kebocoran)..."
+                              className="w-full bg-slate-50 border border-slate-200 rounded-lg py-1.5 px-2.5 text-xs font-bold text-purple-950 focus:outline-none focus:bg-white focus:border-purple-600"
+                            />
                           </td>
                           <td className="p-2">
                             <input
@@ -965,14 +1023,14 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
                               value={param.specification}
                               onChange={(e) => handleQcParamChange(idx, 'specification', e.target.value)}
                               placeholder="Syarat / spesifikasi lolos QC"
-                              className="w-full bg-slate-50 border border-slate-200 rounded-lg py-1 px-2 text-xs text-slate-700 focus:outline-none focus:bg-white focus:border-purple-600"
+                              className="w-full bg-slate-50 border border-slate-200 rounded-lg py-1.5 px-2.5 text-xs text-slate-700 focus:outline-none focus:bg-white focus:border-purple-600"
                             />
                           </td>
                           <td className="p-2 pr-3 text-right">
                             <button
                               type="button"
                               onClick={() => handleRemoveQcParam(idx)}
-                              className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors"
+                              className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
                               title="Hapus Parameter"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -1046,9 +1104,14 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
               <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3 text-xs">
                 <div className="flex items-center justify-between border-b border-slate-200/80 pb-2.5">
                   <div>
-                    <span className="font-mono font-bold text-xs text-purple-700 bg-purple-100/60 px-2 py-0.5 rounded mr-2">
-                      {pmCode}
-                    </span>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-mono font-bold text-xs text-purple-700 bg-purple-100/60 px-2 py-0.5 rounded">
+                        Kode: {pmCode}
+                      </span>
+                      <span className="font-mono font-bold text-xs text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded">
+                        No. Spesifikasi: SP-BK-{pmCode.trim().toUpperCase()}
+                      </span>
+                    </div>
                     <span className="font-black text-sm text-slate-800">{pmName}</span>
                   </div>
                   <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-purple-100 text-purple-800 border border-purple-200">
@@ -1077,18 +1140,31 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
                   </div>
                 </div>
 
-                <div className="pt-2 border-t border-slate-200/80">
-                  <span className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
-                    Parameter Mutu QC Terdaftar ({pmQcParams.filter((p) => p.name.trim()).length} Kriteria):
+                <div className="pt-3 border-t border-slate-200/80">
+                  <span className="block text-[10px] font-extrabold text-purple-900 uppercase tracking-wider mb-2">
+                    Bagian B: Spesifikasi Mutu Analisa QC Bahan Kemas ({pmQcParams.filter((p) => p.name.trim()).length} Kriteria)
                   </span>
-                  <div className="flex flex-wrap gap-1 max-h-36 overflow-y-auto">
-                    {pmQcParams
-                      .filter((p) => p.name.trim())
-                      .map((p, idx) => (
-                        <span key={idx} className="bg-white border border-slate-200 px-2 py-0.5 rounded text-[9px]">
-                          <strong>{p.name}:</strong> {p.specification}
-                        </span>
-                      ))}
+                  <div className="border border-slate-200 rounded-xl overflow-hidden max-h-56 overflow-y-auto bg-white shadow-2xs">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead className="bg-slate-100/90 sticky top-0 border-b border-slate-200">
+                        <tr className="text-slate-600 font-bold uppercase text-[9px] tracking-wider">
+                          <th className="py-2 px-3 w-10 text-center">No</th>
+                          <th className="py-2 px-3 w-5/12">Parameter Analisa / Pengujian</th>
+                          <th className="py-2 px-3 w-6/12">Syarat / Batas Penerimaan Mutu</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 font-medium">
+                        {pmQcParams
+                          .filter((p) => p.name.trim())
+                          .map((p, idx) => (
+                            <tr key={idx} className="hover:bg-purple-50/30">
+                              <td className="py-2 px-3 text-center font-mono text-[10px] text-slate-400 font-bold">{idx + 1}</td>
+                              <td className="py-2 px-3 font-bold text-slate-800 text-[11px]">{p.name}</td>
+                              <td className="py-2 px-3 text-slate-700 text-[11px]">{p.specification}</td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               </div>
@@ -1303,7 +1379,8 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
                     <table className="w-full text-left border-collapse text-[10px]">
                       <thead className="bg-slate-50 sticky top-0 border-b border-slate-200">
                         <tr className="text-slate-600 font-bold uppercase">
-                          <th className="p-2.5 pl-3">Kode PM</th>
+                          <th className="p-2.5 pl-3 w-10 text-center">No</th>
+                          <th className="p-2.5">Kode PM</th>
                           <th className="p-2.5">Nama Kemasan</th>
                           <th className="p-2.5">Tipe</th>
                           <th className="p-2.5">Satuan</th>
@@ -1315,7 +1392,8 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
                       <tbody className="divide-y divide-slate-100 text-slate-600 bg-white font-medium">
                         {importPreview.map((pm, idx) => (
                           <tr key={idx} className="hover:bg-slate-50/50">
-                            <td className="p-2.5 pl-3 font-mono font-bold text-purple-700">{pm.code}</td>
+                            <td className="p-2.5 pl-3 text-center font-mono font-bold text-slate-400">{idx + 1}</td>
+                            <td className="p-2.5 font-mono font-bold text-purple-700">{pm.code}</td>
                             <td className="p-2.5 font-bold text-slate-800">{pm.name}</td>
                             <td className="p-2.5 uppercase text-[9px] font-bold text-purple-600">{pm.type}</td>
                             <td className="p-2.5 font-bold text-purple-900">{pm.unit}</td>
@@ -1393,7 +1471,10 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-mono font-bold text-xs text-purple-700 bg-slate-100 px-2 py-0.5 rounded-md">
-                      {selectedPMForDetails.code}
+                      Kode: {selectedPMForDetails.code}
+                    </span>
+                    <span className="font-mono font-bold text-xs text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md">
+                      No. Spesifikasi: {selectedPMForDetails.specNumber || `SP-BK-${selectedPMForDetails.code}`}
                     </span>
                     <span className="px-2 py-0.5 rounded-full text-[9px] font-bold border uppercase bg-purple-100 text-purple-800 border-purple-200">
                       {selectedPMForDetails.type === 'primary' ? 'Primer' : selectedPMForDetails.type === 'secondary' ? 'Sekunder' : 'Tersier'}
@@ -1456,19 +1537,21 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
                 </h4>
 
                 {selectedPMForDetails.qcParameters && selectedPMForDetails.qcParameters.length > 0 ? (
-                  <div className="border border-slate-200 rounded-2xl overflow-hidden">
+                  <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
                     <table className="w-full text-left border-collapse text-xs">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[9px] tracking-wider">
-                          <th className="py-2.5 px-4 w-1/2">Parameter Analisa</th>
-                          <th className="py-2.5 px-4 w-1/2">Syarat / Batas Penerimaan Mutu</th>
+                          <th className="py-2.5 px-4 w-12 text-center">No</th>
+                          <th className="py-2.5 px-4 w-5/12">Parameter Analisa / Pengujian</th>
+                          <th className="py-2.5 px-4 w-6/12">Syarat / Batas Penerimaan Mutu</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 text-slate-700 bg-white font-medium">
                         {selectedPMForDetails.qcParameters.map((param, idx) => (
                           <tr key={idx} className="hover:bg-slate-50/40">
+                            <td className="py-2.5 px-4 text-center font-mono text-[10px] text-slate-400 font-bold">{idx + 1}</td>
                             <td className="py-2.5 px-4 font-bold text-slate-800">{param.name}</td>
-                            <td className="py-2.5 px-4 font-mono text-slate-600">{param.specification}</td>
+                            <td className="py-2.5 px-4 text-slate-700">{param.specification}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -1490,6 +1573,136 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
                 className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-xs font-bold text-white transition-all cursor-pointer shadow-xs"
               >
                 Tutup Detail
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: KONFIRMASI DELETE DENGAN PASSWORD USER AKTIF      */}
+      {/* ======================================================== */}
+      {pmToDelete && (
+        <div className="fixed inset-0 z-60 overflow-y-auto flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity"
+            onClick={() => !isVerifyingDeletePassword && setPmToDelete(null)}
+          ></div>
+
+          <div className="relative bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl border border-slate-200 overflow-hidden animate-fadeIn">
+            {/* Close */}
+            <button
+              type="button"
+              disabled={isVerifyingDeletePassword}
+              onClick={() => setPmToDelete(null)}
+              className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Header */}
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-11 h-11 rounded-2xl bg-rose-100 flex items-center justify-center text-rose-600 shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900">
+                  Konfirmasi Hapus Bahan Kemas
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  Otorisasi Keamanan CPKB & Jejak Audit
+                </p>
+              </div>
+            </div>
+
+            {/* Detail Item Info */}
+            <div className="p-3.5 bg-rose-50/70 border border-rose-200 rounded-2xl mb-4 space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 font-semibold">Kode Kemasan:</span>
+                <span className="font-mono font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded text-xs">
+                  {pmToDelete.code}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 font-semibold">Nama Kemasan:</span>
+                <span className="font-bold text-slate-800 text-right max-w-[200px] truncate">
+                  {pmToDelete.name}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 font-semibold">Tipe:</span>
+                <span className="capitalize text-slate-700">{pmToDelete.type}</span>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-slate-600 mb-4 leading-relaxed">
+              Tindakan ini permanen. Masukkan kata sandi akun pengguna aktif Anda (<span className="font-bold text-purple-800">{user?.name || user?.username || 'ADMIN'} - {user?.nik}</span>) untuk mengonfirmasi penghapusan.
+            </p>
+
+            {/* Password input */}
+            <div className="space-y-2 mb-4">
+              <label className="block text-[10px] font-extrabold text-slate-700 uppercase tracking-wide">
+                Kata Sandi Pengguna Aktif <span className="text-rose-500">*</span>
+              </label>
+              <div className="relative">
+                <input
+                  type={showDeletePassword ? 'text' : 'password'}
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleConfirmDeletePM();
+                    }
+                  }}
+                  autoFocus
+                  placeholder="Masukkan kata sandi akun Anda..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-3.5 pr-10 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-rose-600 font-medium"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowDeletePassword(!showDeletePassword)}
+                  className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  {showDeletePassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+
+              {deletePasswordError && (
+                <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{deletePasswordError}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                disabled={isVerifyingDeletePassword}
+                onClick={() => setPmToDelete(null)}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={isVerifyingDeletePassword || !deletePassword.trim()}
+                onClick={handleConfirmDeletePM}
+                className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:bg-slate-300 text-white text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-sm"
+              >
+                {isVerifyingDeletePassword ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Memverifikasi...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Konfirmasi Hapus</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

@@ -1,42 +1,253 @@
-import { supabase } from '../../../core/auth/supabaseClient';
+import { supabase, isSupabaseConfigured } from '../../../core/auth/supabaseClient';
 import { RawMaterial } from '../../../types';
+import { ensureUUID } from '../../../utils/uuid';
+
+const RAW_MATERIALS_STORAGE_KEY = 'lsm_raw_materials_b';
 
 export const materialService = {
+  checkConnection: async (): Promise<{ configured: boolean; connected: boolean; message: string }> => {
+    if (!isSupabaseConfigured || !supabase) {
+      return {
+        configured: false,
+        connected: false,
+        message: 'Supabase URL atau Anon Key belum dikonfigurasi pada environment variable.',
+      };
+    }
+    try {
+      const { data, error } = await supabase.from('raw_materials').select('id').limit(1);
+      if (error) {
+        return {
+          configured: true,
+          connected: false,
+          message: `Koneksi Supabase gagal: ${error.message} (Code: ${error.code})`,
+        };
+      }
+      return {
+        configured: true,
+        connected: true,
+        message: 'Koneksi ke tabel raw_materials Supabase aktif dan terverifikasi.',
+      };
+    } catch (err: any) {
+      return {
+        configured: true,
+        connected: false,
+        message: `Terjadi exception saat koneksi: ${err.message || String(err)}`,
+      };
+    }
+  },
+
+  getMaterials: async (): Promise<RawMaterial[]> => {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('raw_materials')
+          .select('*')
+          .order('code', { ascending: true });
+
+        if (error) {
+          console.error('[Supabase Audit] Error fetching raw_materials:', error);
+        } else if (data && data.length > 0) {
+          const mapped: RawMaterial[] = data.map((m: any) => ({
+            id: m.id,
+            code: m.code,
+            specNumber: m.spec_number || m.specNumber || `SP-BB-${m.code}`,
+            name: m.name,
+            chemicalName: m.chemical_name || m.chemicalName || '',
+            category: m.category || 'active',
+            categories: m.categories || (m.category ? [m.category] : ['active']),
+            otherCategorySpecification: m.other_category_specification || m.otherCategorySpecification,
+            storageConditions: m.storage_conditions || m.storageConditions || '',
+            sdsDocNumber: m.sds_doc_number || m.sdsDocNumber || '',
+            sdsFileUrl: m.sds_file_url || m.sdsFileUrl,
+            sdsFileName: m.sds_file_name || m.sdsFileName,
+            approvedSubstitutes: m.approved_substitutes || m.approvedSubstitutes || [],
+            manufacturer: m.manufacturer || '',
+            qcParameters: m.qc_parameters || m.qcParameters || [],
+            supplierLeadTimeDays: m.supplier_lead_time_days ?? m.supplierLeadTimeDays ?? 14,
+            lastModifiedBy: m.last_modified_by || m.lastModifiedBy,
+            lastModifiedAt: m.last_modified_at || m.lastModifiedAt,
+          }));
+          localStorage.setItem(RAW_MATERIALS_STORAGE_KEY, JSON.stringify(mapped));
+          return mapped;
+        }
+      } catch (err) {
+        console.warn('[Supabase Audit] Supabase raw materials fetch exception, falling back to local storage', err);
+      }
+    }
+
+    const saved = localStorage.getItem(RAW_MATERIALS_STORAGE_KEY);
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error('Error parsing local raw materials', e);
+      }
+    }
+    return [];
+  },
+
+  saveSingleMaterial: async (item: RawMaterial): Promise<{ success: boolean; error?: string; updatedId?: string }> => {
+    // Ensure ID is a valid UUID for PostgreSQL
+    const validId = ensureUUID(item.id);
+    const normalizedItem: RawMaterial = { ...item, id: validId };
+
+    // Update local cache first
+    const saved = localStorage.getItem(RAW_MATERIALS_STORAGE_KEY);
+    let currentList: RawMaterial[] = saved ? JSON.parse(saved) : [];
+    const idx = currentList.findIndex((r) => r.id === validId || r.code === normalizedItem.code || r.id === item.id);
+    if (idx >= 0) {
+      currentList[idx] = normalizedItem;
+    } else {
+      currentList.unshift(normalizedItem);
+    }
+    localStorage.setItem(RAW_MATERIALS_STORAGE_KEY, JSON.stringify(currentList));
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const itemCode = normalizedItem.code.trim().toUpperCase();
+
+        // 1. Check if a row already exists in Supabase by `code` or `id`
+        let existingId: string | null = null;
+        
+        if (itemCode) {
+          const { data: byCode, error: errCode } = await supabase
+            .from('raw_materials')
+            .select('id')
+            .eq('code', itemCode)
+            .maybeSingle();
+          if (!errCode && byCode?.id) {
+            existingId = byCode.id;
+          }
+        }
+
+        if (!existingId && validId) {
+          const { data: byId, error: errId } = await supabase
+            .from('raw_materials')
+            .select('id')
+            .eq('id', validId)
+            .maybeSingle();
+          if (!errId && byId?.id) {
+            existingId = byId.id;
+          }
+        }
+
+        const resolvedId = existingId || validId;
+
+        const payload = {
+          id: resolvedId,
+          code: itemCode,
+          spec_number: normalizedItem.specNumber || `SP-BB-${itemCode}`,
+          name: normalizedItem.name,
+          chemical_name: normalizedItem.chemicalName || '',
+          category: normalizedItem.category || 'active',
+          categories: normalizedItem.categories || [normalizedItem.category || 'active'],
+          storage_conditions: normalizedItem.storageConditions || '',
+          sds_doc_number: normalizedItem.sdsDocNumber || '',
+          approved_substitutes: normalizedItem.approvedSubstitutes || [],
+          manufacturer: normalizedItem.manufacturer || '',
+          qc_parameters: normalizedItem.qcParameters || [],
+          supplier_lead_time_days: normalizedItem.supplierLeadTimeDays || 14,
+          last_modified_by: normalizedItem.lastModifiedBy || 'Staff RnD',
+          last_modified_at: normalizedItem.lastModifiedAt || new Date().toISOString(),
+        };
+
+        if (existingId) {
+          // UPDATE existing record
+          const { error: updateError } = await supabase
+            .from('raw_materials')
+            .update(payload)
+            .eq('id', existingId);
+
+          if (updateError) {
+            console.error('[Supabase Audit] Error updating raw_material by ID:', updateError);
+            // Fallback: try update by code
+            const { error: fallbackError } = await supabase
+              .from('raw_materials')
+              .update(payload)
+              .eq('code', itemCode);
+
+            if (fallbackError) {
+              return { success: false, error: `${fallbackError.message} (${fallbackError.code})` };
+            }
+          }
+          return { success: true, updatedId: resolvedId };
+        } else {
+          // INSERT new record
+          const { error: insertError } = await supabase
+            .from('raw_materials')
+            .insert(payload);
+
+          if (insertError) {
+            // If code conflict happens unexpectedly, try updating by code
+            if (insertError.code === '23505' || insertError.message?.includes('duplicate key')) {
+              const { error: retryUpdateError } = await supabase
+                .from('raw_materials')
+                .update(payload)
+                .eq('code', itemCode);
+
+              if (retryUpdateError) {
+                return { success: false, error: `${retryUpdateError.message} (${retryUpdateError.code})` };
+              }
+              return { success: true, updatedId: resolvedId };
+            }
+            console.error('[Supabase Audit] Error inserting raw_material:', insertError);
+            return { success: false, error: `${insertError.message} (${insertError.code})` };
+          }
+          return { success: true, updatedId: resolvedId };
+        }
+      } catch (err: any) {
+        console.error('[Supabase Audit] Exception during raw_material save:', err);
+        return { success: false, error: err.message || String(err) };
+      }
+    }
+    return { success: true, error: 'Tersimpan lokal (Supabase belum terkonfigurasi).' };
+  },
+
+  saveMaterials: async (materials: RawMaterial[]): Promise<void> => {
+    const normalizedList = materials.map((m) => ({ ...m, id: ensureUUID(m.id) }));
+    localStorage.setItem(RAW_MATERIALS_STORAGE_KEY, JSON.stringify(normalizedList));
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        for (const item of normalizedList) {
+          await materialService.saveSingleMaterial(item);
+        }
+      } catch (err) {
+        console.warn('[Supabase Audit] Batch upsert error', err);
+      }
+    }
+  },
+
+  deleteMaterial: async (id: string, code?: string): Promise<void> => {
+    const validId = ensureUUID(id);
+    const saved = localStorage.getItem(RAW_MATERIALS_STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed: RawMaterial[] = JSON.parse(saved);
+        const filtered = parsed.filter((r) => r.id !== id && r.id !== validId && (!code || r.code !== code));
+        localStorage.setItem(RAW_MATERIALS_STORAGE_KEY, JSON.stringify(filtered));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { error: err1 } = await supabase.from('raw_materials').delete().eq('id', validId);
+        if (err1) console.error('[Supabase Audit] Delete by id error:', err1);
+        if (code) {
+          const { error: err2 } = await supabase.from('raw_materials').delete().eq('code', code);
+          if (err2) console.error('[Supabase Audit] Delete by code error:', err2);
+        }
+      } catch (err) {
+        console.warn('[Supabase Audit] Supabase delete raw material error', err);
+      }
+    }
+  },
+
+  // Backward compatibility wrapper
   getAllMaterials: async (): Promise<{ data: RawMaterial[] | null; error: string | null }> => {
-    const { data, error } = await supabase
-      .from('materials')
-      .select('*');
-    
-    if (error) return { data: null, error: error.message };
-    return { data: data as RawMaterial[], error: null };
+    const list = await materialService.getMaterials();
+    return { data: list, error: null };
   },
-
-  addMaterial: async (material: Omit<RawMaterial, 'id'>): Promise<{ error: string | null }> => {
-    const { error } = await supabase
-      .from('materials')
-      .insert([material]);
-      
-    if (error) return { error: error.message };
-    return { error: null };
-  },
-
-  updateMaterial: async (id: string, material: Partial<RawMaterial>): Promise<{ error: string | null }> => {
-    const { error } = await supabase
-      .from('materials')
-      .update(material)
-      .eq('id', id);
-      
-    if (error) return { error: error.message };
-    return { error: null };
-  },
-
-  deleteMaterial: async (id: string): Promise<{ error: string | null }> => {
-    const { error } = await supabase
-      .from('materials')
-      .delete()
-      .eq('id', id);
-      
-    if (error) return { error: error.message };
-    return { error: null };
-  }
 };

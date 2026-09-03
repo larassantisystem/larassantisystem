@@ -49,6 +49,7 @@ export interface QCParameter {
 export interface RawMaterial {
   id: string;
   code: string;
+  specNumber?: string; // Format: SP-BB-[code] (e.g. SP-BB-RM0001)
   name: string;
   chemicalName: string;
   category: string; // Keep for backward-compatibility (e.g. primary or joined)
@@ -71,6 +72,7 @@ export interface RawMaterial {
 export interface PackagingMaterial {
   id: string;
   code: string;
+  specNumber?: string; // Format: SP-BK-[code] (e.g. SP-BK-K0001)
   name: string;
   type: 'primary' | 'secondary' | 'tertiary';
   unit?: string;
