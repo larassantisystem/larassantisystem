@@ -85,6 +85,7 @@ export const packagingService = {
             storageLocation: p.storage_location || p.storageLocation || '',
             storageConditions: p.storage_conditions || p.storageConditions || '',
             qcParameters: p.qc_parameters || p.qcParameters || [],
+            reorderPoint: p.reorder_point ?? p.reorderPoint ?? 100,
             lastModifiedBy: p.last_modified_by || p.lastModifiedBy,
             lastModifiedAt: p.last_modified_at || p.lastModifiedAt,
           }));
@@ -167,6 +168,7 @@ export const packagingService = {
           storage_location: normalizedItem.storageLocation || '',
           storage_conditions: normalizedItem.storageConditions || '',
           qc_parameters: normalizedItem.qcParameters || [], // QC parameters are an array of objects
+          reorder_point: normalizedItem.reorderPoint ?? 100,
           last_modified_by: normalizedItem.lastModifiedBy || 'Staff RnD',
           last_modified_at: normalizedItem.lastModifiedAt || new Date().toISOString(),
         };

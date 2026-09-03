@@ -65,6 +65,7 @@ export interface RawMaterial {
   supplierLeadTimeDays?: number;
   manufacturer?: string;
   qcParameters: QCParameter[];
+  reorderPoint?: number; // Reorder Point (ROP) threshold for stock monitoring
   lastModifiedBy?: string;
   lastModifiedAt?: string;
 }
@@ -81,6 +82,7 @@ export interface PackagingMaterial {
   storageLocation?: string;
   storageConditions?: string;
   qcParameters?: QCParameter[];
+  reorderPoint?: number; // Reorder Point (ROP) threshold for stock monitoring
   lastModifiedBy?: string;
   lastModifiedAt?: string;
   // Legacy optional fields

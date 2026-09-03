@@ -108,6 +108,7 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
   const [rmSubstitutes, setRmSubstitutes] = useState<string[]>([]);
   const [isSingleSpecificMaterial, setIsSingleSpecificMaterial] = useState(false);
   const [rmLeadTime, setRmLeadTime] = useState<number>(14);
+  const [rmReorderPoint, setRmReorderPoint] = useState<number>(50);
 
   // Google Drive SDS states
   const [sdsFile, setSdsFile] = useState<DriveUploadedFile | null>(null);
@@ -213,6 +214,7 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
     setRmSubstitutes([]);
     setIsSingleSpecificMaterial(false);
     setRmLeadTime(14);
+    setRmReorderPoint(50);
     setSdsFile(null);
     setSdsFileUrl('');
     setSdsFileName('');
@@ -255,6 +257,7 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
     setRmSubstitutes(rm.approvedSubstitutes || []);
     setIsSingleSpecificMaterial(rm.isSingleSpecificMaterial || (rm.approvedSubstitutes && rm.approvedSubstitutes.length === 0));
     setRmLeadTime(rm.supplierLeadTimeDays || 14);
+    setRmReorderPoint(rm.reorderPoint ?? 50);
 
     // Google Drive SDS file restore
     if (rm.sdsFileUrl || rm.sdsFileName) {
@@ -473,6 +476,7 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
         manufacturer: rmManufacturer.trim(),
         qcParameters: cleanQcParams,
         supplierLeadTimeDays: Number(rmLeadTime) || 14,
+        reorderPoint: Number(rmReorderPoint) || 50,
         lastModifiedBy: `${user?.name || 'ADMIN'} (${actorNik})`,
         lastModifiedAt: new Date().toISOString(),
       };
@@ -1157,6 +1161,28 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-purple-600"
                       placeholder="Contoh: DSM Nutritional Products"
                     />
+                  </div>
+
+                  {/* Batas ROP (Reorder Point) */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-purple-800 uppercase mb-1 flex items-center gap-1">
+                      <span>Batas ROP (Reorder Point)</span>
+                      <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        required
+                        value={rmReorderPoint}
+                        onChange={(e) => setRmReorderPoint(Number(e.target.value))}
+                        className="w-full bg-purple-50/50 border border-purple-200 rounded-xl py-2 px-3 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-purple-600 font-bold font-mono"
+                        placeholder="50"
+                      />
+                      <span className="absolute right-3 top-2 text-[10px] font-bold text-purple-600 uppercase">kg</span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 mt-0.5 block">Ambang batas pengadaan stok</span>
                   </div>
 
                   {/* Kategori Multi-Select */}

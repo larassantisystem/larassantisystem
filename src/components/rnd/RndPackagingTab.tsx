@@ -116,6 +116,7 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
   const [pmCapacity, setPmCapacity] = useState<number>(20);
   const [pmSupplier, setPmSupplier] = useState('');
   const [pmStorage, setPmStorage] = useState(DEFAULT_STORAGE_CONDITIONS);
+  const [pmReorderPoint, setPmReorderPoint] = useState<number>(100);
 
   // Bagian B (QC Parameter)
   const [pmQcParams, setPmQcParams] = useState<QCParameter[]>(DEFAULT_QC_PARAMS);
@@ -178,6 +179,7 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
     setPmCapacity(20);
     setPmSupplier('');
     setPmStorage(DEFAULT_STORAGE_CONDITIONS);
+    setPmReorderPoint(100);
     setValidationErrors([]);
     setPmQcParams(DEFAULT_QC_PARAMS.map(p => ({ ...p })));
 
@@ -194,6 +196,7 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
     setPmCapacity(pm.unitCapacityGrams || 0);
     setPmSupplier(pm.supplier || pm.manufacturer || '');
     setPmStorage(pm.storageConditions || DEFAULT_STORAGE_CONDITIONS);
+    setPmReorderPoint(pm.reorderPoint ?? 100);
     setValidationErrors([]);
 
     setPmQcParams(
@@ -279,6 +282,7 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
         manufacturer: pmSupplier.trim(),
         storageConditions: pmStorage.trim(),
         qcParameters: cleanQcParams,
+        reorderPoint: Number(pmReorderPoint) || 100,
         lastModifiedBy: `${user?.name || 'ADMIN'} (${actorNik})`,
         lastModifiedAt: new Date().toISOString(),
       };
@@ -1060,7 +1064,7 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
                       Supplier <span className="text-rose-500">*</span>
@@ -1073,6 +1077,26 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
                       onChange={(e) => setPmSupplier(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-purple-600"
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-purple-800 uppercase mb-1 flex items-center gap-1">
+                      <span>Batas ROP (Reorder Point)</span>
+                      <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        required
+                        value={pmReorderPoint}
+                        onChange={(e) => setPmReorderPoint(Number(e.target.value))}
+                        className="w-full bg-purple-50/50 border border-purple-200 rounded-xl py-2 px-3 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-purple-600 font-bold font-mono"
+                        placeholder="100"
+                      />
+                      <span className="absolute right-3 top-2 text-[10px] font-bold text-purple-600 uppercase">{pmUnit}</span>
+                    </div>
                   </div>
 
                   <div>

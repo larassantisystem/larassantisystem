@@ -41,6 +41,7 @@ import {
   DepartmentNotificationCounts,
 } from '../notifications/departmentNotificationService';
 import { NotificationBadge } from './NotificationBadge';
+import { SystemInventoryBanner } from '../notifications/SystemInventoryBanner';
 
 export interface SubMenuItem {
   id: string;
@@ -405,6 +406,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           </button>
         </div>
       </header>
+
+      {/* System-wide ROP Inventory Alert Banner */}
+      <SystemInventoryBanner onNavigateTab={onSelectTab} />
 
       {/* Main App Layout Body */}
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden">

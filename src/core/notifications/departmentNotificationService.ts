@@ -167,6 +167,39 @@ export const departmentNotificationService = {
         });
       }
 
+      // --- ROP (Reorder Point) Inventory Alerts for Procurement & Warehouse ---
+      try {
+        const ropAlerts = await stockService.checkReorderPoints();
+        if (ropAlerts.length > 0) {
+          const criticalRop = ropAlerts.filter((a) => a.urgency === 'critical');
+          const warningRop = ropAlerts.filter((a) => a.urgency === 'warning');
+
+          items.push({
+            id: `proc-rop-alert-${ropAlerts.length}`,
+            department: 'procurement',
+            title: `PERINGATAN ROP: ${ropAlerts.length} Material Di Bawah Ambang Batas Aman`,
+            message: `Terdapat ${ropAlerts.length} material (${criticalRop.length} habis, ${warningRop.length} di bawah ROP) yang memerlukan pembuatan PO pembelian segera ke supplier.`,
+            urgency: criticalRop.length > 0 ? 'critical' : 'warning',
+            timestamp: new Date().toISOString(),
+            isRead: readIds.includes(`proc-rop-alert-${ropAlerts.length}`),
+            actionLabel: 'Buat Purchase Order',
+          });
+
+          items.push({
+            id: `wh-rop-alert-${ropAlerts.length}`,
+            department: 'warehouse',
+            title: `MONITORING STOK: ${ropAlerts.length} Material Menipis (Di Bawah ROP)`,
+            message: `Stok fisik released untuk bahan baku/kemas telah mencapai titik ROP. Harap siapkan area penerimaan dan koordinasi re-stock.`,
+            urgency: 'warning',
+            timestamp: new Date().toISOString(),
+            isRead: readIds.includes(`wh-rop-alert-${ropAlerts.length}`),
+            actionLabel: 'Lihat Stok Gudang',
+          });
+        }
+      } catch (e) {
+        console.error('Error checking ROP alerts:', e);
+      }
+
       // --- PPIC Notifications ---
       items.push({
         id: 'ppic-mrp-01',

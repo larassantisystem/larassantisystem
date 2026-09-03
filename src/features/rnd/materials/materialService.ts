@@ -89,6 +89,7 @@ export const materialService = {
             manufacturer: m.manufacturer || '',
             qcParameters: m.qc_parameters || m.qcParameters || [],
             supplierLeadTimeDays: m.supplier_lead_time_days ?? m.supplierLeadTimeDays ?? 14,
+            reorderPoint: m.reorder_point ?? m.reorderPoint ?? 50,
             lastModifiedBy: m.last_modified_by || m.lastModifiedBy,
             lastModifiedAt: m.last_modified_at || m.lastModifiedAt,
           }));
@@ -172,6 +173,7 @@ export const materialService = {
           manufacturer: normalizedItem.manufacturer || '',
           qc_parameters: normalizedItem.qcParameters || [],
           supplier_lead_time_days: normalizedItem.supplierLeadTimeDays || 14,
+          reorder_point: normalizedItem.reorderPoint ?? 50,
           last_modified_by: normalizedItem.lastModifiedBy || 'Staff RnD',
           last_modified_at: normalizedItem.lastModifiedAt || new Date().toISOString(),
         };
