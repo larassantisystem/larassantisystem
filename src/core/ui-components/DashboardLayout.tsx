@@ -319,7 +319,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       {/* Main App Layout Body */}
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
         {/* Department Sidebar Navigation (Accordion Format) */}
-        <aside className="w-full md:w-64 border-b md:border-b-0 md:border-r border-slate-200 bg-white p-3 flex md:flex-col gap-1 overflow-x-auto md:overflow-y-auto shrink-0 shadow-xs scrollbar-none items-center md:items-stretch">
+        <aside className="w-full md:w-64 border-b md:border-b-0 md:border-r border-slate-200 bg-white p-3 flex md:flex-col gap-1 overflow-x-auto md:overflow-y-auto shrink-0 shadow-xs scrollbar-none items-center md:items-stretch md:sticky md:top-0 md:h-screen">
           <div className="hidden md:block px-3 py-1.5 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">
             Menu Otoritas ({visibleDepartments.length} Modul)
           </div>

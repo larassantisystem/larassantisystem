@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { RawMaterial, QCParameter } from '../../types';
 import { useAuth } from '../../core/auth/AuthContext';
@@ -57,6 +57,8 @@ interface RndMaterialsTabProps {
   onDeleteRM: (id: string) => void;
 }
 
+import { Pagination } from '../../core/ui-components/Pagination';
+
 export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
   rawMaterials,
   onSaveRM,
@@ -64,6 +66,27 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
 }) => {
   const { user } = useAuth();
   const [searchRM, setSearchRM] = useState('');
+  
+  // Search filter
+  const filteredRM = rawMaterials.filter(
+    (rm) =>
+      rm.name.toLowerCase().includes(searchRM.toLowerCase()) ||
+      rm.code.toLowerCase().includes(searchRM.toLowerCase()) ||
+      rm.chemicalName.toLowerCase().includes(searchRM.toLowerCase()) ||
+      (rm.manufacturer && rm.manufacturer.toLowerCase().includes(searchRM.toLowerCase()))
+  );
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
+  
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchRM]);
+
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = filteredRM.slice(indexOfFirstItem, indexOfLastItem);
   
   // Modals visibility states
   const [showFormModal, setShowFormModal] = useState(false);
@@ -127,14 +150,6 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
 
   // RBAC Permission Check
   const canWrite = canWriteModule(user, 'rnd');
-
-  const filteredRM = rawMaterials.filter(
-    (rm) =>
-      rm.name.toLowerCase().includes(searchRM.toLowerCase()) ||
-      rm.code.toLowerCase().includes(searchRM.toLowerCase()) ||
-      rm.chemicalName.toLowerCase().includes(searchRM.toLowerCase()) ||
-      (rm.manufacturer && rm.manufacturer.toLowerCase().includes(searchRM.toLowerCase()))
-  );
 
   // Toggle Category multi-select
   const toggleCategory = (catId: string) => {
@@ -870,8 +885,8 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
-              {filteredRM.length > 0 ? (
-                filteredRM.map((rm, idx) => {
+              {currentItems.length > 0 ? (
+                currentItems.map((rm, idx) => {
                   const displayCategories = rm.categories && rm.categories.length > 0 ? rm.categories : [rm.category];
                   return (
                     <tr 
@@ -986,6 +1001,16 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
               )}
             </tbody>
           </table>
+          <Pagination
+            currentPage={currentPage}
+            totalItems={filteredRM.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+            onItemsPerPageChange={(items) => {
+              setItemsPerPage(items);
+              setCurrentPage(1);
+            }}
+          />
         </div>
       </div>
 

@@ -141,7 +141,7 @@ export const packagingService = {
           manufacturer: normalizedItem.manufacturer || normalizedItem.supplier || '',
           storage_location: normalizedItem.storageLocation || '',
           storage_conditions: normalizedItem.storageConditions || '',
-          qc_parameters: normalizedItem.qcParameters || [],
+          qc_parameters: normalizedItem.qcParameters || [], // QC parameters are an array of objects
           last_modified_by: normalizedItem.lastModifiedBy || 'Staff RnD',
           last_modified_at: normalizedItem.lastModifiedAt || new Date().toISOString(),
         };

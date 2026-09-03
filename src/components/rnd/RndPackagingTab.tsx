@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { PackagingMaterial, QCParameter } from '../../types';
 import { useAuth } from '../../core/auth/AuthContext';
 import { canWriteModule } from '../../core/auth/permissionGuard';
@@ -85,6 +85,8 @@ export const DEFAULT_QC_PARAMS: QCParameter[] = [
   { name: 'Uji Jatuh', specification: 'Lolos uji drop test 1.2 meter tanpa pecah' },
   { name: 'Kecocokan Pasangan', specification: 'Pasangan tutup dan wadah presisi / sealing rapat' },
 ];
+
+import { Pagination } from '../../core/ui-components/Pagination';
 
 export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
   packagingMaterials,
