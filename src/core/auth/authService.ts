@@ -1,6 +1,6 @@
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 import { UserProfile } from '../../types';
-import { DEMO_USERS } from './mockUsers';
+import { DEMO_USERS, INITIAL_SYSTEM_USERS } from './mockUsers';
 
 const AUTH_STORAGE_KEY = 'cosmo_ddmp_auth_user';
 
@@ -56,6 +56,9 @@ export const authService = {
           const isAdminUser = profileData.role === 'admin' || cleanNik.toLowerCase() === 'admin' || profileData.nik === 'LMS00000' || data.user.user_metadata?.role === 'admin';
           const resolvedNik = isAdminUser ? 'admin' : ((data.user.user_metadata?.nik as string) || profileData.nik || cleanNik);
 
+          const accessMapRaw = localStorage.getItem('cosmo_ddmp_specific_access_map');
+          const accessMap = accessMapRaw ? JSON.parse(accessMapRaw) : {};
+
           const userProfile: UserProfile = {
             id: profileData.id,
             nik: resolvedNik,
@@ -63,6 +66,7 @@ export const authService = {
             department: isAdminUser ? 'admin' : (profileData.department || 'rnd'),
             role: isAdminUser ? 'admin' : (profileData.role || 'staff'),
             email: dummyEmail,
+            specificAccess: accessMap[resolvedNik.toLowerCase()] || [],
           };
 
           localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(userProfile));
@@ -158,6 +162,95 @@ export const authService = {
     return raw ? JSON.parse(raw) : [];
   },
 
+  getAllEmployees: async (): Promise<UserProfile[]> => {
+    const accessMapRaw = localStorage.getItem('cosmo_ddmp_specific_access_map');
+    const accessMap: Record<string, any[]> = accessMapRaw ? JSON.parse(accessMapRaw) : {};
+
+    const deactivatedRaw = localStorage.getItem('cosmo_ddmp_deactivated_niks');
+    const deactivatedNiks: string[] = deactivatedRaw ? JSON.parse(deactivatedRaw) : [];
+
+    const customUsersRaw = localStorage.getItem('cosmo_ddmp_registered_users');
+    const customUsers: UserProfile[] = customUsersRaw ? JSON.parse(customUsersRaw) : [];
+
+    let resultList: UserProfile[] = [];
+
+    // 1. Fetch from Supabase profiles if configured
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data: profiles, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .order('created_at', { ascending: true });
+
+        if (!error && profiles && profiles.length > 0) {
+          resultList = profiles.map((p: any) => {
+            const isAdmin = p.nik === 'LMS00000' || p.nik?.toLowerCase() === 'admin' || p.role === 'admin';
+            const cleanNik = isAdmin ? 'admin' : (p.nik || 'N/A');
+            return {
+              id: p.id,
+              nik: cleanNik,
+              name: p.full_name || p.name || (isAdmin ? 'ADMIN' : `Karyawan ${cleanNik}`),
+              department: (isAdmin ? 'admin' : (p.department || 'rnd')) as UserProfile['department'],
+              role: (isAdmin ? 'admin' : (p.role || 'staff')) as UserProfile['role'],
+              email: p.email || (cleanNik === 'admin' ? 'lms00000@larassanti.co.id' : `${cleanNik.toLowerCase()}@larassanti.co.id`),
+              specificAccess: accessMap[cleanNik.toLowerCase()] || [],
+            };
+          });
+        }
+      } catch (err) {
+        console.warn('Could not fetch profiles from Supabase, using fallback list', err);
+      }
+    }
+
+    // 2. Ensure all INITIAL_SYSTEM_USERS exist in resultList
+    if (resultList.length === 0) {
+      resultList = INITIAL_SYSTEM_USERS.map((u) => ({
+        id: u.id,
+        nik: u.nik,
+        name: u.name,
+        department: u.department,
+        role: u.role,
+        email: u.email,
+        specificAccess: accessMap[u.nik.toLowerCase()] || u.specificAccess || [],
+      }));
+    } else {
+      for (const sysUser of INITIAL_SYSTEM_USERS) {
+        const exists = resultList.some((r) => r.nik.toLowerCase() === sysUser.nik.toLowerCase());
+        if (!exists) {
+          resultList.push({
+            id: sysUser.id,
+            nik: sysUser.nik,
+            name: sysUser.name,
+            department: sysUser.department,
+            role: sysUser.role,
+            email: sysUser.email,
+            specificAccess: accessMap[sysUser.nik.toLowerCase()] || sysUser.specificAccess || [],
+          });
+        }
+      }
+    }
+
+    // 3. Merge custom local users
+    for (const cust of customUsers) {
+      const idx = resultList.findIndex((r) => r.nik.toLowerCase() === cust.nik.toLowerCase());
+      if (idx !== -1) {
+        resultList[idx] = {
+          ...resultList[idx],
+          ...cust,
+          specificAccess: accessMap[cust.nik.toLowerCase()] || cust.specificAccess || resultList[idx].specificAccess || [],
+        };
+      } else {
+        resultList.push({
+          ...cust,
+          specificAccess: accessMap[cust.nik.toLowerCase()] || cust.specificAccess || [],
+        });
+      }
+    }
+
+    // Filter out deactivated accounts
+    return resultList.filter((u) => !deactivatedNiks.includes(u.nik.toLowerCase()));
+  },
+
   registerEmployee: async (employee: {
     nik: string;
     name: string;
@@ -170,6 +263,22 @@ export const authService = {
     const cleanNik = rawNik.toLowerCase() === 'admin' ? 'admin' : (rawNik.toUpperCase().startsWith('LMS') ? rawNik.toUpperCase() : `LMS${rawNik.toUpperCase()}`);
     const password = employee.password || 'password123';
     const email = cleanNik === 'admin' ? 'admin@larassanti.co.id' : `${cleanNik}@larassanti.co.id`;
+
+    // Ensure specific access map is updated
+    if (employee.specificAccess && employee.specificAccess.length > 0) {
+      const accessMapRaw = localStorage.getItem('cosmo_ddmp_specific_access_map');
+      const accessMap = accessMapRaw ? JSON.parse(accessMapRaw) : {};
+      accessMap[cleanNik.toLowerCase()] = employee.specificAccess;
+      localStorage.setItem('cosmo_ddmp_specific_access_map', JSON.stringify(accessMap));
+    }
+
+    // Ensure removed from deactivated list if re-registering
+    const deactivatedRaw = localStorage.getItem('cosmo_ddmp_deactivated_niks');
+    if (deactivatedRaw) {
+      const deactivatedNiks: string[] = JSON.parse(deactivatedRaw);
+      const filtered = deactivatedNiks.filter((n) => n.toLowerCase() !== cleanNik.toLowerCase());
+      localStorage.setItem('cosmo_ddmp_deactivated_niks', JSON.stringify(filtered));
+    }
 
     // 1. Try to register in Supabase Auth if configured
     if (isSupabaseConfigured && supabase) {
@@ -186,26 +295,19 @@ export const authService = {
             },
           },
         });
-        if (error) throw error;
-        return { success: true };
+        if (error) {
+          console.warn('Supabase signUp warning:', error.message);
+        }
       } catch (err: any) {
-        console.error('Supabase registration error', err);
-        return { success: false, error: err.message };
+        console.warn('Supabase registration exception', err);
       }
     }
 
-    // Fallback: Save to local custom users storage for immediate testing
+    // Save to local custom users storage for instantaneous overlay and login
     const customUsersRaw = localStorage.getItem('cosmo_ddmp_registered_users');
     const customUsers = customUsersRaw ? JSON.parse(customUsersRaw) : [];
     
-    // Check if NIK already exists
-    if (
-      DEMO_USERS.some((u) => u.nik.toLowerCase() === cleanNik.toLowerCase()) ||
-      customUsers.some((u: { nik: string }) => u.nik.toLowerCase() === cleanNik.toLowerCase())
-    ) {
-      return { success: false, error: `NIK ${cleanNik} sudah terdaftar di sistem!` };
-    }
-
+    const existingIdx = customUsers.findIndex((u: any) => u.nik.toLowerCase() === cleanNik.toLowerCase());
     const newUser = {
       id: `usr-custom-${Date.now()}`,
       nik: cleanNik,
@@ -217,38 +319,77 @@ export const authService = {
       createdAt: new Date().toISOString(),
     };
 
-    customUsers.push(newUser);
+    if (existingIdx >= 0) {
+      customUsers[existingIdx] = newUser;
+    } else {
+      customUsers.push(newUser);
+    }
+
     localStorage.setItem('cosmo_ddmp_registered_users', JSON.stringify(customUsers));
     return { success: true };
   },
 
   updateEmployee: (nik: string, updatedData: Partial<UserProfile & { password?: string }>) => {
-    const raw = localStorage.getItem('cosmo_ddmp_registered_users');
-    if (!raw) return false;
-    try {
-      const list = JSON.parse(raw);
-      const idx = list.findIndex((u: any) => u.nik.toLowerCase() === nik.toLowerCase());
-      if (idx !== -1) {
-        list[idx] = { ...list[idx], ...updatedData };
-        localStorage.setItem('cosmo_ddmp_registered_users', JSON.stringify(list));
-        return true;
-      }
-    } catch {
-      return false;
+    const cleanNik = nik.trim().toLowerCase();
+
+    // 1. Update specific access map
+    if (updatedData.specificAccess !== undefined) {
+      const accessMapRaw = localStorage.getItem('cosmo_ddmp_specific_access_map');
+      const accessMap = accessMapRaw ? JSON.parse(accessMapRaw) : {};
+      accessMap[cleanNik] = updatedData.specificAccess;
+      localStorage.setItem('cosmo_ddmp_specific_access_map', JSON.stringify(accessMap));
     }
-    return false;
+
+    // 2. Update custom users list
+    const raw = localStorage.getItem('cosmo_ddmp_registered_users');
+    const list = raw ? JSON.parse(raw) : [];
+    const idx = list.findIndex((u: any) => u.nik.toLowerCase() === cleanNik);
+    if (idx !== -1) {
+      list[idx] = { ...list[idx], ...updatedData };
+    } else {
+      list.push({
+        id: `usr-${cleanNik}`,
+        nik: updatedData.nik || nik,
+        name: updatedData.name || `Karyawan ${nik}`,
+        department: updatedData.department || 'rnd',
+        role: updatedData.role || 'staff',
+        email: updatedData.email || `${cleanNik}@larassanti.co.id`,
+        specificAccess: updatedData.specificAccess || [],
+        ...updatedData,
+      });
+    }
+    localStorage.setItem('cosmo_ddmp_registered_users', JSON.stringify(list));
+
+    // 3. If currently logged in user is updated, sync local storage session
+    const currentSession = authService.getCurrentUser();
+    if (currentSession && currentSession.nik.toLowerCase() === cleanNik) {
+      const updatedSession = { ...currentSession, ...updatedData };
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updatedSession));
+    }
+
+    return true;
   },
 
   deleteEmployee: (nik: string) => {
+    const cleanNik = nik.trim().toLowerCase();
     const raw = localStorage.getItem('cosmo_ddmp_registered_users');
-    if (!raw) return false;
-    try {
-      const list = JSON.parse(raw);
-      const filtered = list.filter((u: any) => u.nik.toLowerCase() !== nik.toLowerCase());
-      localStorage.setItem('cosmo_ddmp_registered_users', JSON.stringify(filtered));
-      return true;
-    } catch {
-      return false;
+    if (raw) {
+      try {
+        const list = JSON.parse(raw);
+        const filtered = list.filter((u: any) => u.nik.toLowerCase() !== cleanNik);
+        localStorage.setItem('cosmo_ddmp_registered_users', JSON.stringify(filtered));
+      } catch (e) {
+        console.error(e);
+      }
     }
+
+    const deactivatedRaw = localStorage.getItem('cosmo_ddmp_deactivated_niks');
+    const deactivatedNiks: string[] = deactivatedRaw ? JSON.parse(deactivatedRaw) : [];
+    if (!deactivatedNiks.includes(cleanNik)) {
+      deactivatedNiks.push(cleanNik);
+      localStorage.setItem('cosmo_ddmp_deactivated_niks', JSON.stringify(deactivatedNiks));
+    }
+
+    return true;
   },
 };

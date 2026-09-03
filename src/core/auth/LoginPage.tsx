@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useAuth } from './AuthContext';
-import { authService } from './authService';
 import {
   Lock,
   Mail,
@@ -10,62 +9,221 @@ import {
   CalendarDays,
   CheckCircle2,
   Package,
-  ShoppingCart,
   TrendingUp,
   AlertCircle,
   Eye,
   EyeOff,
-  UserPlus,
   ArrowRight,
   X,
   Boxes,
   Award,
   RotateCcw,
-  Check
+  Users,
+  Factory,
+  ChevronDown,
+  ChevronUp,
+  ShieldAlert,
+  Sparkles
 } from 'lucide-react';
-import { Department, Role, ModulePermission } from '../../types';
 import { Logo } from '../../components/Logo';
+
+interface SupabaseAccountItem {
+  nik: string;
+  name: string;
+  role: string;
+  departmentName: string;
+  deptKey: 'admin' | 'rnd' | 'quality' | 'warehouse' | 'production' | 'ppic' | 'management';
+  desc: string;
+}
+
+const SUPABASE_REGISTERED_ACCOUNTS: SupabaseAccountItem[] = [
+  // Super Admin
+  {
+    nik: 'admin',
+    name: 'ADMIN',
+    role: 'Super Administrator',
+    departmentName: 'Admin Sistem',
+    deptKey: 'admin',
+    desc: 'Otoritas penuh seluruh modul & hak akses',
+  },
+  // RnD
+  {
+    nik: 'LMS10001',
+    name: 'Daffa',
+    role: 'Staff RnD',
+    departmentName: 'RnD Formulasi',
+    deptKey: 'rnd',
+    desc: 'Input raw material (B), kemas (K), produk (PJ)',
+  },
+  {
+    nik: 'LMS10002',
+    name: 'Tanzil',
+    role: 'Supervisor RnD',
+    departmentName: 'RnD Formulasi',
+    deptKey: 'rnd',
+    desc: 'Review formula bulk & spesifikasi teknis',
+  },
+  {
+    nik: 'LMS10003',
+    name: 'Lanny',
+    role: 'Manager RnD',
+    departmentName: 'RnD Formulasi',
+    deptKey: 'rnd',
+    desc: 'Approval resep bulk & kalkulator BOM',
+  },
+  // Quality (QC/QA)
+  {
+    nik: 'LMS20001',
+    name: 'Ayu',
+    role: 'Staff QC',
+    departmentName: 'Quality (QC Lab)',
+    deptKey: 'quality',
+    desc: 'Sampling bahan karantina & uji laboratorium',
+  },
+  {
+    nik: 'LMS20002',
+    name: 'Lala',
+    role: 'Supervisor QC',
+    departmentName: 'Quality (QC Lab)',
+    deptKey: 'quality',
+    desc: 'Verifikasi hasil uji lab & sertifikasi CoA',
+  },
+  {
+    nik: 'LMS20003',
+    name: 'Michael',
+    role: 'Manager QA',
+    departmentName: 'Quality Assurance',
+    deptKey: 'quality',
+    desc: 'Otoritas final rilis bets sesuai CPKB BPOM',
+  },
+  // Warehouse (Gudang)
+  {
+    nik: 'LMS30001',
+    name: 'Heni',
+    role: 'Staff Warehouse',
+    departmentName: 'Warehouse (Gudang)',
+    deptKey: 'warehouse',
+    desc: 'Penerimaan PO & penimbangan bahan FEFO',
+  },
+  {
+    nik: 'LMS30002',
+    name: 'Maulana',
+    role: 'Supervisor Warehouse',
+    departmentName: 'Warehouse (Gudang)',
+    deptKey: 'warehouse',
+    desc: 'Pengawasan stok karantina & area sampling',
+  },
+  {
+    nik: 'LMS30003',
+    name: 'Haryani',
+    role: 'Manager Warehouse',
+    departmentName: 'Warehouse (Gudang)',
+    deptKey: 'warehouse',
+    desc: 'Approval transfer material & stok produk jadi',
+  },
+  // Produksi
+  {
+    nik: 'LMS40001',
+    name: 'Lisa',
+    role: 'Staff Produksi',
+    departmentName: 'Produksi Pabrik',
+    deptKey: 'production',
+    desc: 'Operator mixing, filling & peracikan bets',
+  },
+  {
+    nik: 'LMS40002',
+    name: 'Ilham',
+    role: 'Supervisor Produksi',
+    departmentName: 'Produksi Pabrik',
+    deptKey: 'production',
+    desc: 'Pengawasan batch record elektronik & sanitasi',
+  },
+  {
+    nik: 'LMS40003',
+    name: 'Ika Suci',
+    role: 'Manager Produksi',
+    departmentName: 'Produksi Pabrik',
+    deptKey: 'production',
+    desc: 'Manajemen kapasitas line & utilitas mesin',
+  },
+  // PPIC
+  {
+    nik: 'LMS50001',
+    name: 'Heri',
+    role: 'Staff PPIC',
+    departmentName: 'PPIC Planning',
+    deptKey: 'ppic',
+    desc: 'Kalkulasi kebutuhan bahan baku MRP & PO',
+  },
+  {
+    nik: 'LMS50002',
+    name: 'Shinta',
+    role: 'Supervisor PPIC',
+    departmentName: 'PPIC Planning',
+    deptKey: 'ppic',
+    desc: 'Jadwal rencana produksi & supply chain',
+  },
+  {
+    nik: 'LMS50003',
+    name: 'Adha Winatie',
+    role: 'Manager PPIC',
+    departmentName: 'PPIC Planning',
+    deptKey: 'ppic',
+    desc: 'Approval purchase requisition & jadwal bets',
+  },
+  // Management / Direksi
+  {
+    nik: 'LMS90001',
+    name: 'Hermansyah Rusli',
+    role: 'Direktur Utama',
+    departmentName: 'Direksi / Management',
+    deptKey: 'management',
+    desc: 'Executive summary & monitoring performa pabrik',
+  },
+  {
+    nik: 'LMS90002',
+    name: 'Herlina',
+    role: 'Direktur Keuangan',
+    departmentName: 'Direksi / Management',
+    deptKey: 'management',
+    desc: 'Analisis COGS, valuasi inventory & anggaran',
+  },
+  {
+    nik: 'LMS90003',
+    name: 'Dewi Sartika M',
+    role: 'General Manager',
+    departmentName: 'Direksi / Management',
+    deptKey: 'management',
+    desc: 'Pengendalian operasi strategis hulu-ke-hilir',
+  },
+  {
+    nik: 'LMS90004',
+    name: 'Tita',
+    role: 'Konsultan Manajemen',
+    departmentName: 'Direksi / Management',
+    deptKey: 'management',
+    desc: 'Audit kepatuhan CPKB & integrasi sistem',
+  },
+];
 
 export const LoginPage: React.FC = () => {
   const { login, isLoading } = useAuth();
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [username, setUsername] = useState('admin');
+  const [password, setPassword] = useState('laras123');
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showRegisterModal, setShowRegisterModal] = useState(false);
 
-  // Form for registering new employee
-  const [regNik, setRegNik] = useState('');
-  const [regName, setRegName] = useState('');
-  const [regDept, setRegDept] = useState<Department>('rnd');
-  const [regRole, setRegRole] = useState<Role>('staff');
-  const [regPassword, setRegPassword] = useState('');
-  const [regSuccessMsg, setRegSuccessMsg] = useState<string | null>(null);
-  const [regSpecificAccess, setRegSpecificAccess] = useState<ModulePermission[]>([]);
-
-  const toggleSpecificModule = (deptId: Department) => {
-    setRegSpecificAccess((prev) => {
-      const exists = prev.find((p) => p.moduleId === deptId);
-      if (exists) {
-        return prev.filter((p) => p.moduleId !== deptId);
-      } else {
-        return [...prev, { moduleId: deptId, accessLevel: 'read' }];
-      }
-    });
-  };
-
-  const updateSpecificLevel = (deptId: Department, level: 'read' | 'write') => {
-    setRegSpecificAccess((prev) =>
-      prev.map((p) => (p.moduleId === deptId ? { ...p, accessLevel: level } : p))
-    );
-  };
+  // Demo Accounts Filter & Accordion State
+  const [demoDeptFilter, setDemoDeptFilter] = useState<string>('all');
+  const [showDemoAccounts, setShowDemoAccounts] = useState(true);
+  const [selectedAccountNik, setSelectedAccountNik] = useState<string>('admin');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
     if (!username.trim()) {
-      setErrorMessage('Silakan masukkan NIK Karyawan atau Username Administrator.');
+      setErrorMessage('Silakan masukkan NIK Karyawan atau admin.');
       return;
     }
     if (!password) {
@@ -82,68 +240,49 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  const handleRegisterEmployee = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!regNik.trim() || !regName.trim()) {
-      setErrorMessage('Lengkapi NIK Karyawan dan Nama Lengkap.');
-      return;
-    }
-    if (!regPassword.trim()) {
-      setErrorMessage('Silakan tentukan kata sandi akun.');
-      return;
-    }
-
-    const res = await authService.registerEmployee({
-      nik: regNik,
-      name: regName,
-      department: regDept,
-      role: regRole,
-      password: regPassword,
-      specificAccess: regSpecificAccess,
-    });
-
-    if (res.success) {
-      const formattedNik = regNik.toLowerCase() === 'admin' ? 'admin' : (regNik.toUpperCase().startsWith('LMS') ? regNik.toUpperCase() : `LMS${regNik.toUpperCase()}`);
-      setRegSuccessMsg(`Akun Karyawan ${regName} (${formattedNik}) berhasil didaftarkan!`);
-      setUsername(formattedNik);
-      setPassword(regPassword);
-      setTimeout(() => {
-        setShowRegisterModal(false);
-        setRegSuccessMsg(null);
-        setRegNik('');
-        setRegName('');
-        setRegPassword('');
-        setRegSpecificAccess([]);
-      }, 1500);
-    } else {
-      setErrorMessage(res.error || 'Gagal mendaftarkan karyawan ke sistem');
+  const handleSelectDemoAccount = (acc: SupabaseAccountItem, autoLogin = false) => {
+    setUsername(acc.nik);
+    setPassword('laras123');
+    setSelectedAccountNik(acc.nik);
+    if (autoLogin) {
+      setIsSubmitting(true);
+      login(acc.nik, 'laras123').then((res) => {
+        setIsSubmitting(false);
+        if (!res.success) {
+          setErrorMessage(res.error || 'Gagal masuk dengan akun demo.');
+        }
+      });
     }
   };
 
-  const getDepartmentIcon = (dept: Department) => {
-    switch (dept) {
-      case 'rnd':
-        return <FlaskConical className="w-4 h-4 text-purple-400" />;
-      case 'ppic':
-        return <CalendarDays className="w-4 h-4 text-blue-400" />;
-      case 'quality':
-        return <CheckCircle2 className="w-4 h-4 text-amber-400" />;
-      case 'warehouse':
-        return <Package className="w-4 h-4 text-orange-400" />;
-      case 'procurement':
-        return <ShoppingCart className="w-4 h-4 text-purple-400" />;
-      case 'sales':
-        return <TrendingUp className="w-4 h-4 text-pink-400" />;
+  const filteredDemoAccounts = SUPABASE_REGISTERED_ACCOUNTS.filter((acc) => {
+    if (demoDeptFilter === 'all') return true;
+    return acc.deptKey === demoDeptFilter;
+  });
+
+  const getDeptColorClass = (key: SupabaseAccountItem['deptKey']) => {
+    switch (key) {
       case 'admin':
+        return 'text-amber-400 border-amber-500/30 bg-amber-500/10';
+      case 'rnd':
+        return 'text-purple-300 border-purple-500/30 bg-purple-500/10';
+      case 'quality':
+        return 'text-amber-300 border-amber-500/30 bg-amber-500/10';
+      case 'warehouse':
+        return 'text-orange-300 border-orange-500/30 bg-orange-500/10';
+      case 'production':
+        return 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10';
+      case 'ppic':
+        return 'text-blue-300 border-blue-500/30 bg-blue-500/10';
       case 'management':
-        return <ShieldCheck className="w-4 h-4 text-indigo-400" />;
+        return 'text-indigo-300 border-indigo-500/30 bg-indigo-500/10';
       default:
-        return <Building2 className="w-4 h-4 text-gray-400" />;
+        return 'text-slate-300 border-slate-500/30 bg-slate-500/10';
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#0d071e] text-white flex flex-col justify-between p-6 sm:p-10 lg:p-14 relative overflow-hidden font-sans select-none">
+    <div className="min-h-screen bg-[#0d071e] text-white flex flex-col justify-between p-4 sm:p-8 lg:p-12 relative overflow-hidden font-sans select-none">
       {/* Deep Dark Atmosphere Glows */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute -top-32 -left-32 w-[650px] h-[650px] rounded-full bg-purple-900/30 blur-[140px]"></div>
@@ -161,10 +300,10 @@ export const LoginPage: React.FC = () => {
       </div>
 
       {/* Main Grid Content (2 Columns) */}
-      <div className="relative z-10 max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center flex-1 py-4">
+      <div className="relative z-10 max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-start flex-1 py-4">
         
-        {/* LEFT COLUMN: Brand Identity, Badge, Hero Headline & CPKB Features */}
-        <div className="lg:col-span-7 space-y-7">
+        {/* LEFT COLUMN: Brand Identity, Badge, Hero Headline & CPKB Overview */}
+        <div className="lg:col-span-6 space-y-6">
           {/* Brand Header */}
           <div>
             <Logo showText={true} size="md" variant="dark" />
@@ -173,7 +312,7 @@ export const LoginPage: React.FC = () => {
           {/* Badge: Sistem Gudang & Quality Control CPKB */}
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-purple-950/80 border border-purple-700/50 text-purple-300 text-xs font-bold shadow-xs">
             <Award className="w-4 h-4 text-purple-400 shrink-0" />
-            <span>Sistem Gudang & Quality Control CPKB</span>
+            <span>Sistem Gudang & Quality Control CPKB BPOM</span>
           </div>
 
           {/* Hero Headline */}
@@ -191,13 +330,12 @@ export const LoginPage: React.FC = () => {
 
           {/* Description */}
           <p className="text-xs sm:text-sm text-purple-100/70 leading-relaxed max-w-xl">
-            Platform manajemen terpadu PT. Larassanti Makmur Sejahtera untuk pengelolaan Penerimaan Gudang, Pengujian Laboratorium QC, Batch Record CPKB BPOM, Manajemen BOM Formula RnD, hingga Pengiriman Produk Jadi.
+            Platform operasional terpadu PT. Larassanti Makmur Sejahtera. Terintegrasi penuh dengan <strong>20 akun resmi di database Supabase</strong> untuk penelusuran hulu-ke-hilir: Penerimaan Gudang, Pengujian Laboratorium QC, Batch Record CPKB BPOM, Manajemen BOM Formula RnD, hingga Pengiriman Produk Jadi.
           </p>
 
           {/* 2 Feature Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 max-w-xl">
-            {/* Card 1 */}
-            <div className="bg-white/[0.04] border border-purple-500/20 backdrop-blur-md rounded-2xl p-4 shadow-sm hover:border-purple-400/40 transition-all">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1 max-w-xl">
+            <div className="bg-white/[0.04] border border-purple-500/20 backdrop-blur-md rounded-2xl p-4 shadow-sm">
               <div className="flex items-start gap-3">
                 <div className="w-8 h-8 rounded-xl bg-purple-900/60 border border-purple-700/50 flex items-center justify-center text-purple-300 shrink-0">
                   <ShieldCheck className="w-4 h-4" />
@@ -211,8 +349,7 @@ export const LoginPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Card 2 */}
-            <div className="bg-white/[0.04] border border-purple-500/20 backdrop-blur-md rounded-2xl p-4 shadow-sm hover:border-purple-400/40 transition-all">
+            <div className="bg-white/[0.04] border border-purple-500/20 backdrop-blur-md rounded-2xl p-4 shadow-sm">
               <div className="flex items-start gap-3">
                 <div className="w-8 h-8 rounded-xl bg-purple-900/60 border border-purple-700/50 flex items-center justify-center text-purple-300 shrink-0">
                   <Boxes className="w-4 h-4" />
@@ -226,27 +363,46 @@ export const LoginPage: React.FC = () => {
               </div>
             </div>
           </div>
-        </div>
 
-        {/* RIGHT COLUMN: Floating Card Portal Masuk */}
-        <div className="lg:col-span-5 flex justify-center lg:justify-end">
-          <div className="w-full max-w-md bg-[#150a2a]/95 backdrop-blur-xl border border-purple-500/30 rounded-3xl p-7 sm:p-9 shadow-2xl shadow-purple-950/80 relative">
-            
-            {/* Card Title & Subtitle */}
-            <div className="mb-6">
-              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                Portal Masuk
-              </h2>
-              <p className="text-xs text-purple-200/70 mt-1">
-                Silakan masuk dengan kredensial akun operasional Anda
+          {/* Notice: Penambahan Karyawan Terpusat */}
+          <div className="p-4 rounded-2xl bg-indigo-950/40 border border-indigo-700/40 max-w-xl text-xs text-indigo-200/90 flex items-start gap-3">
+            <ShieldAlert className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <span className="font-bold text-white text-[11px] uppercase tracking-wider block">
+                Kebijakan Manajemen Personel Terpusat
+              </span>
+              <p className="text-[11px] text-purple-200/70 leading-relaxed">
+                Pendaftaran karyawan baru dan konfigurasi otoritas lintas departemen dilakukan secara aman oleh Administrator melalui <strong>Modul Admin & Otoritas Sistem</strong> di dalam aplikasi.
               </p>
             </div>
+          </div>
+        </div>
 
-            {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-4">
+        {/* RIGHT COLUMN: Floating Card Portal Masuk & Supabase Demo Accounts */}
+        <div className="lg:col-span-6 flex flex-col items-center lg:items-end w-full space-y-4">
+          <div className="w-full max-w-xl bg-[#150a2a]/95 backdrop-blur-xl border border-purple-500/30 rounded-3xl p-6 sm:p-7 shadow-2xl shadow-purple-950/80 relative">
+            
+            {/* Card Title & Subtitle */}
+            <div className="mb-5 flex items-center justify-between">
               <div>
-                <label className="block text-xs font-bold text-purple-200 mb-1.5">
-                  Email atau Username / NIK
+                <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                  Portal Masuk
+                </h2>
+                <p className="text-xs text-purple-200/70 mt-0.5">
+                  Silakan masuk dengan NIK terdaftar atau pilih akun demo resmi
+                </p>
+              </div>
+              <div className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>Supabase Synced</span>
+              </div>
+            </div>
+
+            {/* Login Form */}
+            <form onSubmit={handleSubmit} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-bold text-purple-200 mb-1">
+                  Nomor Induk Karyawan (NIK) atau admin
                 </label>
                 <div className="relative">
                   <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-purple-400">
@@ -256,15 +412,18 @@ export const LoginPage: React.FC = () => {
                     type="text"
                     required
                     value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    placeholder="Masukkan NIK atau admin (contoh: admin)"
-                    className="w-full rounded-2xl border border-purple-700/50 bg-purple-950/40 pl-10 pr-4 py-3 text-xs text-white placeholder-purple-300/40 focus:bg-purple-950/80 focus:border-purple-400 focus:outline-none focus:ring-1 focus:ring-purple-400 transition-all font-medium"
+                    onChange={(e) => {
+                      setUsername(e.target.value);
+                      setSelectedAccountNik(e.target.value);
+                    }}
+                    placeholder="Masukkan NIK atau admin (contoh: admin, LMS10001)"
+                    className="w-full rounded-2xl border border-purple-700/50 bg-purple-950/40 pl-10 pr-4 py-2.5 text-xs text-white placeholder-purple-300/40 focus:bg-purple-950/80 focus:border-purple-400 focus:outline-none focus:ring-1 focus:ring-purple-400 transition-all font-mono font-bold"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-purple-200 mb-1.5">
+                <label className="block text-xs font-bold text-purple-200 mb-1">
                   Kata Sandi
                 </label>
                 <div className="relative">
@@ -277,7 +436,7 @@ export const LoginPage: React.FC = () => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full rounded-2xl border border-purple-700/50 bg-purple-950/40 pl-10 pr-10 py-3 text-xs text-white placeholder-purple-300/40 focus:bg-purple-950/80 focus:border-purple-400 focus:outline-none focus:ring-1 focus:ring-purple-400 transition-all font-medium"
+                    className="w-full rounded-2xl border border-purple-700/50 bg-purple-950/40 pl-10 pr-10 py-2.5 text-xs text-white placeholder-purple-300/40 focus:bg-purple-950/80 focus:border-purple-400 focus:outline-none focus:ring-1 focus:ring-purple-400 transition-all font-medium font-mono"
                   />
                   <button
                     type="button"
@@ -293,7 +452,7 @@ export const LoginPage: React.FC = () => {
               <button
                 type="submit"
                 disabled={isSubmitting || isLoading}
-                className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 active:from-purple-700 active:to-indigo-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-purple-900/50 transition-all cursor-pointer mt-2 disabled:opacity-50"
+                className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 active:from-purple-700 active:to-indigo-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-purple-900/50 transition-all cursor-pointer disabled:opacity-50"
               >
                 {isSubmitting ? (
                   <span className="flex items-center gap-2">
@@ -302,36 +461,137 @@ export const LoginPage: React.FC = () => {
                   </span>
                 ) : (
                   <>
-                    <span>Masuk ke Sistem</span>
+                    <span>Masuk ke Sistem ({username})</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}
               </button>
             </form>
 
-            {/* Register New Account Link */}
-            <div className="mt-4 pt-3 border-t border-purple-900/50 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px]">
-              <span className="text-purple-300/60 text-[10px]">
-                Mode Otoritas Karyawan Aktif
-              </span>
-              <button
-                type="button"
-                onClick={() => setShowRegisterModal(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-900/50 hover:bg-purple-800/60 border border-purple-700/50 text-purple-200 hover:text-white font-semibold cursor-pointer transition-all"
-              >
-                <UserPlus className="w-3.5 h-3.5 text-purple-400" />
-                <span>Daftar Karyawan Baru</span>
-              </button>
+            {/* INTERACTIVE DEMO ACCOUNTS ACCORDION (REAL SUPABASE ACCOUNTS) */}
+            <div className="mt-5 pt-4 border-t border-purple-900/50">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-purple-400" />
+                  <span className="text-xs font-bold text-white tracking-tight">
+                    Akun Demo Terdaftar di Supabase ({SUPABASE_REGISTERED_ACCOUNTS.length})
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowDemoAccounts(!showDemoAccounts)}
+                  className="text-[11px] font-bold text-purple-300 hover:text-white flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                  <span>{showDemoAccounts ? 'Sembunyikan' : 'Tampilkan Akun'}</span>
+                  {showDemoAccounts ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+
+              {showDemoAccounts && (
+                <div className="space-y-2.5 animate-in fade-in">
+                  {/* Department Filter Pills */}
+                  <div className="flex flex-wrap gap-1.5 pb-1">
+                    {[
+                      { id: 'all', label: 'Semua (20)' },
+                      { id: 'admin', label: 'Admin' },
+                      { id: 'rnd', label: 'RnD' },
+                      { id: 'quality', label: 'QC' },
+                      { id: 'warehouse', label: 'Gudang' },
+                      { id: 'production', label: 'Produksi' },
+                      { id: 'ppic', label: 'PPIC' },
+                      { id: 'management', label: 'Direksi' },
+                    ].map((tab) => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setDemoDeptFilter(tab.id)}
+                        className={`px-2.5 py-1 rounded-xl text-[10px] font-bold transition-all cursor-pointer ${
+                          demoDeptFilter === tab.id
+                            ? 'bg-purple-600 text-white shadow-xs'
+                            : 'bg-purple-950/50 hover:bg-purple-900/60 text-purple-300/80 border border-purple-800/40'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Scrollable List of Demo Accounts */}
+                  <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1 select-none">
+                    {filteredDemoAccounts.map((acc) => {
+                      const isSelected = selectedAccountNik.toLowerCase() === acc.nik.toLowerCase();
+                      const colorBadge = getDeptColorClass(acc.deptKey);
+
+                      return (
+                        <div
+                          key={acc.nik}
+                          onClick={() => handleSelectDemoAccount(acc, false)}
+                          className={`p-2.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                            isSelected
+                              ? 'bg-purple-900/60 border-purple-400 shadow-md shadow-purple-950/40'
+                              : 'bg-purple-950/30 hover:bg-purple-900/40 border-purple-800/40'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-black border ${colorBadge}`}>
+                              {acc.nik}
+                            </span>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-bold text-white truncate">{acc.name}</span>
+                                <span className="text-[10px] text-purple-300/70 font-semibold truncate">
+                                  • {acc.role}
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-purple-300/50 truncate">
+                                {acc.desc}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {isSelected && (
+                              <span className="hidden sm:inline-flex px-1.5 py-0.5 rounded-md bg-purple-500/20 text-purple-300 text-[9px] font-bold">
+                                Terpilih
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSelectDemoAccount(acc, true);
+                              }}
+                              className="px-2.5 py-1 rounded-xl bg-purple-600/80 hover:bg-purple-500 active:bg-purple-700 text-white text-[10px] font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1"
+                              title="Masuk langsung dengan akun ini"
+                            >
+                              <span>Masuk</span>
+                              <ArrowRight className="w-2.5 h-2.5" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Demo Password Hint */}
+                  <div className="pt-2 flex items-center justify-between text-[10px] text-purple-300/60 font-mono">
+                    <span>Password default seluruh akun:</span>
+                    <span className="font-bold text-purple-300 bg-purple-950/80 px-2 py-0.5 rounded-md border border-purple-800/60">
+                      laras123
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Card Footer: SSL & Audit Trail */}
-            <div className="mt-5 pt-3.5 border-t border-purple-900/50 flex items-center justify-between text-[10px] text-purple-300/60 font-semibold">
+            <div className="mt-4 pt-3.5 border-t border-purple-900/50 flex items-center justify-between text-[10px] text-purple-300/60 font-semibold">
               <span className="flex items-center gap-1.5">
                 <ShieldCheck className="w-3.5 h-3.5 text-purple-400" />
                 Enkripsi SSL 256-bit
               </span>
               <span className="text-purple-300 font-bold">
-                Audit Trail CPKB
+                Audit Trail CPKB BPOM
               </span>
             </div>
 
@@ -347,9 +607,9 @@ export const LoginPage: React.FC = () => {
         </span>
       </div>
 
-      {/* POPUP MODAL: Pop-up Kesalahan NIK atau Password (Prominent Alert) */}
+      {/* POPUP MODAL: Pop-up Kesalahan NIK atau Password */}
       {errorMessage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="bg-[#180e30] border border-rose-500/40 rounded-3xl w-full max-w-md p-6 sm:p-7 shadow-2xl text-white relative text-center">
             <button
               onClick={() => setErrorMessage(null)}
@@ -380,192 +640,6 @@ export const LoginPage: React.FC = () => {
                 <span>Coba Masukkan Kembali</span>
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* POPUP MODAL: Register New Employee */}
-      {showRegisterModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-[#180e30] border border-purple-500/30 rounded-3xl w-full max-w-lg p-6 shadow-2xl text-white relative my-8 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-purple-900/60 mb-3 sticky top-0 bg-[#180e30] z-10">
-              <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
-                <UserPlus className="w-4 h-4 text-purple-400" />
-                <span>Pendaftaran Akun Karyawan Asli</span>
-              </h3>
-              <button
-                onClick={() => setShowRegisterModal(false)}
-                className="text-purple-300 hover:text-white p-1 rounded-full cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {regSuccessMsg && (
-              <div className="mb-4 p-3 rounded-xl bg-purple-950/80 border border-purple-700 text-purple-200 text-xs flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-purple-400 shrink-0" />
-                <span>{regSuccessMsg}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleRegisterEmployee} className="space-y-3.5">
-              <div>
-                <label className="block text-xs font-semibold text-purple-200 mb-1">
-                  Nomor Induk Karyawan (NIK)
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Contoh: 1001, LMS2001, atau NIK pabrik"
-                  value={regNik}
-                  onChange={(e) => setRegNik(e.target.value)}
-                  className="w-full rounded-xl bg-purple-950/60 border border-purple-700/60 px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-400 font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-purple-200 mb-1">
-                  Nama Lengkap & Gelar
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Contoh: Budi Santoso, S.Farm"
-                  value={regName}
-                  onChange={(e) => setRegName(e.target.value)}
-                  className="w-full rounded-xl bg-purple-950/60 border border-purple-700/60 px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-400 font-semibold"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-purple-200 mb-1">Departemen Utama</label>
-                  <select
-                    value={regDept}
-                    onChange={(e) => setRegDept(e.target.value as Department)}
-                    className="w-full rounded-xl bg-purple-950/60 border border-purple-700/60 px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-400"
-                  >
-                    <option value="rnd">RnD (Formulasi & Bahan)</option>
-                    <option value="ppic">PPIC (Perencanaan & MRP)</option>
-                    <option value="quality">Quality (QA/QC Lab)</option>
-                    <option value="warehouse">Warehouse (Gudang)</option>
-                    <option value="production">Produksi (Operasional Pabrik)</option>
-                    <option value="procurement">Procurement (Purchasing)</option>
-                    <option value="sales">Sales (Penjualan)</option>
-                    <option value="management">Management / Direksi</option>
-                    <option value="admin">IT / Super Admin</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-purple-200 mb-1">Tingkat Jabatan / Role</label>
-                  <select
-                    value={regRole}
-                    onChange={(e) => setRegRole(e.target.value as Role)}
-                    className="w-full rounded-xl bg-purple-950/60 border border-purple-700/60 px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-400"
-                  >
-                    <option value="staff">Staff (Input & Draft)</option>
-                    <option value="operator">Operator (Pelaksana Lapangan)</option>
-                    <option value="supervisor">Supervisor (Review & Verifikasi)</option>
-                    <option value="manager">Manager (Approval & Otoritas Penuh)</option>
-                    <option value="admin">Admin (Akses Seluruh Sistem)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-purple-200 mb-1">
-                  Kata Sandi (Password Akun)
-                </label>
-                <input
-                  type="password"
-                  required
-                  placeholder="Masukkan password akun"
-                  value={regPassword}
-                  onChange={(e) => setRegPassword(e.target.value)}
-                  className="w-full rounded-xl bg-purple-950/60 border border-purple-700/60 px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-400"
-                />
-              </div>
-
-              {/* Kondisi Khusus: Akses Modul Tambahan (Exception Overlay) */}
-              <div className="pt-2 border-t border-purple-900/60">
-                <label className="block text-xs font-bold text-purple-300 mb-1">
-                  Kondisi Khusus: Izin Akses Lintas Modul (Opsional)
-                </label>
-                <p className="text-[11px] text-purple-300/70 mb-2 leading-relaxed">
-                  Secara default, karyawan hanya dapat membuka modul departemen utamanya. Centang modul di bawah jika karyawan ini memiliki penugasan khusus di departemen lain:
-                </p>
-
-                <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                  {(['rnd', 'ppic', 'quality', 'warehouse', 'procurement', 'sales'] as Department[])
-                    .filter((d) => d !== regDept)
-                    .map((deptId) => {
-                      const perm = regSpecificAccess.find((p) => p.moduleId === deptId);
-                      const isChecked = !!perm;
-                      const deptName =
-                        deptId === 'rnd'
-                          ? 'RnD (Research & Dev)'
-                          : deptId === 'ppic'
-                          ? 'PPIC (Planning & Batching)'
-                          : deptId === 'quality'
-                          ? 'Quality (QC/QA Lab)'
-                          : deptId === 'warehouse'
-                          ? 'Warehouse (Gudang)'
-                          : deptId === 'procurement'
-                          ? 'Procurement (PO Bahan)'
-                          : 'Sales (Pesanan)';
-
-                      return (
-                        <div
-                          key={deptId}
-                          className="flex items-center justify-between p-2 rounded-xl bg-purple-950/40 border border-purple-800/40 text-xs"
-                        >
-                          <label className="flex items-center gap-2 cursor-pointer select-none">
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={() => toggleSpecificModule(deptId)}
-                              className="rounded border-purple-700 text-purple-600 focus:ring-purple-500 cursor-pointer"
-                            />
-                            <span className={isChecked ? 'text-white font-semibold' : 'text-purple-300/70'}>
-                              {deptName}
-                            </span>
-                          </label>
-
-                          {isChecked && (
-                            <select
-                              value={perm?.accessLevel || 'read'}
-                              onChange={(e) =>
-                                updateSpecificLevel(deptId, e.target.value as 'read' | 'write')
-                              }
-                              className="bg-purple-900/80 border border-purple-700 rounded-lg px-2 py-0.5 text-[10px] text-purple-200 focus:outline-none"
-                            >
-                              <option value="read">Hanya Lihat (Read-Only)</option>
-                              <option value="write">Lihat & Edit (Read/Write)</option>
-                            </select>
-                          )}
-                        </div>
-                      );
-                    })}
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-purple-900/60 mt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowRegisterModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-purple-300 hover:bg-white/5 transition-colors cursor-pointer"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-md shadow-purple-900/50 transition-colors cursor-pointer"
-                >
-                  Daftarkan Akun Karyawan
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}

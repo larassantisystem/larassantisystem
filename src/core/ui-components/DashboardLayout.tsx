@@ -29,7 +29,8 @@ import {
   PackageCheck,
   ClipboardList,
   History,
-  FileText
+  FileText,
+  Factory
 } from 'lucide-react';
 import { Logo } from '../../components/Logo';
 
@@ -133,6 +134,17 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         { id: 'inbound', label: 'Penerimaan Raw Material', icon: <Package className="w-3.5 h-3.5" /> },
         { id: 'weighing', label: 'Penimbangan FEFO Bersih', icon: <Sliders className="w-3.5 h-3.5" /> },
         { id: 'finished-goods', label: 'Stok Produk Jadi (PJ)', icon: <PackageCheck className="w-3.5 h-3.5" /> },
+      ]
+    },
+    {
+      id: 'production',
+      name: 'Produksi (Operasional Pabrik)',
+      shortName: 'Produksi',
+      description: 'Peracikan, Mixing, Filling CPKB',
+      icon: <Factory className="w-4 h-4 text-emerald-700" />,
+      subItems: [
+        { id: 'batch-mixing', label: 'Peracikan & Mixing Batch', icon: <Sliders className="w-3.5 h-3.5" /> },
+        { id: 'filling-packing', label: 'Filling & Pengemasan CPKB', icon: <PackageCheck className="w-3.5 h-3.5" /> },
       ]
     },
     {

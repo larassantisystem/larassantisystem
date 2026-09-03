@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from './core/auth/AuthContext';
 import { LoginPage } from './core/auth/LoginPage';
 import { DashboardLayout } from './core/ui-components/DashboardLayout';
 import { RndModule } from './components/RndModule';
+import { EmployeeManagementModule } from './features/admin/EmployeeManagementModule';
 import { Department } from './types';
 import {
   FlaskConical,
@@ -30,6 +31,7 @@ const MainAppContent: React.FC = () => {
   const { user, isAuthenticated, isLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<Department | 'dashboard'>('dashboard');
   const [activeRndSubTab, setActiveRndSubTab] = useState<'materials' | 'packaging' | 'products' | 'formula' | 'bom-calculator'>('products');
+  const [activeAdminSubTab, setActiveAdminSubTab] = useState<'users' | 'audit'>('users');
 
   if (isLoading) {
     return (
@@ -50,6 +52,9 @@ const MainAppContent: React.FC = () => {
     if (activeTab === 'rnd' || ['materials', 'packaging', 'products', 'formula', 'bom-calculator'].includes(subTabId)) {
       setActiveRndSubTab(subTabId as any);
       setActiveTab('rnd');
+    } else if (activeTab === 'admin' || ['users', 'audit'].includes(subTabId)) {
+      setActiveAdminSubTab(subTabId as any);
+      setActiveTab('admin');
     }
   };
 
@@ -57,7 +62,7 @@ const MainAppContent: React.FC = () => {
     <DashboardLayout
       activeTab={activeTab}
       onSelectTab={setActiveTab}
-      activeSubTab={activeRndSubTab}
+      activeSubTab={activeTab === 'rnd' ? activeRndSubTab : (activeTab === 'admin' ? activeAdminSubTab : undefined)}
       onSelectSubTab={handleSelectSubTab}
     >
       {activeTab === 'dashboard' && (
@@ -245,7 +250,16 @@ const MainAppContent: React.FC = () => {
         </div>
       )}
 
-      {activeTab !== 'rnd' && activeTab !== 'dashboard' && (
+      {activeTab === 'admin' && (
+        <div className="max-w-6xl mx-auto">
+          <EmployeeManagementModule
+            activeSubTab={activeAdminSubTab}
+            onSelectSubTab={setActiveAdminSubTab}
+          />
+        </div>
+      )}
+
+      {activeTab !== 'rnd' && activeTab !== 'admin' && activeTab !== 'dashboard' && (
         <div className="max-w-4xl mx-auto py-16 text-center space-y-6">
           <div className="w-20 h-20 rounded-3xl bg-white border border-slate-200 flex items-center justify-center mx-auto shadow-xs text-slate-700">
             {activeTab === 'ppic' && <CalendarDays className="w-9 h-9 text-blue-700" />}
