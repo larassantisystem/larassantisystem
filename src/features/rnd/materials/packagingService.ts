@@ -54,7 +54,7 @@ export const packagingService = {
             .range(from, from + step - 1);
 
           if (error) {
-            console.error('[Supabase Audit] Error fetching packaging_materials batch:', error);
+            console.warn('[Supabase Audit] Notice fetching packaging_materials batch (falling back to local storage):', error.message || error);
             fetchError = true;
             break;
           }

@@ -13,6 +13,9 @@ import {
   ChevronsLeft,
   ChevronsRight,
   ArrowRightLeft,
+  AlertTriangle,
+  CheckCircle2,
+  TrendingDown,
 } from 'lucide-react';
 import { MaterialStockSummary } from '../types/stockTypes';
 import { stockService } from '../stockService';
@@ -298,8 +301,32 @@ export const StockRawMaterialPage: React.FC<StockRawMaterialPageProps> = ({
                         </span>
                         <span className="font-black text-slate-900">{mat.materialName}</span>
                       </div>
-                      <div className="text-[11px] text-slate-400 mt-0.5">
-                        Min. Stock: {mat.minimumStock} {mat.unit} • {mat.storageConditions}
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[11px] text-slate-500">
+                          Min. Stock (ROP): <strong className="text-slate-800">{mat.minimumStock} {mat.unit}</strong>
+                        </span>
+                        <span>•</span>
+                        {mat.stockReleased === 0 ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-bold text-[10px] animate-pulse">
+                            <AlertTriangle className="w-3 h-3" />
+                            <span>HABIS</span>
+                          </span>
+                        ) : mat.stockReleased <= mat.minimumStock ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold text-[10px]">
+                            <TrendingDown className="w-3 h-3 text-amber-600" />
+                            <span>KRITIS</span>
+                          </span>
+                        ) : mat.stockReleased <= mat.minimumStock * 1.25 ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 font-semibold text-[10px]">
+                            <AlertTriangle className="w-3 h-3 text-yellow-600" />
+                            <span>RE-ORDER</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-semibold text-[10px]">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                            <span>OK</span>
+                          </span>
+                        )}
                       </div>
                     </td>
 

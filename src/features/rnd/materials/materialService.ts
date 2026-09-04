@@ -54,7 +54,7 @@ export const materialService = {
             .range(from, from + step - 1);
 
           if (error) {
-            console.error('[Supabase Audit] Error fetching raw_materials batch:', error);
+            console.warn('[Supabase Audit] Notice fetching raw_materials batch (falling back to local storage):', error.message || error);
             fetchError = true;
             break;
           }
