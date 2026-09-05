@@ -272,6 +272,16 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     }
   }, [activeTab, user, onSelectTab]);
 
+  // Auto-expand accordion departemen yang aktif agar sub-menu terlihat langsung di sidebar
+  useEffect(() => {
+    if (activeTab && activeTab !== 'dashboard') {
+      setExpandedDepts((prev) => ({
+        ...prev,
+        [activeTab]: true,
+      }));
+    }
+  }, [activeTab]);
+
   const handleNotificationNavigate = (dept: Department, subTab?: string) => {
     onSelectTab(dept);
     if (subTab && onSelectSubTab) {
@@ -616,6 +626,36 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             );
           })}
         </aside>
+
+        {/* Mobile Sub-Items Bar (Only when active department has sub-items and screen is mobile) */}
+        {(() => {
+          const currentDept = departments.find((d) => d.id === activeTab);
+          if (!currentDept || !currentDept.subItems || currentDept.subItems.length === 0) return null;
+          return (
+            <div className="md:hidden bg-white border-b border-slate-200 px-3 py-2 flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0 shadow-2xs">
+              {currentDept.subItems.map((sub) => {
+                const isSubActive = activeSubTab === sub.id;
+                return (
+                  <button
+                    key={sub.id}
+                    type="button"
+                    onClick={() => {
+                      if (onSelectSubTab) onSelectSubTab(sub.id);
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 flex items-center gap-1.5 transition-all cursor-pointer ${
+                      isSubActive
+                        ? 'bg-purple-700 text-white shadow-xs'
+                        : 'bg-slate-50 border border-slate-200 text-slate-600 hover:bg-purple-50 hover:text-purple-700'
+                    }`}
+                  >
+                    <span className={isSubActive ? 'text-white' : 'text-slate-400'}>{sub.icon}</span>
+                    <span>{sub.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })()}
 
         {/* Content Area */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-slate-50">

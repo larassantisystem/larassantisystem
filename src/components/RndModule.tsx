@@ -8,11 +8,10 @@ import { RndBomCalculatorTab } from './rnd/RndBomCalculatorTab';
 import { productService } from '../features/rnd/products/productService';
 import { materialService } from '../features/rnd/materials/materialService';
 import { packagingService } from '../features/rnd/materials/packagingService';
+import { formulaService } from '../features/rnd/formula/formulaService';
 import {
   FlaskConical,
   Layers,
-  Sliders,
-  FileSpreadsheet,
   PackageCheck,
   CheckCircle2,
   Database,
@@ -88,13 +87,11 @@ export const RndModule: React.FC<RndModuleProps> = ({
       setProducts(res);
     });
 
-    // 4. Formulations (using B0001-B0007)
-    const savedFormulas = localStorage.getItem('lsm_formulations_v2');
-    if (savedFormulas) {
-      const parsed = JSON.parse(savedFormulas);
-      setFormulations(parsed);
-      if (parsed.length > 0) setSelectedFormulation(parsed[0]);
-    }
+    // 4. Formulations directly from Supabase / formulaService
+    formulaService.getFormulations().then((res) => {
+      setFormulations(res);
+      if (res.length > 0) setSelectedFormulation(res[0]);
+    });
   }, []);
 
   const handleSaveRM = async (newRM: RawMaterial) => {
@@ -169,21 +166,30 @@ export const RndModule: React.FC<RndModuleProps> = ({
     packagingService.deletePackagingMaterial(id, pm?.code);
   };
 
-  const handleSaveFormula = (newFormula: BulkFormulation) => {
-    const exists = formulations.some((f) => f.id === newFormula.id);
+  const handleSaveFormula = async (newFormula: BulkFormulation) => {
+    const exists = formulations.some((f) => f.id === newFormula.id || f.code === newFormula.code);
     let updated: BulkFormulation[];
     if (exists) {
-      updated = formulations.map((f) => (f.id === newFormula.id ? newFormula : f));
+      updated = formulations.map((f) => (f.id === newFormula.id || f.code === newFormula.code ? newFormula : f));
     } else {
       updated = [newFormula, ...formulations];
     }
     setFormulations(updated);
     setSelectedFormulation(newFormula);
-    localStorage.setItem('lsm_formulations_v2', JSON.stringify(updated));
+    await formulaService.saveSingleFormulation(newFormula);
   };
 
-  // --- PRODUCTS & VARIANTS HANDLERS ---
-  const handleSaveProduct = (newProd: Product) => {
+  const handleDeleteFormula = async (id: string, code?: string) => {
+    const updated = formulations.filter((f) => f.id !== id && (!code || f.code !== code));
+    setFormulations(updated);
+    if (selectedFormulation?.id === id) {
+      setSelectedFormulation(updated.length > 0 ? updated[0] : null);
+    }
+    await formulaService.deleteFormulation(id, code);
+  };
+
+  // --- PRODUCTS & VARIANTS HANDLERS (SUPABASE ONLY, NO LOCAL STORAGE) ---
+  const handleSaveProduct = async (newProd: Product) => {
     const exists = products.some((p) => p.id === newProd.id);
     let updated: Product[];
     if (exists) {
@@ -192,16 +198,20 @@ export const RndModule: React.FC<RndModuleProps> = ({
       updated = [newProd, ...products];
     }
     setProducts(updated);
-    productService.saveProducts(updated);
+
+    // Persist directly to Supabase tables 'products' & 'product_variants'
+    await productService.saveSingleProduct(newProd);
   };
 
-  const handleDeleteProduct = (productId: string) => {
+  const handleDeleteProduct = async (productId: string) => {
     const updated = products.filter((p) => p.id !== productId);
     setProducts(updated);
-    productService.saveProducts(updated);
+
+    // Delete directly from Supabase table 'products' (cascades to variants)
+    await productService.deleteProduct(productId);
   };
 
-  const handleSaveVariant = (productId: string, variant: ProductVariant) => {
+  const handleSaveVariant = async (productId: string, variant: ProductVariant) => {
     const updated = products.map((prod) => {
       if (prod.id !== productId) return prod;
       const vExists = prod.variants.some((v) => v.id === variant.id);
@@ -214,10 +224,12 @@ export const RndModule: React.FC<RndModuleProps> = ({
       return { ...prod, variants: newVariants };
     });
     setProducts(updated);
-    productService.saveProducts(updated);
+
+    // Persist directly to Supabase table 'product_variants'
+    await productService.saveSingleVariant(productId, variant);
   };
 
-  const handleDeleteVariant = (productId: string, variantId: string) => {
+  const handleDeleteVariant = async (productId: string, variantId: string) => {
     const updated = products.map((prod) => {
       if (prod.id !== productId) return prod;
       return {
@@ -226,7 +238,9 @@ export const RndModule: React.FC<RndModuleProps> = ({
       };
     });
     setProducts(updated);
-    productService.saveProducts(updated);
+
+    // Delete directly from Supabase table 'product_variants'
+    await productService.deleteVariant(variantId);
   };
 
   const totalVariantsCount = products.reduce((sum, p) => sum + p.variants.length, 0);
@@ -299,69 +313,6 @@ export const RndModule: React.FC<RndModuleProps> = ({
         </div>
       </div>
 
-      {/* Sub-Tab Navigation */}
-      <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
-        <button
-          onClick={() => setActiveSubTab('products')}
-          className={`px-4 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl border transition-all cursor-pointer flex items-center gap-2 ${
-            activeSubTab === 'products'
-              ? 'bg-purple-700 border-purple-700 text-white shadow-sm'
-              : 'border-slate-200 bg-white text-slate-600 hover:text-purple-700 hover:bg-purple-50/50'
-          }`}
-        >
-          <PackageCheck className="w-4 h-4" />
-          <span>Produk Jadi & Varian (PJ0001)</span>
-        </button>
-
-        <button
-          onClick={() => setActiveSubTab('materials')}
-          className={`px-4 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl border transition-all cursor-pointer flex items-center gap-2 ${
-            activeSubTab === 'materials'
-              ? 'bg-purple-700 border-purple-700 text-white shadow-sm'
-              : 'border-slate-200 bg-white text-slate-600 hover:text-purple-700 hover:bg-purple-50/50'
-          }`}
-        >
-          <FlaskConical className="w-4 h-4" />
-          <span>Bahan Baku (B0001)</span>
-        </button>
-
-        <button
-          onClick={() => setActiveSubTab('packaging')}
-          className={`px-4 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl border transition-all cursor-pointer flex items-center gap-2 ${
-            activeSubTab === 'packaging'
-              ? 'bg-purple-700 border-purple-700 text-white shadow-sm'
-              : 'border-slate-200 bg-white text-slate-600 hover:text-purple-700 hover:bg-purple-50/50'
-          }`}
-        >
-          <Layers className="w-4 h-4" />
-          <span>Bahan Kemas (K0001)</span>
-        </button>
-
-        <button
-          onClick={() => setActiveSubTab('formula')}
-          className={`px-4 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl border transition-all cursor-pointer flex items-center gap-2 ${
-            activeSubTab === 'formula'
-              ? 'bg-purple-700 border-purple-700 text-white shadow-sm'
-              : 'border-slate-200 bg-white text-slate-600 hover:text-purple-700 hover:bg-purple-50/50'
-          }`}
-        >
-          <Sliders className="w-4 h-4" />
-          <span>Master Formula & Instruksi</span>
-        </button>
-
-        <button
-          onClick={() => setActiveSubTab('bom-calculator')}
-          className={`px-4 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl border transition-all cursor-pointer flex items-center gap-2 ${
-            activeSubTab === 'bom-calculator'
-              ? 'bg-purple-700 border-purple-700 text-white shadow-sm'
-              : 'border-slate-200 bg-white text-slate-600 hover:text-purple-700 hover:bg-purple-50/50'
-          }`}
-        >
-          <FileSpreadsheet className="w-4 h-4" />
-          <span>Dynamic BOM Calculator</span>
-        </button>
-      </div>
-
       {/* Sub-Tab Panels */}
       {activeSubTab === 'products' && (
         <RndProductsTab
@@ -397,9 +348,11 @@ export const RndModule: React.FC<RndModuleProps> = ({
         <RndFormulaTab
           formulations={formulations}
           rawMaterials={rawMaterials}
+          products={products}
           selectedFormulation={selectedFormulation}
           onSelectFormulation={setSelectedFormulation}
           onSaveFormula={handleSaveFormula}
+          onDeleteFormula={handleDeleteFormula}
         />
       )}
 

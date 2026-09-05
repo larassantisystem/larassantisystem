@@ -42,8 +42,12 @@ export interface AuthState {
 }
 
 export interface QCParameter {
-  name: string;
-  specification: string;
+  name?: string;
+  specification?: string;
+  parameterName?: string;
+  acceptanceCondition?: string;
+  unit?: string;
+  id?: string;
 }
 
 export interface RawMaterial {
@@ -102,19 +106,27 @@ export interface PackagingMaterial {
 export interface FormulationIngredient {
   rawMaterialCode: string;
   percentage: number;
+  qtyBasisKg?: number;
+  phase?: string; // e.g. Fase A, Fase B
+  description?: string;
 }
 
 export interface BulkFormulation {
   id: string;
-  code: string;
-  name: string;
-  bulkQuantityKg: number;
+  code: string; // e.g. BOM-PJ0099-V1.0
+  name: string; // e.g. Larassanti Hair Tonic ginseng
+  productId?: string; // Links to Product.id
+  productCode: string; // e.g. PJ0099
+  productName: string; // e.g. Larassanti Hair Tonic ginseng
+  version: string; // e.g. v1.0, v1.1
+  status: 'ACTIVE' | 'DRAFT' | 'ARCHIVED' | string;
+  bulkQuantityKg: number; // Standar basis CPKB: 100 kg
+  purposeDescription?: string; // Keterangan / Tujuan Formula
   ingredients: FormulationIngredient[];
-  targetPh: number;
-  phTolerance: number;
-  targetViscosity: string;
-  gravityTarget: number;
-  mixingInstructions: string;
+  mixingInstructions?: string; // Catatan Teknis Formulasi / Petunjuk Pengolahan
+  createdAt?: string;
+  updatedAt?: string;
+  createdBy?: string;
 }
 
 export interface VariantPackagingItem {
@@ -128,6 +140,8 @@ export interface ProductVariant {
   productId: string; // references Product.id or code
   variantCode: string; // e.g. PJ0001-V1
   variantName: string; // e.g. "Botol Pipet 20ml"
+  sku?: string; // e.g. PJ0001-V1 or custom SKU
+  status?: 'active' | 'inactive' | 'discontinued' | string;
   netVolumeGrams: number;
   bulkFormulaCode: string; // links to BulkFormulation code (e.g. FORM-001)
   packagingBom: VariantPackagingItem[];
@@ -140,10 +154,17 @@ export interface ProductVariant {
 export interface Product {
   id: string;
   code: string; // Format PJ0001, PJ0002 dst
+  productCode?: string; // DB column mapping
   name: string; // e.g. "Brightening Glow Serum"
   category: string; // e.g. "Skincare - Face Serum"
   brand: string; // e.g. "Larassanti Skin"
   description: string;
+  unit?: string; // e.g. "pcs (Pieces)"
+  storageConditions?: string; // e.g. "Suhu Ruang (15-25°C), Kering, Bebas Cahaya Langsung"
+  bpomNotificationNumber?: string; // e.g. "NA18220100123"
+  bpomNotificationExt?: string; // e.g. "2028-12-31 / Ext-01"
+  expNotificationDate?: string; // DB column mapping for exp_notification_date
+  qcParameters?: QCParameter[];
   variants: ProductVariant[];
   createdAt?: string;
 }

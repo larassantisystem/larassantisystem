@@ -34,16 +34,13 @@ export const RndBomCalculatorTab: React.FC<RndBomCalculatorTabProps> = ({
   const canWrite = canWriteModule(user, 'rnd');
 
   const [targetBulkAllocation, setTargetBulkAllocation] = useState<number>(100);
-  const [packAllocations, setPackAllocations] = useState<{ [pmCode: string]: number }>({
-    'PM-201': 3000,
-    'PM-202': 2000,
-  });
+  const [packAllocations, setPackAllocations] = useState<{ [pmCode: string]: number }>({});
 
   // Simulator Modal states
   const [showSubSimulator, setShowSubSimulator] = useState(false);
-  const [simSelectedPMToSwap, setSimSelectedPMToSwap] = useState<string>('PM-201');
-  const [simTargetUnits, setSimTargetUnits] = useState<number>(3000);
-  const [simNewPMCode, setSimNewPMCode] = useState<string>('PM-202');
+  const [simSelectedPMToSwap, setSimSelectedPMToSwap] = useState<string>('');
+  const [simTargetUnits, setSimTargetUnits] = useState<number>(1000);
+  const [simNewPMCode, setSimNewPMCode] = useState<string>('');
   const [simulationLog, setSimulationLog] = useState<string[]>([]);
 
   const availablePrimaries = packagingMaterials.filter((p) => p.type === 'primary');
