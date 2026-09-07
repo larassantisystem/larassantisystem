@@ -341,7 +341,6 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
           <th className={`${isCompactMode ? 'p-1.5 w-8' : 'p-3 w-10'} text-center`}>No</th>
           <th className={isCompactMode ? 'p-1.5' : 'p-3'}>No. GRN & Tgl Masuk</th>
           <th className={isCompactMode ? 'p-1.5' : 'p-3'}>Material & Produsen</th>
-          <th className={isCompactMode ? 'p-1.5' : 'p-3'}>Pemasok</th>
           <th className={isCompactMode ? 'p-1.5' : 'p-3'}>Kuantitas & Koli</th>
           <th className={isCompactMode ? 'p-1.5' : 'p-3'}>Rencana Sampling</th>
           <th className={`${isCompactMode ? 'p-1.5' : 'p-3'} text-center`}>Status</th>
@@ -351,7 +350,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
       <tbody className="divide-y divide-slate-100">
         {items.length === 0 ? (
           <tr>
-            <td colSpan={8} className={`${isCompactMode ? 'p-4' : 'p-8'} text-center text-slate-400`}>
+            <td colSpan={7} className={`${isCompactMode ? 'p-4' : 'p-8'} text-center text-slate-400`}>
               {emptyText}
             </td>
           </tr>
@@ -381,9 +380,6 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
                 <div className={`${isCompactMode ? 'text-[9.5px]' : 'text-[11px]'} text-slate-500`}>
                   Produsen: {item.manufacturer} • Batch: {item.batchNumberVendor}
                 </div>
-              </td>
-              <td className={isCompactMode ? 'p-1.5' : 'p-3'}>
-                <span className="text-slate-700 font-medium">{item.distributor || '-'}</span>
               </td>
               <td className={isCompactMode ? 'p-1.5' : 'p-3'}>
                 <div className="font-bold text-slate-800 font-mono">
@@ -630,7 +626,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
         <tr className={`border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider bg-slate-50/50 ${isCompactMode ? 'text-[10px]' : 'text-[11px]'}`}>
           <th className={`${isCompactMode ? 'p-1.5 w-8' : 'p-3 w-10'} text-center`}>No</th>
           <th className={isCompactMode ? 'p-1.5' : 'p-3'}>No. Lot / Laporan</th>
-          <th className={isCompactMode ? 'p-1.5' : 'p-3'}>Material & Pemasok</th>
+          <th className={isCompactMode ? 'p-1.5' : 'p-3'}>Material & Produsen</th>
           <th className={isCompactMode ? 'p-1.5' : 'p-3'}>Kuantitas Masuk</th>
           <th className={isCompactMode ? 'p-1.5' : 'p-3'}>Disposisi Quality Manager</th>
           <th className={`${isCompactMode ? 'p-1.5' : 'p-3'} text-center`}>Status Akhir</th>
@@ -668,7 +664,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
                   <span className="font-bold text-slate-900">{item.materialName}</span>
                 </div>
                 <div className={`${isCompactMode ? 'text-[9.5px]' : 'text-[11px]'} text-slate-500`}>
-                  Batch: {item.batchNumberVendor} • {item.distributor || item.manufacturer}
+                  Produsen: {item.manufacturer} • Batch: {item.batchNumberVendor}
                 </div>
               </td>
               <td className={isCompactMode ? 'p-1.5' : 'p-3'}>

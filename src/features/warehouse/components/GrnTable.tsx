@@ -264,8 +264,8 @@ export const GrnTable: React.FC<GrnTableProps> = ({
             }}
             placeholder={
               activeCategory === 'raw'
-                ? 'Cari Bahan Baku (No. GRN, Kode B..., Nama, Pemasok)...'
-                : 'Cari Bahan Kemas (No. GRN, Kode K..., Nama, Pemasok)...'
+                ? 'Cari Bahan Baku (No. GRN, Kode B..., Nama, Produsen)...'
+                : 'Cari Bahan Kemas (No. GRN, Kode K..., Nama, Produsen)...'
             }
             className="w-full pl-10 pr-4 py-2 bg-slate-50/70 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:bg-white transition-all"
           />
@@ -307,7 +307,7 @@ export const GrnTable: React.FC<GrnTableProps> = ({
         </div>
       </div>
 
-      {/* Main Table Container: Kolom No., No Grn, Material & Produsen, Pemasok, QTY (3 desimal), Status, Aksi */}
+      {/* Main Table Container: Kolom No., No Grn, Material & Produsen, QTY (3 desimal), Status, Aksi */}
       <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -319,8 +319,7 @@ export const GrnTable: React.FC<GrnTableProps> = ({
               >
                 <th className={`${isCompactMode ? 'py-2 px-2.5 w-10' : 'py-3.5 px-3.5 w-12'} text-center`}>No.</th>
                 <th className={`${isCompactMode ? 'py-2 px-3 min-w-[130px]' : 'py-3.5 px-4 min-w-[150px]'}`}>No Grn</th>
-                <th className={`${isCompactMode ? 'py-2 px-3 min-w-[180px]' : 'py-3.5 px-4 min-w-[200px]'}`}>Material & Produsen</th>
-                <th className={`${isCompactMode ? 'py-2 px-3 min-w-[150px]' : 'py-3.5 px-4 min-w-[170px]'}`}>Pemasok</th>
+                <th className={`${isCompactMode ? 'py-2 px-3 min-w-[200px]' : 'py-3.5 px-4 min-w-[240px]'}`}>Material & Produsen</th>
                 <th className={`${isCompactMode ? 'py-2 px-3 min-w-[120px]' : 'py-3.5 px-4 min-w-[140px]'}`}>QTY</th>
                 <th className={`${isCompactMode ? 'py-2 px-2 text-center min-w-[110px]' : 'py-3.5 px-4 text-center min-w-[120px]'}`}>Status</th>
                 <th className={`${isCompactMode ? 'py-2 px-3 text-right min-w-[120px]' : 'py-3.5 px-4 text-right min-w-[130px]'}`}>Aksi</th>
@@ -367,6 +366,11 @@ export const GrnTable: React.FC<GrnTableProps> = ({
                           <Clock className="w-3 h-3 text-slate-400" />
                           <span>{rec.receivedDate}</span>
                         </div>
+                        {rec.deliveryNoteNumber && rec.deliveryNoteNumber !== '-' && (
+                          <div className={`${isCompactMode ? 'text-[9px]' : 'text-[10px]'} text-slate-400 mt-0.5`}>
+                            SJ: <span className="font-mono text-slate-600">{rec.deliveryNoteNumber}</span>
+                          </div>
+                        )}
                       </td>
 
                       {/* 3. Material & Produsen */}
@@ -400,22 +404,7 @@ export const GrnTable: React.FC<GrnTableProps> = ({
                         )}
                       </td>
 
-                      {/* 4. Pemasok */}
-                      <td className={isCompactMode ? 'py-1.5 px-3' : 'py-3 px-4'}>
-                        <div className="font-medium text-slate-800 truncate max-w-[180px]">
-                          {rec.distributor}
-                        </div>
-                        <div className={`${isCompactMode ? 'text-[9.5px]' : 'text-[11px]'} text-slate-400 flex items-center gap-1.5 mt-0.5`}>
-                          {rec.deliveryNoteNumber && rec.deliveryNoteNumber !== '-' && (
-                            <span>SJ: <span className="font-mono text-slate-600">{rec.deliveryNoteNumber}</span></span>
-                          )}
-                          {rec.poNumber && rec.poNumber !== '-' && (
-                            <span>• PO: <span className="font-mono text-slate-600">{rec.poNumber}</span></span>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* 5. QTY (format 3 angka dibelakang koma) */}
+                      {/* 4. QTY (format 3 angka dibelakang koma) */}
                       <td className={isCompactMode ? 'py-1.5 px-3' : 'py-3 px-4'}>
                         <div className="font-mono font-bold text-slate-900">
                           {formattedQty} <span className="text-slate-500 font-sans font-normal text-[10px]">{rec.unit}</span>
@@ -425,12 +414,12 @@ export const GrnTable: React.FC<GrnTableProps> = ({
                         </div>
                       </td>
 
-                      {/* 6. Status */}
+                      {/* 5. Status */}
                       <td className={`${isCompactMode ? 'py-1.5 px-2' : 'py-3 px-4'} text-center`}>
                         {renderStatusBadge(rec.qcStatus)}
                       </td>
 
-                      {/* 7. Aksi */}
+                      {/* 6. Aksi */}
                       <td className={`${isCompactMode ? 'py-1.5 px-3' : 'py-3 px-4'} text-right`}>
                         <div
                           className="flex items-center justify-end gap-1"
@@ -536,7 +525,7 @@ export const GrnTable: React.FC<GrnTableProps> = ({
                 })
               ) : (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-400">
+                  <td colSpan={6} className="py-12 text-center text-slate-400">
                     <div className="max-w-xs mx-auto space-y-2">
                       <Boxes className="w-8 h-8 text-slate-300 mx-auto" />
                       <p className="text-xs font-semibold text-slate-600">
