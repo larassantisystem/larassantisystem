@@ -36,6 +36,18 @@ export const materialService = {
     }
   },
 
+  getLocalMaterials: (): RawMaterial[] => {
+    const saved = localStorage.getItem(RAW_MATERIALS_STORAGE_KEY);
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error('Error parsing local raw materials', e);
+      }
+    }
+    return [];
+  },
+
   getMaterials: async (): Promise<RawMaterial[]> => {
     if (isSupabaseConfigured && supabase) {
       try {

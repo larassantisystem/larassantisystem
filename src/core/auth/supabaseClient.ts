@@ -7,6 +7,10 @@ const getEnv = (key: string): string => {
   if (typeof process !== 'undefined' && process.env && process.env[key]) {
     return process.env[key] || '';
   }
+  if (typeof window !== 'undefined' && window.localStorage) {
+    const fromStorage = window.localStorage.getItem(key) || window.localStorage.getItem(`VITE_${key}`);
+    if (fromStorage) return fromStorage;
+  }
   return '';
 };
 

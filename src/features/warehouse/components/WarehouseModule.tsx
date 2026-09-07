@@ -13,6 +13,7 @@ import {
   Truck,
   MinusCircle,
   Scale,
+  ShieldAlert,
 } from 'lucide-react';
 import { RawMaterial, PackagingMaterial } from '../../../types';
 import { materialService } from '../../rnd/materials/materialService';
@@ -28,7 +29,8 @@ import { StockRawMaterialPage } from './StockRawMaterialPage';
 import { StockPackagingPage } from './StockPackagingPage';
 import { LocationRelocationPage } from './LocationRelocationPage';
 import { useAuth } from '../../../core/auth/AuthContext';
-import { MapPin, ArrowRightLeft } from 'lucide-react';
+import { MapPin, ArrowRightLeft, Database } from 'lucide-react';
+import { SupabaseWarehouseSqlModal } from './SupabaseWarehouseSqlModal';
 
 interface WarehouseModuleProps {
   activeSubTab?: string;
@@ -42,18 +44,19 @@ export const WarehouseModule: React.FC<WarehouseModuleProps> = ({
   const { user } = useAuth();
   const [currentTab, setCurrentTab] = useState(activeSubTab || 'inbound');
 
-  // Master Data from RnD
-  const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>([]);
-  const [packagingMaterials, setPackagingMaterials] = useState<PackagingMaterial[]>([]);
-  const [isLoadingMaster, setIsLoadingMaster] = useState(true);
+  // Master Data from RnD - instant cache initializers (0ms)
+  const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>(() => materialService.getLocalMaterials());
+  const [packagingMaterials, setPackagingMaterials] = useState<PackagingMaterial[]>(() => packagingService.getLocalPackagingMaterials());
+  const [isLoadingMaster, setIsLoadingMaster] = useState(false);
 
-  // GRN records
-  const [grnRecords, setGrnRecords] = useState<GrnRecord[]>([]);
-  const [isLoadingGrn, setIsLoadingGrn] = useState(true);
+  // GRN records - instant cache initializers (0ms paint)
+  const [grnRecords, setGrnRecords] = useState<GrnRecord[]>(() => warehouseService.getLocalRecords());
+  const [isLoadingGrn, setIsLoadingGrn] = useState<boolean>(() => warehouseService.getLocalRecords().length === 0);
 
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [quarantineRecordToPrint, setQuarantineRecordToPrint] = useState<GrnRecord | null>(null);
+  const [isSqlModalOpen, setIsSqlModalOpen] = useState(false);
 
   // Sync subTab prop
   useEffect(() => {
@@ -61,23 +64,35 @@ export const WarehouseModule: React.FC<WarehouseModuleProps> = ({
   }, [activeSubTab]);
 
   const loadData = async () => {
-    setIsLoadingMaster(true);
-    setIsLoadingGrn(true);
-    try {
-      const [rms, pms, grns] = await Promise.all([
-        materialService.getMaterials(),
-        packagingService.getPackagingMaterials(),
-        warehouseService.getGrnRecords(),
-      ]);
-      setRawMaterials(rms);
-      setPackagingMaterials(pms);
-      setGrnRecords(grns);
-    } catch (err) {
-      console.error('Error loading warehouse data:', err);
-    } finally {
-      setIsLoadingMaster(false);
-      setIsLoadingGrn(false);
-    }
+    // 1. Prioritize GRN records so table appears instantly and updates smoothly
+    warehouseService.getGrnRecords()
+      .then((grns) => {
+        if (grns && grns.length > 0) {
+          setGrnRecords(grns);
+        }
+      })
+      .catch((err) => {
+        console.warn('[WarehouseModule] Supabase GRN fetch fallback:', err);
+      })
+      .finally(() => {
+        setIsLoadingGrn(false);
+      });
+
+    // 2. Refresh Master Materials in the background for new modal entries without blocking the table
+    Promise.all([
+      materialService.getMaterials(),
+      packagingService.getPackagingMaterials(),
+    ])
+      .then(([rms, pms]) => {
+        if (rms && rms.length > 0) setRawMaterials(rms);
+        if (pms && pms.length > 0) setPackagingMaterials(pms);
+      })
+      .catch((err) => {
+        console.warn('[WarehouseModule] Master materials fetch notice:', err);
+      })
+      .finally(() => {
+        setIsLoadingMaster(false);
+      });
   };
 
   useEffect(() => {
@@ -148,6 +163,15 @@ export const WarehouseModule: React.FC<WarehouseModuleProps> = ({
             </button>
 
             <button
+              onClick={() => setIsSqlModalOpen(true)}
+              className="px-3.5 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer bg-white shadow-2xs"
+              title="Audit Status Database Supabase & Skrip SQL Migration"
+            >
+              <Database className="w-4 h-4 text-emerald-600" />
+              <span>Audit DB & SQL</span>
+            </button>
+
+            <button
               onClick={() => setIsModalOpen(true)}
               className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md shadow-emerald-600/20 flex items-center gap-2 transition-all cursor-pointer"
             >
@@ -157,8 +181,8 @@ export const WarehouseModule: React.FC<WarehouseModuleProps> = ({
           </div>
         </div>
 
-        {/* Quick KPI Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-6 border-t border-slate-100">
+        {/* Quick KPI Cards - Real-Time QC Pipeline */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-6 pt-6 border-t border-slate-100">
           <div className="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-200/70">
             <div className="flex items-center justify-between text-[11px] font-bold text-slate-500">
               <span>Total Kedatangan</span>
@@ -171,7 +195,7 @@ export const WarehouseModule: React.FC<WarehouseModuleProps> = ({
 
           <div className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200/80">
             <div className="flex items-center justify-between text-[11px] font-bold text-amber-800">
-              <span>Dalam Karantina</span>
+              <span>Karantina (Baru)</span>
               <Clock className="w-3.5 h-3.5 text-amber-600" />
             </div>
             <div className="text-xl font-black text-amber-900 mt-1">
@@ -179,23 +203,33 @@ export const WarehouseModule: React.FC<WarehouseModuleProps> = ({
             </div>
           </div>
 
-          <div className="p-3.5 rounded-2xl bg-teal-50/70 border border-teal-200/80">
-            <div className="flex items-center justify-between text-[11px] font-bold text-teal-800">
-              <span>Bahan Baku (B)</span>
-              <FlaskConical className="w-3.5 h-3.5 text-teal-600" />
+          <div className="p-3.5 rounded-2xl bg-blue-50/70 border border-blue-200/80">
+            <div className="flex items-center justify-between text-[11px] font-bold text-blue-800">
+              <span>Sedang Uji Lab</span>
+              <FlaskConical className="w-3.5 h-3.5 text-blue-600" />
             </div>
-            <div className="text-xl font-black text-teal-900 mt-1">
-              {rawMaterials.length} <span className="text-xs font-semibold text-teal-600">Master BB</span>
+            <div className="text-xl font-black text-blue-900 mt-1">
+              {stats.underTesting || 0} <span className="text-xs font-semibold text-blue-600">Analisa Staf</span>
             </div>
           </div>
 
           <div className="p-3.5 rounded-2xl bg-purple-50/70 border border-purple-200/80">
             <div className="flex items-center justify-between text-[11px] font-bold text-purple-800">
-              <span>Bahan Kemas (K)</span>
-              <Layers className="w-3.5 h-3.5 text-purple-600" />
+              <span>Menunggu Otorisasi</span>
+              <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />
             </div>
             <div className="text-xl font-black text-purple-900 mt-1">
-              {packagingMaterials.length} <span className="text-xs font-semibold text-purple-600">Master BK</span>
+              {stats.awaitingAuth || 0} <span className="text-xs font-semibold text-purple-600">Review QM</span>
+            </div>
+          </div>
+
+          <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200/80">
+            <div className="flex items-center justify-between text-[11px] font-bold text-emerald-800">
+              <span>Lolos QC (Rilis)</span>
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+            </div>
+            <div className="text-xl font-black text-emerald-900 mt-1">
+              {stats.passedQC} <span className="text-xs font-semibold text-emerald-600">Siap Pakai</span>
             </div>
           </div>
         </div>
@@ -264,6 +298,13 @@ export const WarehouseModule: React.FC<WarehouseModuleProps> = ({
         isOpen={!!quarantineRecordToPrint}
         onClose={() => setQuarantineRecordToPrint(null)}
         record={quarantineRecordToPrint}
+      />
+
+      {/* Supabase Warehouse DB Audit & SQL Modal */}
+      <SupabaseWarehouseSqlModal
+        isOpen={isSqlModalOpen}
+        onClose={() => setIsSqlModalOpen(false)}
+        onDataChanged={loadData}
       />
     </div>
   );

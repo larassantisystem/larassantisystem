@@ -64,7 +64,11 @@ export const GrnEditModal: React.FC<GrnEditModalProps> = ({
 
   if (!isOpen || !record) return null;
 
-  const isLocked = record.qcStatus === 'PASSED' || record.qcStatus === 'REJECTED';
+  const isLocked =
+    record.qcStatus === 'PASSED' ||
+    record.qcStatus === 'RELEASED' ||
+    record.qcStatus === 'PASSED_WITH_DEVIATION' ||
+    record.qcStatus === 'REJECTED';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -112,7 +116,14 @@ export const GrnEditModal: React.FC<GrnEditModalProps> = ({
         return;
       }
 
-      await onSave(record.id, formData);
+      const payloadToSave: Partial<GrnRecord> = {
+        ...formData,
+        ...(record.qcStatus === 'REVERTED_TO_WAREHOUSE'
+          ? { qcStatus: 'QUARANTINE', notes: `Diperbaiki oleh Gudang (${new Date().toLocaleDateString('id-ID')})` }
+          : {}),
+      };
+
+      await onSave(record.id, payloadToSave);
       setShowPasswordModal(false);
       onClose();
     } catch (err: any) {
@@ -167,12 +178,15 @@ export const GrnEditModal: React.FC<GrnEditModalProps> = ({
         )}
 
         {record.qcStatus === 'REVERTED_TO_WAREHOUSE' && (
-          <div className="bg-amber-50 border-b border-amber-200 p-4 text-xs text-amber-900 flex items-start gap-2.5 shrink-0">
-            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+          <div className="bg-orange-50 border-b border-orange-200 p-4 text-xs text-orange-950 flex items-start gap-2.5 shrink-0">
+            <AlertTriangle className="w-4 h-4 text-orange-600 shrink-0 mt-0.5" />
             <div>
-              <span className="font-bold">Penerimaan Dikembalikan (Revert) oleh Tim QC:</span>
-              <p className="text-[11px] text-amber-800 mt-0.5">
-                Silakan perbaiki data di bawah ini sesuai instruksi sebelum disampling ulang.
+              <span className="font-bold text-orange-900">Penerimaan Dikembalikan (Revert) oleh Tim QC:</span>
+              <p className="text-[11.5px] text-orange-800 font-semibold mt-0.5 italic">
+                "{record.notes || 'Silakan periksa dan perbaiki data dokumen penerimaan fisik.'}"
+              </p>
+              <p className="text-[10.5px] text-orange-700 mt-1">
+                Menyimpan formulir ini akan mengembalikan status ke <strong>KARANTINA</strong> agar analis QC dapat melanjutkan sampling dan pengujian ulang.
               </p>
             </div>
           </div>

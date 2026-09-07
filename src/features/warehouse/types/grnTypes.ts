@@ -1,6 +1,14 @@
 export type GrnMaterialType = 'raw' | 'packaging';
 
-export type GrnQcStatus = 'QUARANTINE' | 'PASSED' | 'PASSED_WITH_DEVIATION' | 'RELEASED' | 'REJECTED';
+export type GrnQcStatus =
+  | 'QUARANTINE'
+  | 'QUALITY_CONTROL_PROCESS'
+  | 'AWAITING_QM_AUTHORIZATION'
+  | 'PASSED'
+  | 'PASSED_WITH_DEVIATION'
+  | 'RELEASED'
+  | 'REJECTED'
+  | 'REVERTED_TO_WAREHOUSE';
 
 export interface GrnRecord {
   id: string;
@@ -37,6 +45,8 @@ export interface GrnRecord {
 export interface GrnStats {
   totalIncoming: number;
   inQuarantine: number;
+  underTesting: number;
+  awaitingAuth: number;
   passedQC: number;
   rejectedQC: number;
   rawMaterialsCount: number;

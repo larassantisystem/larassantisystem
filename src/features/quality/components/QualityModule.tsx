@@ -66,8 +66,8 @@ interface QualityModuleProps {
 export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }) => {
   const { user } = useAuth();
 
-  const [reports, setReports] = useState<QcInspectionReport[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [reports, setReports] = useState<QcInspectionReport[]>(() => qualityService.getLocalReports());
+  const [isLoading, setIsLoading] = useState<boolean>(() => qualityService.getLocalReports().length === 0);
   const [currentTab, setCurrentTab] = useState<
     'queue' | 'testing' | 'approval' | 'archive' | 
     'ipc-bulk' | 'ipc-rework' | 

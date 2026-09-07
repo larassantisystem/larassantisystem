@@ -36,6 +36,18 @@ export const packagingService = {
     }
   },
 
+  getLocalPackagingMaterials: (): PackagingMaterial[] => {
+    const saved = localStorage.getItem(PACKAGING_STORAGE_KEY);
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error('Error parsing local packaging materials', e);
+      }
+    }
+    return [];
+  },
+
   getPackagingMaterials: async (): Promise<PackagingMaterial[]> => {
     if (isSupabaseConfigured && supabase) {
       try {

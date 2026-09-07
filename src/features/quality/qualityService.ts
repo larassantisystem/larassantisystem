@@ -19,24 +19,43 @@ const QC_NOTIFICATIONS_STORAGE_KEY = 'lsm_qc_notifications_v2';
 
 export const qualityService = {
   /**
-   * Get all QC inspection reports, synchronizing with latest warehouse GRN records and Master Data (Bagian B)
+   * Read cached QC inspection reports synchronously for instant (0ms) render
    */
-  getReports: async (): Promise<QcInspectionReport[]> => {
-    let storedReports: QcInspectionReport[] = [];
+  getLocalReports: (): QcInspectionReport[] => {
     const saved = localStorage.getItem(QC_REPORTS_STORAGE_KEY);
     if (saved) {
       try {
-        storedReports = JSON.parse(saved);
+        return JSON.parse(saved);
       } catch (e) {
         console.error('Failed to parse QC reports from storage:', e);
       }
     }
+    return [];
+  },
 
-    // Fetch warehouse GRN records to sync incoming lots, along with Master Data (Bagian B)
-    const [grnRecords, packagingMaterials, rawMaterials] = await Promise.all([
+  /**
+   * Get all QC inspection reports, synchronizing with latest warehouse GRN records and Master Data (Bagian B)
+   */
+  getReports: async (): Promise<QcInspectionReport[]> => {
+    let storedReports: QcInspectionReport[] = qualityService.getLocalReports();
+
+    // Fast resolution: Use local master data first (0ms) to avoid downloading thousands of rows on every queue load
+    let packagingMaterials = packagingService.getLocalPackagingMaterials();
+    let rawMaterials = materialService.getLocalMaterials();
+
+    // Only fetch remote master data if local cache is completely empty
+    const masterPromises: Promise<any>[] = [];
+    if (packagingMaterials.length === 0) {
+      masterPromises.push(packagingService.getPackagingMaterials().then((res) => { packagingMaterials = res; }));
+    }
+    if (rawMaterials.length === 0) {
+      masterPromises.push(materialService.getMaterials().then((res) => { rawMaterials = res; }));
+    }
+
+    // Fetch GRN records (with fast timeout/fallback)
+    const [grnRecords] = await Promise.all([
       warehouseService.getGrnRecords(),
-      packagingService.getPackagingMaterials(),
-      materialService.getMaterials(),
+      ...masterPromises,
     ]);
     let isModified = false;
 
@@ -173,7 +192,7 @@ export const qualityService = {
       }
     });
 
-    if (isModified || !saved) {
+    if (isModified || !localStorage.getItem(QC_REPORTS_STORAGE_KEY)) {
       localStorage.setItem(QC_REPORTS_STORAGE_KEY, JSON.stringify(storedReports));
     }
 
@@ -428,18 +447,24 @@ export const qualityService = {
   },
 
   /**
-   * Helper to sync status with warehouse GRN records in storage
+   * Helper to sync status with warehouse GRN records in storage and database
    */
   syncGrnStatus: async (grnId: string, newStatus: string, notes?: string) => {
     try {
       const records = await warehouseService.getGrnRecords();
-      const target = records.find((r) => r.id === grnId);
+      const target = records.find((r) => r.id === grnId || r.grnNumber === grnId);
       if (target) {
         target.qcStatus = newStatus as any;
         if (notes) {
           target.notes = notes;
         }
         localStorage.setItem('lsm_warehouse_grn_v1', JSON.stringify(records));
+
+        // Synchronize directly with Supabase via warehouseService
+        await warehouseService.updateGrnRecord(target.id, {
+          qcStatus: newStatus as any,
+          notes: notes || target.notes,
+        });
       }
     } catch (e) {
       console.warn('Failed to sync GRN status:', e);

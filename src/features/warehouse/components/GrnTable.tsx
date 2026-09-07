@@ -23,6 +23,7 @@ import {
   Minimize2,
   Maximize2,
   Lock,
+  RotateCcw,
   X,
 } from 'lucide-react';
 import { GrnRecord, GrnMaterialType, GrnQcStatus } from '../types/grnTypes';
@@ -89,7 +90,15 @@ export const GrnTable: React.FC<GrnTableProps> = ({
         // Separate category
         if (rec.materialType !== activeCategory) return false;
         // Status filter
-        if (statusFilter !== 'ALL' && rec.qcStatus !== statusFilter) return false;
+        if (statusFilter !== 'ALL') {
+          if (statusFilter === 'PASSED' || statusFilter === 'RELEASED') {
+            if (rec.qcStatus !== 'PASSED' && rec.qcStatus !== 'RELEASED' && rec.qcStatus !== 'PASSED_WITH_DEVIATION') {
+              return false;
+            }
+          } else if (rec.qcStatus !== statusFilter) {
+            return false;
+          }
+        }
 
         // Query search
         if (!searchQuery.trim()) return true;
@@ -129,18 +138,53 @@ export const GrnTable: React.FC<GrnTableProps> = ({
             KARANTINA
           </span>
         );
-      case 'PASSED':
+      case 'QUALITY_CONTROL_PROCESS':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-emerald-50 text-emerald-800 border border-emerald-200">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-blue-50 text-blue-700 border border-blue-200 shadow-2xs">
+            <Clock className="w-3.5 h-3.5 text-blue-600 animate-spin" />
+            SEDANG UJI
+          </span>
+        );
+      case 'AWAITING_QM_AUTHORIZATION':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-purple-50 text-purple-700 border border-purple-200 shadow-2xs">
+            <Clock className="w-3.5 h-3.5 text-purple-600" />
+            MENUNGGU OTORISASI
+          </span>
+        );
+      case 'PASSED':
+      case 'RELEASED':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-            LOLOS QC
+            RILIS
+          </span>
+        );
+      case 'PASSED_WITH_DEVIATION':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-teal-50 text-teal-800 border border-teal-200 shadow-2xs">
+            <CheckCircle2 className="w-3.5 h-3.5 text-teal-600" />
+            RILIS (DEVIASI)
           </span>
         );
       case 'REJECTED':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-rose-50 text-rose-800 border border-rose-200">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-rose-50 text-rose-800 border border-rose-200 shadow-2xs">
             <ShieldAlert className="w-3.5 h-3.5 text-rose-600" />
-            REJECTED
+            DITOLAK
+          </span>
+        );
+      case 'REVERTED_TO_WAREHOUSE':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-orange-50 text-orange-800 border border-orange-200 shadow-2xs">
+            <AlertCircle className="w-3.5 h-3.5 text-orange-600" />
+            DIKEMBALIKAN QC
+          </span>
+        );
+      default:
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+            {status}
           </span>
         );
     }
@@ -250,12 +294,15 @@ export const GrnTable: React.FC<GrnTableProps> = ({
               setStatusFilter(e.target.value as any);
               setCurrentPage(1);
             }}
-            className="text-xs border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-700 font-semibold focus:outline-none focus:ring-2 focus:ring-slate-300 shadow-2xs"
+            className="text-xs border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-700 font-semibold focus:outline-none focus:ring-2 focus:ring-slate-300 shadow-2xs cursor-pointer"
           >
             <option value="ALL">Semua Status QC</option>
             <option value="QUARANTINE">Karantina CPKB</option>
-            <option value="PASSED">Lolos QC (Rilis)</option>
+            <option value="QUALITY_CONTROL_PROCESS">Sedang Uji (QC Analisa)</option>
+            <option value="AWAITING_QM_AUTHORIZATION">Menunggu Otorisasi QM</option>
+            <option value="PASSED">Rilis (Lolos QC)</option>
             <option value="REJECTED">Ditolak (Rejected)</option>
+            <option value="REVERTED_TO_WAREHOUSE">Dikembalikan QC</option>
           </select>
         </div>
       </div>
@@ -288,12 +335,23 @@ export const GrnTable: React.FC<GrnTableProps> = ({
                     maximumFractionDigits: 3,
                   });
 
+                  const isReverted = rec.qcStatus === 'REVERTED_TO_WAREHOUSE';
+                  const isDeletable = rec.qcStatus === 'QUARANTINE' || rec.qcStatus === 'REVERTED_TO_WAREHOUSE';
+
                   return (
                     <tr
                       key={rec.id}
                       onClick={() => setSelectedRecord(rec)}
-                      className="hover:bg-amber-50/40 cursor-pointer transition-colors group"
-                      title="Klik baris untuk melihat detail view"
+                      className={`cursor-pointer transition-colors group ${
+                        isReverted
+                          ? 'bg-orange-50/70 hover:bg-orange-100/70 border-l-4 border-l-orange-500'
+                          : 'hover:bg-amber-50/40'
+                      }`}
+                      title={
+                        isReverted
+                          ? 'Penerimaan dikembalikan oleh QC untuk verifikasi data (Klik untuk detail)'
+                          : 'Klik baris untuk melihat detail view'
+                      }
                     >
                       {/* 1. No. */}
                       <td className={`${isCompactMode ? 'py-1.5 px-2.5' : 'py-3 px-3.5'} text-center font-bold text-slate-400 group-hover:text-slate-900`}>
@@ -313,7 +371,7 @@ export const GrnTable: React.FC<GrnTableProps> = ({
 
                       {/* 3. Material & Produsen */}
                       <td className={isCompactMode ? 'py-1.5 px-3' : 'py-3 px-4'}>
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span
                             className={`font-mono font-bold rounded-md ${
                               isCompactMode ? 'text-[9px] px-1.5 py-0.2' : 'text-[10px] px-2 py-0.5'
@@ -332,6 +390,14 @@ export const GrnTable: React.FC<GrnTableProps> = ({
                         <div className={`${isCompactMode ? 'text-[9.5px]' : 'text-[11px]'} text-slate-400 mt-0.5 truncate max-w-[220px]`}>
                           Produsen: <span className="text-slate-600 font-medium">{rec.manufacturer}</span>
                         </div>
+                        {isReverted && (
+                          <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold text-orange-800 bg-orange-100 px-2 py-0.5 rounded border border-orange-300">
+                            <RotateCcw className="w-3 h-3 text-orange-600 shrink-0" />
+                            <span className="truncate max-w-[240px]">
+                              Dikembalikan QC: {rec.notes || 'Periksa fisik dokumen'}
+                            </span>
+                          </div>
+                        )}
                       </td>
 
                       {/* 4. Pemasok */}
@@ -381,7 +447,7 @@ export const GrnTable: React.FC<GrnTableProps> = ({
                                 setLabelRecordToPrint(rec);
                               }
                             }}
-                            className={`${isCompactMode ? 'p-1' : 'p-1.5'} rounded-lg text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-colors`}
+                            className={`${isCompactMode ? 'p-1' : 'p-1.5'} rounded-lg text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-colors cursor-pointer`}
                             title="Print Label Karantina CPKB"
                           >
                             <Printer className="w-3.5 h-3.5" />
@@ -394,10 +460,12 @@ export const GrnTable: React.FC<GrnTableProps> = ({
                               e.stopPropagation();
                               setEditRecordToUpdate(rec);
                             }}
-                            className={`${isCompactMode ? 'p-1' : 'p-1.5'} rounded-lg text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-colors`}
+                            className={`${isCompactMode ? 'p-1' : 'p-1.5'} rounded-lg text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-colors cursor-pointer`}
                             title={
-                              rec.qcStatus === 'PASSED' || rec.qcStatus === 'REJECTED'
+                              rec.qcStatus === 'PASSED' || rec.qcStatus === 'RELEASED' || rec.qcStatus === 'REJECTED'
                                 ? 'Lihat Data Penerimaan (Terkunci CPKB)'
+                                : isReverted
+                                ? 'Koreksi Data Penerimaan yang Dikembalikan QC'
                                 : 'Edit Data Penerimaan Barang'
                             }
                           >
@@ -411,26 +479,56 @@ export const GrnTable: React.FC<GrnTableProps> = ({
                               e.stopPropagation();
                               setSelectedRecord(rec);
                             }}
-                            className={`${isCompactMode ? 'p-1' : 'p-1.5'} rounded-lg text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors`}
+                            className={`${isCompactMode ? 'p-1' : 'p-1.5'} rounded-lg text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer`}
                             title="Lihat Detail Penerimaan"
                           >
                             <Eye className="w-3.5 h-3.5" />
                           </button>
 
-                          {/* Delete Record */}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setRecordToDelete(rec);
-                              setDeletePassword('');
-                              setDeletePasswordError(null);
-                            }}
-                            className={`${isCompactMode ? 'p-1' : 'p-1.5'} rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors`}
-                            title="Hapus Catatan (Memerlukan Kata Sandi)"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          {/* Delete Record - Protected by CPKB Data Integrity */}
+                          {isDeletable ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setRecordToDelete(rec);
+                                setDeletePassword('');
+                                setDeletePasswordError(null);
+                              }}
+                              className={`${isCompactMode ? 'p-1' : 'p-1.5'} rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer`}
+                              title={
+                                isReverted
+                                  ? 'Hapus Penerimaan yang Dibatalkan/Dikembalikan QC (Otorisasi Password)'
+                                  : 'Hapus Catatan Karantina (Memerlukan Kata Sandi)'
+                              }
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const label =
+                                  rec.qcStatus === 'QUALITY_CONTROL_PROCESS'
+                                    ? 'Sedang Uji'
+                                    : rec.qcStatus === 'AWAITING_QM_AUTHORIZATION'
+                                    ? 'Menunggu Otorisasi QM'
+                                    : rec.qcStatus === 'PASSED' || rec.qcStatus === 'RELEASED'
+                                    ? 'Rilis'
+                                    : rec.qcStatus === 'PASSED_WITH_DEVIATION'
+                                    ? 'Rilis dengan Deviasi'
+                                    : 'Ditolak';
+                                alert(
+                                  `[Terkunci CPKB / GMP]\n\nPenerimaan ${rec.grnNumber} tidak dapat dihapus karena sudah dalam tahap "${label}".\n\nUntuk menjaga integritas data pengujian laboratorium, gudang tidak dapat menghapus data yang sudah diproses QC. Silakan hubungi tim QC untuk melakukan pembatalan (Revert) pengujian terlebih dahulu jika diperlukan perbaikan.`
+                                );
+                              }}
+                              className={`${isCompactMode ? 'p-1' : 'p-1.5'} rounded-lg text-slate-300 bg-slate-100/70 border border-slate-200/80 cursor-not-allowed`}
+                              title={`Terkunci CPKB: Tidak dapat dihapus karena status sudah ${rec.qcStatus}. Hubungi QC jika perlu pembatalan pengujian.`}
+                            >
+                              <Lock className="w-3.5 h-3.5 text-slate-400" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -508,6 +606,26 @@ export const GrnTable: React.FC<GrnTableProps> = ({
             </div>
 
             <div className="p-6 space-y-4 text-xs text-slate-700 max-h-[75vh] overflow-y-auto">
+              {selectedRecord.qcStatus === 'REVERTED_TO_WAREHOUSE' && (
+                <div className="p-4 rounded-2xl bg-orange-50 border border-orange-200 text-orange-950 space-y-1.5 animate-in fade-in">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-orange-800 font-bold text-xs">
+                      <RotateCcw className="w-4 h-4 text-orange-600" />
+                      <span>CATATAN PENGEMBALIAN DARI QUALITY CONTROL (REVERT)</span>
+                    </div>
+                    <span className="text-[10px] font-bold bg-orange-200 text-orange-900 px-2 py-0.5 rounded-full">
+                      Perlu Tindakan Gudang
+                    </span>
+                  </div>
+                  <p className="text-xs text-orange-900 font-medium pl-6">
+                    "{selectedRecord.notes || 'Pengujian dibatalkan/dikembalikan oleh QC untuk verifikasi data penerimaan fisik.'}"
+                  </p>
+                  <p className="text-[10.5px] text-orange-700 pl-6 pt-0.5">
+                    Status penerimaan telah dibuka kembali. Tim gudang dapat mengedit data (nomor batch/surat jalan/kemasan) atau membatalkan penerimaan.
+                  </p>
+                </div>
+              )}
+
               <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center justify-between">
                 <div>
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
