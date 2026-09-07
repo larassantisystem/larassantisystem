@@ -22,11 +22,15 @@ import {
   Pencil,
   Minimize2,
   Maximize2,
+  Lock,
+  X,
 } from 'lucide-react';
 import { GrnRecord, GrnMaterialType, GrnQcStatus } from '../types/grnTypes';
 import { Pagination } from '../../../core/ui-components/Pagination';
 import { QuarantineLabelModal } from './QuarantineLabelModal';
 import { GrnEditModal } from './GrnEditModal';
+import { useAuth } from '../../../core/auth/AuthContext';
+import { authService } from '../../../core/auth/authService';
 
 interface GrnTableProps {
   records: GrnRecord[];
@@ -41,6 +45,8 @@ export const GrnTable: React.FC<GrnTableProps> = ({
   onUpdateRecord,
   onPrintLabel,
 }) => {
+  const { user } = useAuth();
+
   // Category separation: 'raw' or 'packaging'
   const [activeCategory, setActiveCategory] = useState<'raw' | 'packaging'>('raw');
   const [searchQuery, setSearchQuery] = useState('');
@@ -56,6 +62,12 @@ export const GrnTable: React.FC<GrnTableProps> = ({
 
   // Edit Modal State
   const [editRecordToUpdate, setEditRecordToUpdate] = useState<GrnRecord | null>(null);
+
+  // Delete Authorization Modal State
+  const [recordToDelete, setRecordToDelete] = useState<GrnRecord | null>(null);
+  const [deletePassword, setDeletePassword] = useState<string>('');
+  const [deletePasswordError, setDeletePasswordError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
   // Print Label Modal State
   const [labelRecordToPrint, setLabelRecordToPrint] = useState<GrnRecord | null>(null);
@@ -410,12 +422,12 @@ export const GrnTable: React.FC<GrnTableProps> = ({
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (window.confirm(`Hapus catatan kedatangan ${rec.grnNumber}?`)) {
-                                onDeleteRecord(rec.id);
-                              }
+                              setRecordToDelete(rec);
+                              setDeletePassword('');
+                              setDeletePasswordError(null);
                             }}
                             className={`${isCompactMode ? 'p-1' : 'p-1.5'} rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors`}
-                            title="Hapus Catatan"
+                            title="Hapus Catatan (Memerlukan Kata Sandi)"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -508,7 +520,7 @@ export const GrnTable: React.FC<GrnTableProps> = ({
                     Parameter Pengujian QC
                   </span>
                   <span className="text-xs font-black text-slate-800 mt-1 block">
-                    {selectedRecord.qcParametersCount || 3} Parameter Uji Terdaftar
+                    {selectedRecord.qcParametersCount ?? 0} Parameter Uji Terdaftar
                   </span>
                 </div>
               </div>
@@ -611,6 +623,125 @@ export const GrnTable: React.FC<GrnTableProps> = ({
             }
           }}
         />
+      )}
+
+      {/* Delete GRN Authorization Modal with Password */}
+      {recordToDelete && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-slate-200 overflow-hidden p-6 space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-rose-100 text-rose-700 rounded-xl">
+                  <Trash2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-slate-900">
+                    Otorisasi Hapus Penerimaan (GRN)
+                  </h4>
+                  <span className="text-[10px] text-slate-400">Verifikasi Kata Sandi Elektronik</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRecordToDelete(null)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="bg-rose-50/70 border border-rose-200/80 rounded-2xl p-3.5 text-xs text-rose-950 space-y-1.5">
+              <div className="flex justify-between font-mono font-bold text-[11px]">
+                <span>No. GRN: {recordToDelete.grnNumber}</span>
+                <span className="text-rose-700">{recordToDelete.qcStatus}</span>
+              </div>
+              <p className="font-bold text-slate-900">
+                {recordToDelete.materialCode} - {recordToDelete.materialName}
+              </p>
+              <p className="text-[11px] text-slate-600">
+                Jumlah: {recordToDelete.quantityReceived.toLocaleString()} {recordToDelete.unit} ({recordToDelete.containerCount} {recordToDelete.containerType})
+              </p>
+              <p className="text-[10.5px] text-rose-700 font-semibold pt-1">
+                Peringatan: Menghapus catatan GRN ini juga akan otomatis membatalkan laporan pengujian QC di antrean karantina.
+              </p>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!recordToDelete) return;
+                if (!deletePassword.trim()) {
+                  setDeletePasswordError('Kata sandi wajib diisi.');
+                  return;
+                }
+                setIsDeleting(true);
+                setDeletePasswordError(null);
+                try {
+                  const actorNik = user?.nik || 'admin';
+                  const verify = await authService.verifyPassword(actorNik, deletePassword);
+                  if (!verify.valid) {
+                    setDeletePasswordError(verify.error || 'Kata sandi tidak valid. Otorisasi hapus ditolak.');
+                    return;
+                  }
+                  onDeleteRecord(recordToDelete.id);
+                  setRecordToDelete(null);
+                  setDeletePassword('');
+                } catch (err: any) {
+                  setDeletePasswordError(err.message || 'Gagal menghapus catatan.');
+                } finally {
+                  setIsDeleting(false);
+                }
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                  <span>Kata Sandi Akun Pengguna Aktif <span className="text-rose-500">*</span></span>
+                  <span className="text-[10px] text-slate-400 font-normal">
+                    {user?.name || 'User'} ({user?.nik || 'NIK'})
+                  </span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="password"
+                    required
+                    autoFocus
+                    value={deletePassword}
+                    onChange={(e) => setDeletePassword(e.target.value)}
+                    placeholder="Masukkan password akun Anda..."
+                    className="w-full text-xs border border-slate-300 rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-rose-500 text-slate-800 font-semibold"
+                  />
+                  <Lock className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-3" />
+                </div>
+              </div>
+
+              {deletePasswordError && (
+                <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-medium flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span>{deletePasswordError}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setRecordToDelete(null)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isDeleting}
+                  className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-md shadow-rose-600/20 disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>{isDeleting ? 'Menghapus...' : 'Otorisasi & Hapus GRN'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

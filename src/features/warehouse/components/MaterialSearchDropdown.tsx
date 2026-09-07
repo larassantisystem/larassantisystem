@@ -42,11 +42,11 @@ export const MaterialSearchDropdown: React.FC<MaterialSearchDropdownProps> = ({
         code: rm.code,
         name: rm.name,
         chemicalName: rm.chemicalName,
-        manufacturer: rm.manufacturer || 'PT. Petrona Pacific Chemical',
+        manufacturer: rm.manufacturer || rm.supplier || '-',
         category: rm.categories && rm.categories.length > 0 ? rm.categories[0] : (rm.category || 'Bahan Baku'),
         unit: 'kg',
-        storageConditions: rm.storageConditions || 'Suhu Ruang Terkendali (15 - 25°C)',
-        qcParametersCount: rm.qcParameters?.length || 3,
+        storageConditions: rm.storageConditions || '-',
+        qcParametersCount: rm.qcParameters?.length || 0,
       }));
     } else {
       return packagingMaterials.map((pm) => ({
@@ -54,11 +54,11 @@ export const MaterialSearchDropdown: React.FC<MaterialSearchDropdownProps> = ({
         code: pm.code,
         name: pm.name,
         chemicalName: '',
-        manufacturer: pm.supplier || pm.manufacturer || 'PD Surya Abadi',
+        manufacturer: pm.supplier || pm.manufacturer || '-',
         category: pm.type === 'primary' ? 'Primer' : pm.type === 'secondary' ? 'Sekunder' : 'Tersier',
         unit: pm.unit || 'pcs',
-        storageConditions: pm.storageConditions || 'Suhu Ruang Terkendali (15 - 25°C)',
-        qcParametersCount: pm.qcParameters?.length || 9,
+        storageConditions: pm.storageConditions || '-',
+        qcParametersCount: pm.qcParameters?.length || 0,
       }));
     }
   }, [type, rawMaterials, packagingMaterials]);

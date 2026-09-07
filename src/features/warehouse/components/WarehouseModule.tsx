@@ -20,6 +20,7 @@ import { packagingService } from '../../rnd/materials/packagingService';
 import { warehouseService } from '../warehouseService';
 import { stockService } from '../stockService';
 import { GrnRecord, GrnStats } from '../types/grnTypes';
+import { qualityService } from '../../quality/qualityService';
 import { GrnFormModal } from './GrnFormModal';
 import { GrnTable } from './GrnTable';
 import { QuarantineLabelModal } from './QuarantineLabelModal';
@@ -102,6 +103,7 @@ export const WarehouseModule: React.FC<WarehouseModuleProps> = ({
 
   const handleDeleteGrn = async (id: string) => {
     await warehouseService.deleteGrnRecord(id);
+    await qualityService.deleteReportByGrnId(id);
     setGrnRecords((prev) => prev.filter((r) => r.id !== id));
     await stockService.getStockLots();
   };

@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { X, Scale, AlertCircle, Download, FileSpreadsheet, CheckCircle2, Upload } from 'lucide-react';
+import { X, Scale, AlertCircle, Download, FileSpreadsheet, CheckCircle2, Upload, Lock } from 'lucide-react';
 import { MaterialStockSummary } from '../types/stockTypes';
 import { stockService } from '../stockService';
+import { useAuth } from '../../../core/auth/AuthContext';
+import { authService } from '../../../core/auth/authService';
 import {
   downloadStockOpnameTemplate,
   parseStockOpnameExcel,
@@ -22,6 +24,7 @@ export const StockOpnameModal: React.FC<StockOpnameModalProps> = ({
   onSuccess,
   userName = 'Auditor Stock Opname',
 }) => {
+  const { user } = useAuth();
   const [mode, setMode] = useState<'manual' | 'excel'>('manual');
   const [selectedMaterialCode, setSelectedMaterialCode] = useState('');
   const [selectedLotInternal, setSelectedLotInternal] = useState('');
@@ -30,6 +33,12 @@ export const StockOpnameModal: React.FC<StockOpnameModalProps> = ({
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Password Confirmation State
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [authPassword, setAuthPassword] = useState('');
+  const [authPasswordError, setAuthPasswordError] = useState<string | null>(null);
+  const [pendingActionType, setPendingActionType] = useState<'manual' | 'excel'>('manual');
 
   // Excel state
   const [excelFile, setExcelFile] = useState<File | null>(null);
@@ -67,21 +76,58 @@ export const StockOpnameModal: React.FC<StockOpnameModalProps> = ({
       return;
     }
 
+    setPendingActionType('manual');
+    setAuthPassword('');
+    setAuthPasswordError(null);
+    setShowPasswordModal(true);
+  };
+
+  const handleFinalizeActionWithPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthPasswordError(null);
+    if (!authPassword.trim()) {
+      setAuthPasswordError('Kata sandi pengguna aktif wajib diisi.');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      await stockService.adjustStockOpname({
-        materialCode: selectedMaterialCode,
-        lotInternalNumber: selectedLotInternal || autoStkLotName,
-        systemQuantity: systemQty,
-        actualQuantity: parsedActual,
-        unit: currentMaterial?.unit || 'kg',
-        reason,
-        auditorName: userName,
-      });
-      onSuccess();
-      onClose();
+      const actorNik = user?.nik || 'admin';
+      const verify = await authService.verifyPassword(actorNik, authPassword);
+      if (!verify.valid) {
+        setAuthPasswordError(verify.error || 'Kata sandi tidak valid. Otorisasi penyesuaian stok ditolak.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (pendingActionType === 'manual') {
+        await stockService.adjustStockOpname({
+          materialCode: selectedMaterialCode,
+          lotInternalNumber: selectedLotInternal || autoStkLotName,
+          systemQuantity: systemQty,
+          actualQuantity: parsedActual,
+          unit: currentMaterial?.unit || 'kg',
+          reason,
+          auditorName: userName,
+        });
+        setShowPasswordModal(false);
+        onSuccess();
+        onClose();
+      } else {
+        const res = await stockService.batchAdjustStockOpname(parsedRows, userName);
+        setShowPasswordModal(false);
+        if (res.errors.length > 0) {
+          setSuccessMsg(`Berhasil memproses ${res.successCount} item. Ada ${res.errors.length} peringatan.`);
+        } else {
+          setSuccessMsg(`Berhasil memproses ${res.successCount} item penyesuaian opname!`);
+        }
+        setTimeout(() => {
+          onSuccess();
+          onClose();
+        }, 1200);
+      }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Gagal menyimpan penyesuaian opname.');
+      setAuthPasswordError(err.message || 'Gagal memproses penyesuaian opname.');
     } finally {
       setIsSubmitting(false);
     }
@@ -113,24 +159,10 @@ export const StockOpnameModal: React.FC<StockOpnameModalProps> = ({
       return;
     }
 
-    setIsSubmitting(true);
-    setErrorMsg('');
-    try {
-      const res = await stockService.batchAdjustStockOpname(parsedRows, userName);
-      if (res.errors.length > 0) {
-        setSuccessMsg(`Berhasil memproses ${res.successCount} item. Ada ${res.errors.length} peringatan.`);
-      } else {
-        setSuccessMsg(`Berhasil memproses ${res.successCount} item penyesuaian opname!`);
-      }
-      setTimeout(() => {
-        onSuccess();
-        onClose();
-      }, 1200);
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Gagal melakukan pemprosesan batch Excel.');
-    } finally {
-      setIsSubmitting(false);
-    }
+    setPendingActionType('excel');
+    setAuthPassword('');
+    setAuthPasswordError(null);
+    setShowPasswordModal(true);
   };
 
   return (
@@ -425,6 +457,106 @@ export const StockOpnameModal: React.FC<StockOpnameModalProps> = ({
           </div>
         )}
       </div>
+
+      {/* Password Confirmation Modal */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-slate-200 overflow-hidden p-6 space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-indigo-100 text-indigo-800 rounded-xl">
+                  <Lock className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-slate-900">
+                    Otorisasi Penyesuaian Stock Opname
+                  </h4>
+                  <span className="text-[10px] text-slate-400">Tanda Tangan Elektronik Pengguna</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPasswordModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 text-xs text-slate-800 space-y-1.5">
+              {pendingActionType === 'manual' ? (
+                <>
+                  <div className="flex justify-between font-mono font-bold text-[11px] text-slate-500">
+                    <span>Kode: {selectedMaterialCode}</span>
+                    <span>Lot: {selectedLotInternal || autoStkLotName}</span>
+                  </div>
+                  <p className="font-bold text-slate-900">
+                    Penyesuaian Fisik: {parsedActual} {currentMaterial?.unit} (Selisih: {diffQty > 0 ? `+${diffQty}` : diffQty} {currentMaterial?.unit})
+                  </p>
+                  <p className="text-[11px] text-slate-600">Alasan: {reason}</p>
+                </>
+              ) : (
+                <>
+                  <p className="font-bold text-slate-900">
+                    Proses Batch Impor Excel: {parsedRows.length} Baris Data
+                  </p>
+                  <p className="text-[11px] text-slate-600">
+                    Seluruh perubahan stok fisik akan diterapkan secara permanen ke buku inventaris.
+                  </p>
+                </>
+              )}
+            </div>
+
+            <form onSubmit={handleFinalizeActionWithPassword} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                  <span>Kata Sandi Akun Pengguna Aktif <span className="text-rose-500">*</span></span>
+                  <span className="text-[10px] text-slate-400 font-normal">
+                    {user?.name || userName} ({user?.nik || 'NIK'})
+                  </span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="password"
+                    required
+                    autoFocus
+                    value={authPassword}
+                    onChange={(e) => setAuthPassword(e.target.value)}
+                    placeholder="Masukkan password akun Anda..."
+                    className="w-full text-xs border border-slate-300 rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 font-semibold"
+                  />
+                  <Lock className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-3" />
+                </div>
+              </div>
+
+              {authPasswordError && (
+                <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-medium flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span>{authPasswordError}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  <Scale className="w-3.5 h-3.5" />
+                  <span>{isSubmitting ? 'Menyimpan...' : 'Verifikasi & Terapkan Opname'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

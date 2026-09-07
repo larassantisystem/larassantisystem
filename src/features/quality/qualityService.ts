@@ -6,6 +6,8 @@ import {
 } from './types/qcTypes';
 import { GrnRecord } from '../warehouse/types/grnTypes';
 import { warehouseService } from '../warehouse/warehouseService';
+import { packagingService } from '../rnd/materials/packagingService';
+import { materialService } from '../rnd/materials/materialService';
 import { calculateSamplingPlan } from './utils/milStd105e';
 import { generateLotInternalNumber, generateDigitalSignatureHash } from './utils/qcNumbering';
 import { analyzeLabResults, analyzeQueuePriorities } from './utils/qcAiAssistant';
@@ -15,26 +17,9 @@ import { UserProfile } from '../../types';
 const QC_REPORTS_STORAGE_KEY = 'lsm_qc_reports_v2';
 const QC_NOTIFICATIONS_STORAGE_KEY = 'lsm_qc_notifications_v2';
 
-// Default standard parameters for Raw Material and Packaging
-const DEFAULT_RAW_PARAMETERS: Array<{ name: string; spec: string }> = [
-  { name: 'Pemeriksaan Organoleptis (Bentuk, Warna, Bau)', spec: 'Sesuai Standar Spesifikasi Bahan & CoA Produsen' },
-  { name: 'Uji pH (Larutan 1% / Sediaan)', spec: '6.50 - 7.50 (Sesuai Monografi)' },
-  { name: 'Kadar Air / Susut Pengeringan (LOD)', spec: 'Maksimal 0.50 % b/b' },
-  { name: 'Bobot Jenis / Kelarutan', spec: 'Kelarutan praktis tidak larut dalam air, larut dalam asam encer' },
-  { name: 'Kadar Logam Berat (Pb, As, Cd, Hg)', spec: 'Memenuhi Batas Cemaran BPOM (< 20 ppm)' },
-];
-
-const DEFAULT_PACKAGING_PARAMETERS: Array<{ name: string; spec: string }> = [
-  { name: 'Pemeriksaan Visual, Warna, & Kebersihan Wadah', spec: 'Bersih, bebas goresan, warna seragam, tidak ada flash/bintik hitam' },
-  { name: 'Uji Dimensi (Tinggi, Diameter, Ulir Leher)', spec: 'Sesuai Gambar Kerja Teknik (Toleransi ± 0.20 mm)' },
-  { name: 'Uji Kebocoran & Kepresisian Tutup (Vacuum Leak)', spec: 'Tidak bocor pada tekanan vacuum -0.06 MPa selama 3 menit' },
-  { name: 'Uji Kompatibilitas & Ketahanan Jatuh (Drop Test)', spec: 'Wadah tidak pecah / retak dijatuhkan dari ketinggian 1.2 m' },
-  { name: 'Uji Kelengkapan & Ketepatan Teks Artwork/Cetak', spec: 'Teks tajam, barcode dapat dipindai, tidak mudah luntur oleh alkohol' },
-];
-
 export const qualityService = {
   /**
-   * Get all QC inspection reports, synchronizing with latest warehouse GRN records
+   * Get all QC inspection reports, synchronizing with latest warehouse GRN records and Master Data (Bagian B)
    */
   getReports: async (): Promise<QcInspectionReport[]> => {
     let storedReports: QcInspectionReport[] = [];
@@ -47,13 +32,56 @@ export const qualityService = {
       }
     }
 
-    // Fetch warehouse GRN records to sync incoming lots
-    const grnRecords = await warehouseService.getGrnRecords();
+    // Fetch warehouse GRN records to sync incoming lots, along with Master Data (Bagian B)
+    const [grnRecords, packagingMaterials, rawMaterials] = await Promise.all([
+      warehouseService.getGrnRecords(),
+      packagingService.getPackagingMaterials(),
+      materialService.getMaterials(),
+    ]);
     let isModified = false;
+
+    // Prune orphan quarantine reports if the GRN was deleted in warehouse
+    const validGrnIds = new Set(grnRecords.map(g => g.id));
+    const validGrnNumbers = new Set(grnRecords.map(g => g.grnNumber));
+    const initialReportCount = storedReports.length;
+    storedReports = storedReports.filter(r => {
+      if (r.status === 'QUARANTINE') {
+        return validGrnIds.has(r.grnId) || validGrnNumbers.has(r.grnNumber);
+      }
+      return true;
+    });
+    if (storedReports.length !== initialReportCount) {
+      isModified = true;
+    }
 
     // Synchronize GRN records into QC Reports
     grnRecords.forEach((grn) => {
       const existingReport = storedReports.find((r) => r.grnId === grn.id || r.grnNumber === grn.grnNumber);
+
+      // Resolve dynamic QC parameters registered in Master Data (Bagian B)
+      let resolvedParams: Array<{ name: string; spec: string }> = [];
+      if (grn.materialType === 'packaging') {
+        const matchedPM = packagingMaterials.find(
+          (pm) => pm.code === grn.materialCode || pm.name.toLowerCase() === grn.materialName.toLowerCase()
+        );
+        if (matchedPM?.qcParameters && matchedPM.qcParameters.length > 0) {
+          resolvedParams = matchedPM.qcParameters
+            .filter((p) => p.name && p.name.trim())
+            .map((p) => ({ name: p.name, spec: p.specification || 'Sesuai Standar Spesifikasi Mutu' }));
+        }
+      } else {
+        const matchedRM = rawMaterials.find(
+          (rm) => rm.code === grn.materialCode || rm.name.toLowerCase() === grn.materialName.toLowerCase()
+        );
+        if (matchedRM?.qcParameters && matchedRM.qcParameters.length > 0) {
+          resolvedParams = matchedRM.qcParameters
+            .filter((p) => p.name && p.name.trim())
+            .map((p) => ({ name: p.name, spec: p.specification || 'Sesuai Standar Spesifikasi Mutu' }));
+        }
+      }
+
+      // Exact criteria from Master Bagian B (zero hardcoded defaults)
+      const effectiveParamTemplates = resolvedParams;
 
       if (!existingReport) {
         // Calculate sampling plan
@@ -65,11 +93,7 @@ export const qualityService = {
           grn.containerType
         );
 
-        // Generate initial default parameter checklist
-        const defaultParamTemplates =
-          grn.materialType === 'raw' ? DEFAULT_RAW_PARAMETERS : DEFAULT_PACKAGING_PARAMETERS;
-
-        const parameters: QcParameterResult[] = defaultParamTemplates.map((item, idx) => ({
+        const parameters: QcParameterResult[] = effectiveParamTemplates.map((item, idx) => ({
           id: `param-${Date.now()}-${idx}`,
           parameterName: item.name,
           specification: item.spec,
@@ -108,6 +132,8 @@ export const qualityService = {
         isModified = true;
       } else {
         // Sync basic warehouse edits if reverted or updated
+        let needsUpdate = false;
+        
         if (existingReport.quantityReceived !== grn.quantityReceived || existingReport.containerCount !== grn.containerCount) {
           existingReport.quantityReceived = grn.quantityReceived;
           existingReport.containerCount = grn.containerCount;
@@ -118,6 +144,30 @@ export const qualityService = {
             grn.unit,
             grn.containerType
           );
+          needsUpdate = true;
+        }
+
+        // Live Synchronization with Master Bahan Kemas / Bahan Baku (Bagian B)
+        // If the report is in QUARANTINE (untested), ensure all criteria from Master Data are fully synced
+        if (existingReport.status === 'QUARANTINE') {
+          const isParameterCountMismatch = existingReport.parameters.length !== effectiveParamTemplates.length;
+          const isNameMismatch = effectiveParamTemplates.some(
+            (ep, idx) => existingReport.parameters[idx]?.parameterName !== ep.name
+          );
+
+          if (isParameterCountMismatch || isNameMismatch) {
+            existingReport.parameters = effectiveParamTemplates.map((item, idx) => ({
+              id: `param-${Date.now()}-${idx}`,
+              parameterName: item.name,
+              specification: item.spec,
+              resultValue: existingReport.parameters.find(p => p.parameterName === item.name)?.resultValue || '',
+              isCompliant: existingReport.parameters.find(p => p.parameterName === item.name)?.isCompliant ?? true,
+            }));
+            needsUpdate = true;
+          }
+        }
+
+        if (needsUpdate) {
           isModified = true;
         }
       }
@@ -432,5 +482,76 @@ export const qualityService = {
     const existing = qualityService.getNotifications();
     const updated = existing.map((n) => ({ ...n, isRead: true }));
     localStorage.setItem(QC_NOTIFICATIONS_STORAGE_KEY, JSON.stringify(updated));
+  },
+
+  /**
+   * Delete QC inspection report when corresponding GRN is deleted in warehouse
+   */
+  deleteReportByGrnId: async (grnId: string): Promise<void> => {
+    const saved = localStorage.getItem(QC_REPORTS_STORAGE_KEY);
+    if (!saved) return;
+    try {
+      const list: QcInspectionReport[] = JSON.parse(saved);
+      const updated = list.filter((r) => r.grnId !== grnId);
+      localStorage.setItem(QC_REPORTS_STORAGE_KEY, JSON.stringify(updated));
+    } catch (e) {
+      console.error('Error deleting QC report by grnId', e);
+    }
+  },
+
+  /**
+   * Manually synchronize quarantine reports with latest Master Data criteria
+   */
+  syncQuarantineWithMaster: async (reportId?: string): Promise<{ updatedCount: number; message: string }> => {
+    const [reports, packagingMaterials, rawMaterials] = await Promise.all([
+      qualityService.getReports(),
+      packagingService.getPackagingMaterials(),
+      materialService.getMaterials(),
+    ]);
+
+    let updatedCount = 0;
+    const targetReports = reportId
+      ? reports.filter((r) => r.id === reportId)
+      : reports.filter((r) => r.status === 'QUARANTINE');
+
+    targetReports.forEach((rep) => {
+      let masterParams: Array<{ name: string; spec: string }> = [];
+      if (rep.materialType === 'packaging') {
+        const pm = packagingMaterials.find(
+          (p) => p.code === rep.materialCode || p.name.toLowerCase() === rep.materialName.toLowerCase()
+        );
+        if (pm?.qcParameters && pm.qcParameters.length > 0) {
+          masterParams = pm.qcParameters
+            .filter((p) => p.name && p.name.trim())
+            .map((p) => ({ name: p.name, spec: p.specification || 'Sesuai Standar Spesifikasi Mutu' }));
+        }
+      } else {
+        const rm = rawMaterials.find(
+          (r) => r.code === rep.materialCode || r.name.toLowerCase() === rep.materialName.toLowerCase()
+        );
+        if (rm?.qcParameters && rm.qcParameters.length > 0) {
+          masterParams = rm.qcParameters
+            .filter((p) => p.name && p.name.trim())
+            .map((p) => ({ name: p.name, spec: p.specification || 'Sesuai Standar Spesifikasi Mutu' }));
+        }
+      }
+
+      if (masterParams.length > 0) {
+        rep.parameters = masterParams.map((item, idx) => ({
+          id: `param-${Date.now()}-${idx}`,
+          parameterName: item.name,
+          specification: item.spec,
+          resultValue: rep.parameters.find((p) => p.parameterName === item.name)?.resultValue || '',
+          isCompliant: rep.parameters.find((p) => p.parameterName === item.name)?.isCompliant ?? true,
+        }));
+        updatedCount++;
+      }
+    });
+
+    localStorage.setItem(QC_REPORTS_STORAGE_KEY, JSON.stringify(reports));
+    return {
+      updatedCount,
+      message: `Berhasil menyinkronkan ${updatedCount} catatan inspeksi QC dengan kriteria Master Data terbaru.`,
+    };
   },
 };

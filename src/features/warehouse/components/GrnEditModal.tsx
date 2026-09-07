@@ -14,6 +14,8 @@ import {
   FileText,
 } from 'lucide-react';
 import { GrnRecord } from '../types/grnTypes';
+import { useAuth } from '../../../core/auth/AuthContext';
+import { authService } from '../../../core/auth/authService';
 
 interface GrnEditModalProps {
   isOpen: boolean;
@@ -28,9 +30,15 @@ export const GrnEditModal: React.FC<GrnEditModalProps> = ({
   record,
   onSave,
 }) => {
+  const { user } = useAuth();
   const [formData, setFormData] = useState<Partial<GrnRecord>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  // Password confirmation state
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [authPassword, setAuthPassword] = useState('');
+  const [authPasswordError, setAuthPasswordError] = useState<string | null>(null);
 
   useEffect(() => {
     if (record) {
@@ -50,6 +58,7 @@ export const GrnEditModal: React.FC<GrnEditModalProps> = ({
         storageConditions: record.storageConditions || '',
       });
       setErrorMsg('');
+      setShowPasswordModal(false);
     }
   }, [record]);
 
@@ -79,13 +88,35 @@ export const GrnEditModal: React.FC<GrnEditModalProps> = ({
       return;
     }
 
+    // Trigger password authorization
+    setAuthPassword('');
+    setAuthPasswordError(null);
+    setShowPasswordModal(true);
+  };
+
+  const handleFinalizeSaveWithPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthPasswordError(null);
+    if (!authPassword.trim()) {
+      setAuthPasswordError('Kata sandi pengguna aktif wajib diisi.');
+      return;
+    }
+
+    setIsSubmitting(true);
     try {
-      setIsSubmitting(true);
-      setErrorMsg('');
+      const actorNik = user?.nik || 'admin';
+      const verify = await authService.verifyPassword(actorNik, authPassword);
+      if (!verify.valid) {
+        setAuthPasswordError(verify.error || 'Kata sandi tidak valid. Otorisasi perubahan GRN ditolak.');
+        setIsSubmitting(false);
+        return;
+      }
+
       await onSave(record.id, formData);
+      setShowPasswordModal(false);
       onClose();
     } catch (err: any) {
-      setErrorMsg(err.message || 'Gagal menyimpan perubahan GRN');
+      setAuthPasswordError(err.message || 'Gagal menyimpan perubahan GRN');
     } finally {
       setIsSubmitting(false);
     }
@@ -364,6 +395,95 @@ export const GrnEditModal: React.FC<GrnEditModalProps> = ({
           </div>
         </form>
       </div>
+
+      {/* Password Confirmation Modal for Edit */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-slate-200 overflow-hidden p-6 space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-orange-100 text-orange-800 rounded-xl">
+                  <Lock className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-slate-900">
+                    Otorisasi Simpan Perubahan GRN
+                  </h4>
+                  <span className="text-[10px] text-slate-400">Tanda Tangan Elektronik Pengguna</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPasswordModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 text-xs text-slate-800 space-y-1.5">
+              <div className="flex justify-between font-mono font-bold text-[11px] text-slate-500">
+                <span>No. GRN: {record.grnNumber}</span>
+                <span>Batch: {formData.batchNumber}</span>
+              </div>
+              <p className="font-bold text-slate-900">
+                {record.materialCode} - {record.materialName}
+              </p>
+              <p className="text-[11px] text-slate-600">
+                Kuantitas Baru: {formData.quantityReceived} {formData.unit} ({formData.containerCount} {formData.containerType})
+              </p>
+            </div>
+
+            <form onSubmit={handleFinalizeSaveWithPassword} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                  <span>Kata Sandi Akun Pengguna Aktif <span className="text-rose-500">*</span></span>
+                  <span className="text-[10px] text-slate-400 font-normal">
+                    {user?.name || 'User'} ({user?.nik || 'NIK'})
+                  </span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="password"
+                    required
+                    autoFocus
+                    value={authPassword}
+                    onChange={(e) => setAuthPassword(e.target.value)}
+                    placeholder="Masukkan password akun Anda..."
+                    className="w-full text-xs border border-slate-300 rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-orange-500 text-slate-800 font-semibold"
+                  />
+                  <Lock className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-3" />
+                </div>
+              </div>
+
+              {authPasswordError && (
+                <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-medium flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span>{authPasswordError}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-5 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold shadow-md shadow-orange-600/20 disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>{isSubmitting ? 'Menyimpan...' : 'Verifikasi & Simpan'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

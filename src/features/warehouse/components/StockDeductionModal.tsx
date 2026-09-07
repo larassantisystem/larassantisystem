@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { X, MinusCircle, FileSpreadsheet, Download, AlertCircle, CheckCircle2, Upload } from 'lucide-react';
+import { X, MinusCircle, FileSpreadsheet, Download, AlertCircle, CheckCircle2, Upload, Lock } from 'lucide-react';
 import { MaterialStockSummary } from '../types/stockTypes';
 import { stockService } from '../stockService';
+import { useAuth } from '../../../core/auth/AuthContext';
+import { authService } from '../../../core/auth/authService';
 import {
   downloadStockDeductTemplate,
   parseStockDeductExcel,
@@ -22,6 +24,7 @@ export const StockDeductionModal: React.FC<StockDeductionModalProps> = ({
   onSuccess,
   userName = 'Operator Timbang',
 }) => {
+  const { user } = useAuth();
   const [selectedMaterialCode, setSelectedMaterialCode] = useState('');
   const [selectedLotInternal, setSelectedLotInternal] = useState('');
   const [deductQty, setDeductQty] = useState('');
@@ -32,6 +35,12 @@ export const StockDeductionModal: React.FC<StockDeductionModalProps> = ({
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Password Confirmation State
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [authPassword, setAuthPassword] = useState('');
+  const [authPasswordError, setAuthPasswordError] = useState<string | null>(null);
+  const [pendingActionType, setPendingActionType] = useState<'manual' | 'excel'>('manual');
 
   // Excel state
   const [excelFile, setExcelFile] = useState<File | null>(null);
@@ -69,22 +78,60 @@ export const StockDeductionModal: React.FC<StockDeductionModalProps> = ({
       return;
     }
 
+    setPendingActionType('manual');
+    setAuthPassword('');
+    setAuthPasswordError(null);
+    setShowPasswordModal(true);
+  };
+
+  const handleFinalizeActionWithPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthPasswordError(null);
+    if (!authPassword.trim()) {
+      setAuthPasswordError('Kata sandi pengguna aktif wajib diisi.');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      await stockService.deductStock({
-        materialCode: selectedMaterialCode,
-        lotInternalNumber: selectedLotInternal,
-        deductQuantity: qty,
-        unit: currentMaterial?.unit || 'kg',
-        spkNumber,
-        batchTarget,
-        performerName: userName,
-        notes,
-      });
-      onSuccess();
-      onClose();
+      const actorNik = user?.nik || 'admin';
+      const verify = await authService.verifyPassword(actorNik, authPassword);
+      if (!verify.valid) {
+        setAuthPasswordError(verify.error || 'Kata sandi tidak valid. Otorisasi pemotongan stok ditolak.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (pendingActionType === 'manual') {
+        const qty = Number(deductQty);
+        await stockService.deductStock({
+          materialCode: selectedMaterialCode,
+          lotInternalNumber: selectedLotInternal,
+          deductQuantity: qty,
+          unit: currentMaterial?.unit || 'kg',
+          spkNumber,
+          batchTarget,
+          performerName: userName,
+          notes,
+        });
+        setShowPasswordModal(false);
+        onSuccess();
+        onClose();
+      } else {
+        const res = await stockService.batchDeductStock(parsedRows, userName);
+        setShowPasswordModal(false);
+        if (res.errors.length > 0) {
+          setSuccessMsg(`Berhasil memotong ${res.successCount} item. Terdapat ${res.errors.length} peringatan.`);
+        } else {
+          setSuccessMsg(`Berhasil memproses pemotongan stok ${res.successCount} item dari Excel!`);
+        }
+        setTimeout(() => {
+          onSuccess();
+          onClose();
+        }, 1200);
+      }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Gagal memotong stok.');
+      setAuthPasswordError(err.message || 'Gagal memproses pemotongan stok.');
     } finally {
       setIsSubmitting(false);
     }
@@ -116,24 +163,10 @@ export const StockDeductionModal: React.FC<StockDeductionModalProps> = ({
       return;
     }
 
-    setIsSubmitting(true);
-    setErrorMsg('');
-    try {
-      const res = await stockService.batchDeductStock(parsedRows, userName);
-      if (res.errors.length > 0) {
-        setSuccessMsg(`Berhasil memotong ${res.successCount} item. Terdapat ${res.errors.length} peringatan.`);
-      } else {
-        setSuccessMsg(`Berhasil memproses pemotongan stok ${res.successCount} item dari Excel!`);
-      }
-      setTimeout(() => {
-        onSuccess();
-        onClose();
-      }, 1200);
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Gagal melakukan pemprosesan batch pemotongan stok.');
-    } finally {
-      setIsSubmitting(false);
-    }
+    setPendingActionType('excel');
+    setAuthPassword('');
+    setAuthPasswordError(null);
+    setShowPasswordModal(true);
   };
 
   return (
@@ -429,6 +462,106 @@ export const StockDeductionModal: React.FC<StockDeductionModalProps> = ({
           </div>
         )}
       </div>
+
+      {/* Password Confirmation Modal */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-slate-200 overflow-hidden p-6 space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-amber-100 text-amber-800 rounded-xl">
+                  <Lock className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-slate-900">
+                    Otorisasi Pemotongan Stok (SPK)
+                  </h4>
+                  <span className="text-[10px] text-slate-400">Tanda Tangan Elektronik Pengguna</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPasswordModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 text-xs text-slate-800 space-y-1.5">
+              {pendingActionType === 'manual' ? (
+                <>
+                  <div className="flex justify-between font-mono font-bold text-[11px] text-slate-500">
+                    <span>Kode: {selectedMaterialCode}</span>
+                    <span>SPK: {spkNumber}</span>
+                  </div>
+                  <p className="font-bold text-slate-900">
+                    Pemotongan: {deductQty} {currentMaterial?.unit} dari Lot {selectedLotInternal}
+                  </p>
+                  <p className="text-[11px] text-slate-600">Batch Target: {batchTarget}</p>
+                </>
+              ) : (
+                <>
+                  <p className="font-bold text-slate-900">
+                    Proses Batch Impor Excel: {parsedRows.length} Pemotongan Stok
+                  </p>
+                  <p className="text-[11px] text-slate-600">
+                    Stok material akan dipotong secara permanen sesuai instruksi SPK di file Excel.
+                  </p>
+                </>
+              )}
+            </div>
+
+            <form onSubmit={handleFinalizeActionWithPassword} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                  <span>Kata Sandi Akun Pengguna Aktif <span className="text-rose-500">*</span></span>
+                  <span className="text-[10px] text-slate-400 font-normal">
+                    {user?.name || userName} ({user?.nik || 'NIK'})
+                  </span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="password"
+                    required
+                    autoFocus
+                    value={authPassword}
+                    onChange={(e) => setAuthPassword(e.target.value)}
+                    placeholder="Masukkan password akun Anda..."
+                    className="w-full text-xs border border-slate-300 rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-800 font-semibold"
+                  />
+                  <Lock className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-3" />
+                </div>
+              </div>
+
+              {authPasswordError && (
+                <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-medium flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span>{authPasswordError}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-600/20 disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  <MinusCircle className="w-3.5 h-3.5" />
+                  <span>{isSubmitting ? 'Menyimpan...' : 'Verifikasi & Potong Stok'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

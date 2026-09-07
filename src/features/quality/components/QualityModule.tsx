@@ -29,6 +29,7 @@ import {
   ExternalLink,
   Check,
   Sliders,
+  Database,
 } from 'lucide-react';
 import { QcInspectionReport } from '../types/qcTypes';
 import { qualityService } from '../qualityService';
@@ -39,6 +40,7 @@ import { QcRevertModal } from './QcRevertModal';
 import { QcInspectionReportPdfModal } from './QcInspectionReportPdfModal';
 import { QcStatusLabelModal } from './QcStatusLabelModal';
 import { QcNotificationsCenter } from './QcNotificationsCenter';
+import { QcDiagnosticAuditModal } from './QcDiagnosticAuditModal';
 import { useAuth } from '../../../core/auth/AuthContext';
 import {
   IpcBulkTest,
@@ -129,6 +131,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
   const [revertingReport, setRevertingReport] = useState<QcInspectionReport | null>(null);
   const [pdfReport, setPdfReport] = useState<QcInspectionReport | null>(null);
   const [labelReport, setLabelReport] = useState<QcInspectionReport | null>(null);
+  const [showDiagnosticAudit, setShowDiagnosticAudit] = useState<boolean>(false);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -750,6 +753,16 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
         </div>
 
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setShowDiagnosticAudit(true)}
+            className="px-3.5 py-2 rounded-xl bg-teal-700/80 hover:bg-teal-600 text-white text-xs font-bold border border-teal-400/40 flex items-center gap-1.5 transition-all shadow-sm"
+            title="Audit Komparasi Kriteria Master Kemasan (15) vs Checklist Lab (5)"
+          >
+            <Database className="w-4 h-4 text-teal-200" />
+            <span className="hidden sm:inline">Audit Diagnostik Master vs Lab</span>
+            <span className="sm:hidden">Audit DB</span>
+          </button>
           <QcNotificationsCenter
             onSelectReport={(reportId) => {
               const rep = reports.find((r) => r.id === reportId);
@@ -2534,6 +2547,12 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
         isOpen={!!labelReport}
         onClose={() => setLabelReport(null)}
         report={labelReport}
+      />
+
+      <QcDiagnosticAuditModal
+        isOpen={showDiagnosticAudit}
+        onClose={() => setShowDiagnosticAudit(false)}
+        onSynced={loadData}
       />
     </div>
   );

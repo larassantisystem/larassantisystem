@@ -20,6 +20,8 @@ import {
 import { RawMaterial, PackagingMaterial } from '../../../types';
 import { GrnMaterialType, GrnRecord } from '../types/grnTypes';
 import { MaterialSearchDropdown } from './MaterialSearchDropdown';
+import { useAuth } from '../../../core/auth/AuthContext';
+import { authService } from '../../../core/auth/authService';
 
 interface GrnFormModalProps {
   isOpen: boolean;
@@ -38,6 +40,7 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
   onSave,
   userName = 'Staf Gudang Logistik',
 }) => {
+  const { user } = useAuth();
   const todayStr = new Date().toISOString().split('T')[0];
   const defaultExpDate = new Date(Date.now() + 730 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]; // +2 years
 
@@ -78,6 +81,11 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  // Password Confirmation State
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [authPassword, setAuthPassword] = useState('');
+  const [authPasswordError, setAuthPasswordError] = useState<string | null>(null);
 
   // Auto-switch defaults when material type changes
   useEffect(() => {
@@ -147,13 +155,35 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
       }
     }
 
-    const resolvedManufacturer =
-      materialType === 'raw'
-        ? selectedMaterial.manufacturer || 'PT. Petrona Pacific Chemical'
-        : distributor.trim();
+    // Open password confirmation dialog (electronic signature)
+    setAuthPassword('');
+    setAuthPasswordError(null);
+    setShowPasswordModal(true);
+  };
 
+  const handleFinalizeSaveWithPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthPasswordError(null);
+    if (!authPassword.trim()) {
+      setAuthPasswordError('Kata sandi pengguna aktif wajib diisi.');
+      return;
+    }
+
+    if (!selectedMaterial) return;
+
+    setIsSubmitting(true);
     try {
-      setIsSubmitting(true);
+      const actorNik = user?.nik || 'admin';
+      const verify = await authService.verifyPassword(actorNik, authPassword);
+      if (!verify.valid) {
+        setAuthPasswordError(verify.error || 'Kata sandi tidak valid. Otorisasi simpan GRN ditolak.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      const resolvedManufacturer =
+        selectedMaterial.manufacturer || selectedMaterial.supplier || distributor.trim() || '-';
+
       await onSave({
         materialType,
         materialId: selectedMaterial.id,
@@ -173,7 +203,7 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
         storageLocation,
         storageConditions,
         qcStatus: 'QUARANTINE',
-        qcParametersCount: selectedMaterial.qcParametersCount || 3,
+        qcParametersCount: selectedMaterial.qcParametersCount ?? 0,
         sealCondition,
         packagingCondition,
         coaAttachment: coaFileName || undefined,
@@ -183,9 +213,10 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
         notes: additionalNotes.trim() || undefined,
       });
 
+      setShowPasswordModal(false);
       onClose();
     } catch (err: any) {
-      setFormError(err.message || 'Gagal menyimpan penerimaan barang ke sistem.');
+      setAuthPasswordError(err.message || 'Gagal menyimpan penerimaan barang ke sistem.');
     } finally {
       setIsSubmitting(false);
     }
@@ -902,6 +933,98 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
           </div>
         </form>
       </div>
+
+      {/* Password Confirmation Modal */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-slate-200 overflow-hidden p-6 space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-emerald-100 text-emerald-800 rounded-xl">
+                  <Lock className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-slate-900">
+                    Otorisasi Simpan Penerimaan GRN
+                  </h4>
+                  <span className="text-[10px] text-slate-400">Tanda Tangan Elektronik Pengguna</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPasswordModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 text-xs text-slate-800 space-y-1.5">
+              <div className="flex justify-between font-mono font-bold text-[11px] text-slate-500">
+                <span>Jenis: {materialType === 'raw' ? 'Bahan Baku' : 'Bahan Kemas'}</span>
+                <span>Tgl Terima: {receivedDate}</span>
+              </div>
+              <p className="font-bold text-slate-900">
+                {selectedMaterial?.code} - {selectedMaterial?.name}
+              </p>
+              <p className="text-[11px] text-slate-600">
+                Jumlah: {Number(quantityReceived).toLocaleString()} {unit} ({containerCount} {containerType})
+              </p>
+              <p className="text-[11px] text-slate-600">
+                Pemasok: {distributor}
+              </p>
+            </div>
+
+            <form onSubmit={handleFinalizeSaveWithPassword} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                  <span>Kata Sandi Akun Pengguna Aktif <span className="text-rose-500">*</span></span>
+                  <span className="text-[10px] text-slate-400 font-normal">
+                    {user?.name || userName} ({user?.nik || 'NIK'})
+                  </span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="password"
+                    required
+                    autoFocus
+                    value={authPassword}
+                    onChange={(e) => setAuthPassword(e.target.value)}
+                    placeholder="Masukkan password akun Anda..."
+                    className="w-full text-xs border border-slate-300 rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800 font-semibold"
+                  />
+                  <Lock className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-3" />
+                </div>
+              </div>
+
+              {authPasswordError && (
+                <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-medium flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span>{authPasswordError}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>{isSubmitting ? 'Menyimpan...' : 'Verifikasi & Terbitkan GRN'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
