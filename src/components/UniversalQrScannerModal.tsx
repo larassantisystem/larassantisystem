@@ -214,10 +214,6 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
         const trimmed = p.trim();
         if (trimmed.startsWith('LOT:')) {
           map.lot = trimmed.substring(4);
-        } else if (trimmed.startsWith('RPT:') || trimmed.startsWith('REPORT:')) {
-          const rptVal = trimmed.substring(trimmed.indexOf(':') + 1);
-          map.lot = rptVal;
-          map.rpt = rptVal;
         } else if (trimmed.startsWith('W:')) {
           const wStr = trimmed.substring(2);
           map.containerLabel = `Wadah ${wStr}`;
@@ -258,35 +254,19 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
 
     setScannedResult(parsed);
 
-    // Cross-match with internal records strictly by exact lot, GRN, or ID
+    // Cross-match with internal records
     try {
       const qcReports = qualityService.getLocalReports();
-      const targetLot = parsed.rpt || parsed.lot || parsed.grn;
+      const targetLot = parsed.lot || parsed.grn;
       if (targetLot) {
         const found = qcReports.find(
           (r) =>
-            r.id === targetLot ||
             r.lotInternalNumber === targetLot ||
             r.grnNumber === targetLot ||
-            r.lotInternalNumber?.toLowerCase() === targetLot?.toLowerCase() ||
-            r.grnNumber?.toLowerCase() === targetLot?.toLowerCase()
+            (parsed.matCode && r.materialCode === parsed.matCode)
         );
         if (found) {
           setMatchedReport(found);
-        } else {
-          qualityService.getReports().then((allReports) => {
-            const foundFresh = allReports.find(
-              (r) =>
-                r.id === targetLot ||
-                r.lotInternalNumber === targetLot ||
-                r.grnNumber === targetLot ||
-                r.lotInternalNumber?.toLowerCase() === targetLot?.toLowerCase() ||
-                r.grnNumber?.toLowerCase() === targetLot?.toLowerCase()
-            );
-            if (foundFresh) {
-              setMatchedReport(foundFresh);
-            }
-          }).catch(() => {});
         }
       }
     } catch (e) {
@@ -641,131 +621,6 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
                       </div>
                     )}
                   </div>
-                </div>
-
-                {/* Direct Action to Open Quality Analysis Report (CoA) */}
-                <div className="pt-2">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      let reportToOpen = matchedReport;
-                      if (!reportToOpen) {
-                        const targetLot = scannedResult.rpt || scannedResult.lot || scannedResult.grn;
-                        if (targetLot) {
-                          try {
-                            const allReports = await qualityService.getReports();
-                            reportToOpen = allReports.find(
-                              (r) =>
-                                r.id === targetLot ||
-                                r.lotInternalNumber === targetLot ||
-                                r.grnNumber === targetLot ||
-                                r.lotInternalNumber?.toLowerCase() === targetLot?.toLowerCase() ||
-                                r.grnNumber?.toLowerCase() === targetLot?.toLowerCase()
-                            ) || null;
-                          } catch (err) {
-                            console.error('Failed to fetch reports:', err);
-                          }
-                        }
-                      }
-
-                      if (!reportToOpen) {
-                        // Fallback: Try to find in GRN records and convert
-                        try {
-                          const grns = await warehouseService.getGrnRecords();
-                          const targetLot = scannedResult.rpt || scannedResult.lot || scannedResult.grn;
-                          const matchedGrn = grns.find(g => g.grnNumber === targetLot || g.batchNumber === targetLot || g.id === targetLot);
-                          if (matchedGrn) {
-                            reportToOpen = {
-                              id: `qc-rep-${matchedGrn.id}`,
-                              grnId: matchedGrn.id,
-                              grnNumber: matchedGrn.grnNumber,
-                              materialType: matchedGrn.materialType,
-                              materialCode: matchedGrn.materialCode,
-                              materialName: matchedGrn.materialName,
-                              manufacturer: matchedGrn.manufacturer || 'PT. Larassanti Makmur Sejahtera',
-                              distributor: matchedGrn.distributor || 'Pemasok Utama',
-                              poNumber: matchedGrn.poNumber || 'PO-001',
-                              deliveryNoteNumber: matchedGrn.deliveryNoteNumber || 'SJ-001',
-                              batchNumberVendor: matchedGrn.batchNumber || 'BATCH-001',
-                              receivedDate: matchedGrn.receivedDate || new Date().toISOString().split('T')[0],
-                              expiryDate: matchedGrn.expiryDate || new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString().split('T')[0],
-                              quantityReceived: matchedGrn.quantityReceived,
-                              unit: matchedGrn.unit,
-                              containerCount: matchedGrn.containerCount,
-                              containerType: matchedGrn.containerType,
-                              storageLocation: matchedGrn.storageLocation,
-                              storageConditions: matchedGrn.storageConditions,
-                              status: scannedResult.status || 'PASSED',
-                              lotInternalNumber: targetLot || 'LBB2609001',
-                              reportNumber: targetLot || 'LBB2609001',
-                              samplingInfo: { sampleSizePerContainer: '20g', totalSampleSize: '100g', samplingMethod: 'Representative Sampling' },
-                              parameters: [
-                                { id: 'p1', parameterName: 'Organoleptik / Bentuk', specification: 'Serbuk / Cairan Sesuai Standar', resultValue: 'Sesuai', isCompliant: true },
-                                { id: 'p2', parameterName: 'Kadar Air / Moisture', specification: 'Maks. 5.0%', resultValue: '3.2%', isCompliant: true },
-                                { id: 'p3', parameterName: 'Uji Identifikasi', specification: 'Positif', resultValue: 'Positif', isCompliant: true },
-                              ],
-                              staffDecision: 'RELEASE',
-                              staffSignature: { signerName: matchedGrn.receivedBy || 'Staf Analis QC', signerNik: 'QC-001', signerRole: 'QC Analyst', signedAt: new Date().toISOString(), signatureHash: 'hash-staf' },
-                              qmDecision: 'RELEASE',
-                              qmSignature: { signerName: scannedResult.qmSigner || 'Dr. Apt. Quality Manager, M.Pharm', signerNik: 'QM-001', signerRole: 'Quality Manager / Apoteker Penanggung Jawab Mutu', signedAt: new Date().toISOString(), signatureHash: 'hash-qm', notes: 'Lulus uji pemastian mutu CPKB.' },
-                              createdAt: matchedGrn.createdAt || new Date().toISOString(),
-                              updatedAt: new Date().toISOString(),
-                            };
-                          }
-                        } catch (e) {
-                          console.error('GRN fallback failed:', e);
-                        }
-                      }
-
-                      if (!reportToOpen) {
-                        // Ultimate fallback: construct directly from scannedResult
-                        const targetLot = scannedResult.rpt || scannedResult.lot || scannedResult.grn || 'LOT-SCAN-' + Date.now();
-                        reportToOpen = {
-                          id: `qc-rep-${Date.now()}`,
-                          grnId: scannedResult.grn || 'GRN-SCAN-001',
-                          grnNumber: scannedResult.grn || 'GRN-001',
-                          materialType: 'raw',
-                          materialCode: scannedResult.matCode || 'MAT-001',
-                          materialName: scannedResult.matName || 'Bahan Hasil Scan QR',
-                          manufacturer: scannedResult.mfg || 'PT. Larassanti Makmur Sejahtera',
-                          distributor: 'Pemasok Utama',
-                          poNumber: 'PO-001',
-                          deliveryNoteNumber: 'SJ-001',
-                          batchNumberVendor: targetLot,
-                          receivedDate: new Date().toISOString().split('T')[0],
-                          expiryDate: new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString().split('T')[0],
-                          quantityReceived: 1000,
-                          unit: 'kg',
-                          containerCount: scannedResult.totalContainers || 1,
-                          containerType: 'Drum',
-                          storageLocation: 'Gudang Utama',
-                          storageConditions: 'Suhu Ruang',
-                          status: scannedResult.status || 'PASSED',
-                          lotInternalNumber: targetLot,
-                          reportNumber: targetLot,
-                          samplingInfo: { sampleSizePerContainer: '20g', totalSampleSize: '100g', samplingMethod: 'Representative Sampling' },
-                          parameters: [
-                            { id: 'p1', parameterName: 'Organoleptik / Bentuk', specification: 'Serbuk / Cairan Sesuai Standar', resultValue: 'Sesuai', isCompliant: true },
-                            { id: 'p2', parameterName: 'Kadar Air / Moisture', specification: 'Maks. 5.0%', resultValue: '3.2%', isCompliant: true },
-                            { id: 'p3', parameterName: 'Uji Identifikasi', specification: 'Positif', resultValue: 'Positif', isCompliant: true },
-                          ],
-                          staffDecision: 'RELEASE',
-                          staffSignature: { signerName: 'Staf Analis QC', signerNik: 'QC-001', signerRole: 'QC Analyst', signedAt: new Date().toISOString(), signatureHash: 'hash-staf' },
-                          qmDecision: 'RELEASE',
-                          qmSignature: { signerName: scannedResult.qmSigner || 'Dr. Apt. Quality Manager, M.Pharm', signerNik: 'QM-001', signerRole: 'Quality Manager / Apoteker Penanggung Jawab Mutu', signedAt: new Date().toISOString(), signatureHash: 'hash-qm', notes: 'Lulus uji pemastian mutu CPKB.' },
-                          createdAt: new Date().toISOString(),
-                          updatedAt: new Date().toISOString(),
-                        };
-                      }
-
-                      window.dispatchEvent(new CustomEvent('open-qc-report', { detail: reportToOpen }));
-                      onClose();
-                    }}
-                    className="w-full py-3.5 px-5 bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-700 hover:from-teal-700 hover:to-emerald-800 text-white rounded-2xl font-black text-sm shadow-xl shadow-teal-500/25 flex items-center justify-center gap-2.5 transition-all cursor-pointer transform hover:scale-[1.01]"
-                  >
-                    <FileText className="w-5 h-5 text-teal-200" />
-                    <span>Buka Laporan Analisa Mutu (CoA) Lengkap</span>
-                  </button>
                 </div>
               </div>
             </div>

@@ -191,18 +191,6 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
   }, []);
 
   useEffect(() => {
-    const handleOpenQcReport = (e: any) => {
-      if (e.detail) {
-        setPdfReport(e.detail);
-      }
-    };
-    window.addEventListener('open-qc-report', handleOpenQcReport);
-    return () => {
-      window.removeEventListener('open-qc-report', handleOpenQcReport);
-    };
-  }, []);
-
-  useEffect(() => {
     if (subTab) {
       setCurrentTab(subTab as any);
     }
