@@ -119,7 +119,10 @@ export const GrnEditModal: React.FC<GrnEditModalProps> = ({
       const payloadToSave: Partial<GrnRecord> = {
         ...formData,
         ...(record.qcStatus === 'REVERTED_TO_WAREHOUSE'
-          ? { qcStatus: 'QUARANTINE', notes: `Diperbaiki oleh Gudang (${new Date().toLocaleDateString('id-ID')})` }
+          ? {
+              qcStatus: 'QUARANTINE',
+              notes: `Diperbaiki oleh Gudang (${new Date().toLocaleDateString('id-ID')}). Sebelumnya direvert: ${record.revertReason || record.notes || '-'}`,
+            }
           : {}),
       };
 
@@ -177,16 +180,33 @@ export const GrnEditModal: React.FC<GrnEditModalProps> = ({
           </div>
         )}
 
-        {record.qcStatus === 'REVERTED_TO_WAREHOUSE' && (
-          <div className="bg-orange-50 border-b border-orange-200 p-4 text-xs text-orange-950 flex items-start gap-2.5 shrink-0">
-            <AlertTriangle className="w-4 h-4 text-orange-600 shrink-0 mt-0.5" />
-            <div>
-              <span className="font-bold text-orange-900">Penerimaan Dikembalikan (Revert) oleh Tim QC:</span>
-              <p className="text-[11.5px] text-orange-800 font-semibold mt-0.5 italic">
-                "{record.notes || 'Silakan periksa dan perbaiki data dokumen penerimaan fisik.'}"
-              </p>
-              <p className="text-[10.5px] text-orange-700 mt-1">
-                Menyimpan formulir ini akan mengembalikan status ke <strong>KARANTINA</strong> agar analis QC dapat melanjutkan sampling dan pengujian ulang.
+        {(record.qcStatus === 'REVERTED_TO_WAREHOUSE' || Boolean(record.revertReason && record.revertReason.trim())) && (
+          <div className="bg-amber-50 border-b border-amber-200 p-4 text-xs text-amber-950 flex items-start gap-3 shrink-0">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="space-y-1.5 w-full">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-amber-900 uppercase tracking-wide">
+                  Penerimaan Dikembalikan (Revert) oleh Tim QC
+                </span>
+                {record.revertedAt && (
+                  <span className="text-[10px] text-amber-700 font-mono">
+                    {new Date(record.revertedAt).toLocaleString('id-ID')}
+                  </span>
+                )}
+              </div>
+              <div className="bg-white/80 border border-amber-200 rounded-lg p-2.5">
+                <span className="text-[10px] font-bold text-slate-500 block uppercase">Alasan Revert:</span>
+                <p className="text-[12px] text-amber-900 font-semibold mt-0.5">
+                  "{record.revertReason || record.notes || 'Silakan periksa dan perbaiki data dokumen penerimaan fisik.'}"
+                </p>
+                {record.revertedBy && (
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Petugas QC: <span className="font-medium text-slate-800">{record.revertedBy}</span>
+                  </p>
+                )}
+              </div>
+              <p className="text-[10.5px] text-amber-800">
+                Menyimpan perbaikan formulir ini akan mengembalikan status ke <strong>KARANTINA</strong> dan secara otomatis menghitung ulang rencana sampling QC.
               </p>
             </div>
           </div>
@@ -468,6 +488,9 @@ export const GrnEditModal: React.FC<GrnEditModalProps> = ({
                   />
                   <Lock className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-3" />
                 </div>
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Password demo: <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-slate-700 font-semibold">budi123</code> / <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-slate-700 font-semibold">laras123</code> / <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-slate-700 font-semibold">admin</code>
+                </p>
               </div>
 
               {authPasswordError && (

@@ -2,6 +2,7 @@ import { Department } from '../../types';
 import { qualityService } from '../../features/quality/qualityService';
 import { warehouseService } from '../../features/warehouse/warehouseService';
 import { stockService } from '../../features/warehouse/stockService';
+import { formulaService } from '../../features/rnd/formula/formulaService';
 
 export interface DepartmentNotificationItem {
   id: string;
@@ -47,64 +48,108 @@ export const departmentNotificationService = {
     const items: DepartmentNotificationItem[] = [];
 
     try {
-      // 1. Quality & Warehouse Reports Sync
-      const [qcReports, grnRecords, stockLots] = await Promise.all([
-        qualityService.getReports(),
-        warehouseService.getGrnRecords(),
-        stockService.getStockLots(),
+      // 1. Fetch system state in parallel
+      const [qcReports, grnRecords, stockLots, qcEventNotifs, formulations] = await Promise.all([
+        qualityService.getReports().catch(() => []),
+        warehouseService.getGrnRecords().catch(() => []),
+        stockService.getStockLots().catch(() => []),
+        Promise.resolve(qualityService.getNotifications()),
+        formulaService.getFormulations().catch(() => []),
       ]);
 
-      // --- QC Notifications ---
+      // --- 1. QC Broadcast & Event Notifications (e.g. QM Revert to Lab, Release, Reject) ---
+      if (Array.isArray(qcEventNotifs)) {
+        qcEventNotifs.forEach((ev) => {
+          const isRevert = ev.title?.toLowerCase().includes('dikembalikan') || ev.title?.toLowerCase().includes('revert') || ev.title?.toLowerCase().includes('revisi');
+          const isReject = ev.title?.toLowerCase().includes('reject') || ev.title?.toLowerCase().includes('ditolak');
+          const isRelease = ev.title?.toLowerCase().includes('release') || ev.title?.toLowerCase().includes('lolos');
+
+          items.push({
+            id: `qc-event-${ev.id}`,
+            department: 'quality',
+            subTab: isRevert ? 'testing' : isRelease || isReject ? 'archive' : 'queue',
+            title: ev.title,
+            message: ev.message,
+            urgency: isRevert ? 'warning' : isReject ? 'critical' : isRelease ? 'success' : 'info',
+            timestamp: ev.timestamp || new Date().toISOString(),
+            isRead: ev.isRead || readIds.includes(`qc-event-${ev.id}`),
+            actionLabel: isRevert ? 'Buka Form Uji Lab (Revisi)' : isRelease || isReject ? 'Buka Dokumen CoA' : 'Lihat Detail QC',
+          });
+        });
+      }
+
+      // --- 2. QC Real-time State Queues ---
       const queueItems = qcReports.filter((r) => r.status === 'QUARANTINE');
       const testingItems = qcReports.filter((r) => r.status === 'QUALITY_CONTROL_PROCESS');
       const approvalItems = qcReports.filter((r) => r.status === 'AWAITING_QM_AUTHORIZATION');
 
+      // Specific QM Revert Alert if items currently in testing have revision notes
+      const revertedInTesting = qcReports.filter(
+        (r) => r.status === 'QUALITY_CONTROL_PROCESS' && r.qmRevertToLabReason
+      );
+
+      if (revertedInTesting.length > 0) {
+        revertedInTesting.forEach((rev) => {
+          const revId = `qc-rev-${rev.id}-${rev.qmRevertToLabAt || 'now'}`;
+          items.push({
+            id: revId,
+            department: 'quality',
+            subTab: 'testing',
+            title: `PERBAIKAN UJI LAB: ${rev.lotInternalNumber || rev.grnNumber} (${rev.materialName})`,
+            message: `Quality Manager mengembalikan lot ini untuk revisi uji lab: "${rev.qmRevertToLabReason}".`,
+            urgency: 'warning',
+            timestamp: rev.qmRevertToLabAt || new Date().toISOString(),
+            isRead: readIds.includes(revId),
+            actionLabel: 'Input Hasil Uji Ulang',
+          });
+        });
+      }
+
       if (queueItems.length > 0) {
         items.push({
-          id: `qc-queue-${queueItems.length}`,
+          id: `qc-queue-summary-${queueItems.length}`,
           department: 'quality',
           subTab: 'queue',
           title: `${queueItems.length} Material Menunggu Sampling QC`,
           message: `Ada ${queueItems.length} lot kedatangan GRN baru di area karantina yang memerlukan pengambilan sampel lab.`,
-          urgency: 'warning',
+          urgency: 'info',
           timestamp: new Date().toISOString(),
-          isRead: readIds.includes(`qc-queue-${queueItems.length}`),
+          isRead: readIds.includes(`qc-queue-summary-${queueItems.length}`),
           actionLabel: 'Buka Antrean Sampling',
         });
       }
 
-      if (testingItems.length > 0) {
+      if (testingItems.length > 0 && revertedInTesting.length === 0) {
         items.push({
-          id: `qc-test-${testingItems.length}`,
+          id: `qc-test-summary-${testingItems.length}`,
           department: 'quality',
           subTab: 'testing',
           title: `${testingItems.length} Pengujian Lab Sedang Berjalan`,
           message: `Parameter uji sedang dianalisis oleh analis QC. Segera selesaikan input hasil CoA.`,
           urgency: 'info',
           timestamp: new Date().toISOString(),
-          isRead: readIds.includes(`qc-test-${testingItems.length}`),
+          isRead: readIds.includes(`qc-test-summary-${testingItems.length}`),
           actionLabel: 'Input Hasil Uji Lab',
         });
       }
 
       if (approvalItems.length > 0) {
         items.push({
-          id: `qc-appr-${approvalItems.length}`,
+          id: `qc-appr-summary-${approvalItems.length}`,
           department: 'quality',
           subTab: 'approval',
           title: `PERHATIAN QM: ${approvalItems.length} Laporan Menunggu Otorisasi`,
           message: `Laporan analisa QC telah selesai diuji dan membutuhkan tanda tangan digital Quality Manager.`,
           urgency: 'critical',
           timestamp: new Date().toISOString(),
-          isRead: readIds.includes(`qc-appr-${approvalItems.length}`),
+          isRead: readIds.includes(`qc-appr-summary-${approvalItems.length}`),
           actionLabel: 'Otorisasi Sekarang',
         });
       }
 
-      // --- Warehouse Notifications ---
-      // Ready for Shelving (Passed QC needing relocation)
+      // --- 3. Warehouse Notifications ---
       const passedLots = stockLots.filter(
-        (l) => (l.qcStatus === 'RELEASED' || (l.qcStatus as any) === 'PASSED') && l.storageLocation.includes('Karantina')
+        (l) => (l.qcStatus === 'RELEASED' || (l.qcStatus as any) === 'PASSED') && l.storageLocation?.includes('Karantina')
       );
       if (passedLots.length > 0) {
         items.push({
@@ -120,7 +165,6 @@ export const departmentNotificationService = {
         });
       }
 
-      // Inbound GRN waiting for initial processing
       const newGrns = grnRecords.filter((g) => g.qcStatus === 'QUARANTINE');
       if (newGrns.length > 0) {
         items.push({
@@ -136,7 +180,6 @@ export const departmentNotificationService = {
         });
       }
 
-      // Rejected Lots need Return / Quarantine B
       const rejectLots = stockLots.filter((l) => l.qcStatus === 'REJECTED');
       if (rejectLots.length > 0) {
         items.push({
@@ -152,7 +195,37 @@ export const departmentNotificationService = {
         });
       }
 
-      // --- Procurement Notifications ---
+      // --- 4. RnD Notifications ---
+      const activeFormulas = formulations.filter((f) => f.status === 'ACTIVE' || !f.status);
+      const draftFormulas = formulations.filter((f) => f.status === 'DRAFT' || f.status === 'IN_DEVELOPMENT');
+
+      if (draftFormulas.length > 0) {
+        items.push({
+          id: `rnd-draft-formulas-${draftFormulas.length}`,
+          department: 'rnd',
+          subTab: 'formula',
+          title: `${draftFormulas.length} Formulasi Bulk Dalam Pengembangan (Draft)`,
+          message: `Ada formulasi kosmetik yang sedang dalam tahap uji coba skala lab dan kajian stabilitas bulk.`,
+          urgency: 'info',
+          timestamp: new Date().toISOString(),
+          isRead: readIds.includes(`rnd-draft-formulas-${draftFormulas.length}`),
+          actionLabel: 'Buka Formula Bulk',
+        });
+      }
+
+      items.push({
+        id: 'rnd-master-specs-01',
+        department: 'rnd',
+        subTab: 'materials',
+        title: `Master Data Material CPKB Terintegrasi (${activeFormulas.length} Formula Aktif)`,
+        message: 'Spesifikasi parameter organoleptik, pH, viskositas, dan kadar aktif sinkron otomatis dengan QC lab.',
+        urgency: 'info',
+        timestamp: new Date().toISOString(),
+        isRead: readIds.includes('rnd-master-specs-01'),
+        actionLabel: 'Kelola Master Material',
+      });
+
+      // --- 5. Procurement Notifications & ROP ---
       if (rejectLots.length > 0) {
         items.push({
           id: `proc-return-${rejectLots.length}`,
@@ -167,7 +240,6 @@ export const departmentNotificationService = {
         });
       }
 
-      // --- ROP (Reorder Point) Inventory Alerts for Procurement & Warehouse ---
       try {
         const ropAlerts = await stockService.checkReorderPoints();
         if (ropAlerts.length > 0) {
@@ -178,7 +250,7 @@ export const departmentNotificationService = {
             id: `proc-rop-alert-${ropAlerts.length}`,
             department: 'procurement',
             title: `PERINGATAN ROP: ${ropAlerts.length} Material Di Bawah Ambang Batas Aman`,
-            message: `Terdapat ${ropAlerts.length} material (${criticalRop.length} habis, ${warningRop.length} di bawah ROP) yang memerlukan pembuatan PO pembelian segera ke supplier.`,
+            message: `Terdapat ${ropAlerts.length} material (${criticalRop.length} habis, ${warningRop.length} di bawah ROP) yang memerlukan pembuatan PO pembelian segera.`,
             urgency: criticalRop.length > 0 ? 'critical' : 'warning',
             timestamp: new Date().toISOString(),
             isRead: readIds.includes(`proc-rop-alert-${ropAlerts.length}`),
@@ -200,7 +272,7 @@ export const departmentNotificationService = {
         console.error('Error checking ROP alerts:', e);
       }
 
-      // --- PPIC Notifications ---
+      // --- 6. PPIC Notifications ---
       items.push({
         id: 'ppic-mrp-01',
         department: 'ppic',
@@ -213,7 +285,7 @@ export const departmentNotificationService = {
         actionLabel: 'Buka Kalkulator MRP',
       });
 
-      // --- Production Notifications ---
+      // --- 7. Production Notifications ---
       const availableReleased = stockLots.filter((l) => l.qcStatus === 'RELEASED' || (l.qcStatus as any) === 'PASSED');
       if (availableReleased.length > 0) {
         items.push({
@@ -229,20 +301,7 @@ export const departmentNotificationService = {
         });
       }
 
-      // --- RnD Notifications ---
-      items.push({
-        id: 'rnd-master-01',
-        department: 'rnd',
-        subTab: 'materials',
-        title: 'Master Data & Spesifikasi Parameter CPKB',
-        message: 'Seluruh bahan baku (B0001+) dan kemasan (K0001+) tersinkronisasi otomatis dengan checklist QC.',
-        urgency: 'info',
-        timestamp: new Date().toISOString(),
-        isRead: readIds.includes('rnd-master-01'),
-        actionLabel: 'Buka Master Material',
-      });
-
-      // --- Admin Notifications ---
+      // --- 8. Admin Notifications ---
       items.push({
         id: 'admin-audit-01',
         department: 'admin',
@@ -297,11 +356,19 @@ export const departmentNotificationService = {
 
     if (id) {
       if (!readIds.includes(id)) readIds.push(id);
+      // If it's a qc-event, also mark in qualityService
+      if (id.startsWith('qc-event-')) {
+        const rawId = id.replace('qc-event-', '');
+        qualityService.markNotificationAsRead(rawId);
+      }
     } else {
       // Mark all current
       departmentNotificationService.getNotifications().then((all) => {
         readIds = all.map((n) => n.id);
         localStorage.setItem(READ_NOTIFICATIONS_STORAGE_KEY, JSON.stringify(readIds));
+        // Also mark all in QC
+        const qcList = qualityService.getNotifications();
+        qcList.forEach((q) => qualityService.markNotificationAsRead(q.id));
       });
       return;
     }
@@ -309,3 +376,4 @@ export const departmentNotificationService = {
     localStorage.setItem(READ_NOTIFICATIONS_STORAGE_KEY, JSON.stringify(readIds));
   },
 };
+

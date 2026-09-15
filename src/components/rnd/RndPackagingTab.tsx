@@ -686,44 +686,44 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
   };
 
   return (
-    <div className="space-y-4 font-sans">
+    <div className="space-y-3 font-sans">
       {/* Toast Notifikasi Sukses */}
       {successToast && (
-        <div className="fixed bottom-6 right-6 z-50 bg-emerald-700 text-white px-5 py-3.5 rounded-2xl shadow-xl flex items-center gap-3 border border-emerald-500 animate-in fade-in slide-in-from-bottom-4">
-          <CheckCircle2 className="w-5 h-5 text-emerald-200 shrink-0" />
+        <div className="fixed bottom-6 right-6 z-50 bg-emerald-700 text-white px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2.5 border border-emerald-500 animate-in fade-in slide-in-from-bottom-4">
+          <CheckCircle2 className="w-4 h-4 text-emerald-200 shrink-0" />
           <span className="text-xs font-bold">{successToast}</span>
         </div>
       )}
 
       {/* READ-ONLY BANNER IF USER IS RESTRICTED */}
       {!canWrite && (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center justify-between gap-3 text-amber-800">
-          <div className="flex items-center gap-2.5">
-            <Lock className="w-4 h-4 text-amber-600 shrink-0" />
-            <div className="text-xs leading-relaxed">
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-2.5 flex items-center justify-between gap-3 text-amber-800">
+          <div className="flex items-center gap-2">
+            <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+            <div className="text-[11px] leading-snug">
               <span className="font-bold">Mode Akses Terbatas (Read-Only):</span> Anda memiliki hak akses baca khusus R&D. Tindakan pendaftaran, edit, import excel, dan hapus master kemas dinonaktifkan.
             </div>
           </div>
-          <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-amber-200/80 text-amber-900 uppercase">
+          <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-amber-200/80 text-amber-900 uppercase">
             Hanya Lihat
           </span>
         </div>
       )}
 
       {/* Control Bar: Search & Action Buttons */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1 max-w-2xl">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-1 max-w-2xl">
           <div className="relative flex-1">
-            <Search className="absolute left-3.5 top-2.5 h-4 w-4 text-slate-400" />
+            <Search className="absolute left-3 top-2 h-3.5 w-3.5 text-slate-400" />
             <input
               type="text"
-              placeholder="Cari kode PM (K0001), nama kemasan, supplier, satuan..."
+              placeholder="Cari kode PM (K0001), nama kemasan, supplier..."
               value={searchPM}
               onChange={(e) => {
                 setSearchPM(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full bg-white border border-slate-200 rounded-xl py-2 pl-10 pr-4 text-xs text-slate-800 placeholder-slate-400 focus:border-purple-600 focus:outline-none focus:ring-1 focus:ring-purple-600 shadow-xs"
+              className="w-full bg-white border border-slate-200 rounded-lg py-1.5 pl-8 pr-3 text-xs text-slate-800 placeholder-slate-400 focus:border-purple-600 focus:outline-none focus:ring-1 focus:ring-purple-600 shadow-2xs"
             />
           </div>
 
@@ -734,7 +734,7 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
               setSelectedTypeFilter(e.target.value);
               setCurrentPage(1);
             }}
-            className="bg-white border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-700 font-semibold focus:outline-none focus:border-purple-600 shadow-xs"
+            className="bg-white border border-slate-200 rounded-lg py-1.5 px-2.5 text-xs text-slate-700 font-semibold focus:outline-none focus:border-purple-600 shadow-2xs"
           >
             <option value="all">Semua Tipe Kemasan</option>
             <option value="primary">Primer (Wadah Langsung)</option>
@@ -743,17 +743,17 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
           </select>
 
           {/* Counter Badge */}
-          <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50 border border-purple-200 text-purple-800 text-xs font-mono font-bold whitespace-nowrap">
+          <div className="hidden md:flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-50 border border-purple-200 text-purple-800 text-[11px] font-mono font-bold whitespace-nowrap">
             <span>Total: {packagingMaterials.length} Item</span>
             {filteredPM.length !== packagingMaterials.length && (
-              <span className="text-[10px] text-purple-600">({filteredPM.length} hasil)</span>
+              <span className="text-[10px] text-purple-600">({filteredPM.length})</span>
             )}
           </div>
         </div>
 
         {/* Action Buttons: Add & Excel Import (Hanya untuk Write Access) */}
         {canWrite && (
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
               onClick={() => {
                 setImportPreview([]);
@@ -761,17 +761,17 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
                 setPasteData('');
                 setShowImportModal(true);
               }}
-              className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+              className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
             >
-              <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
               <span>Import Excel</span>
             </button>
 
             <button
               onClick={openAddPMModal}
-              className="px-4 py-2 rounded-xl bg-purple-700 hover:bg-purple-800 text-xs font-bold text-white flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm"
+              className="px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-800 text-xs font-bold text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-3.5 h-3.5" />
               <span>Tambah Bahan Kemas</span>
             </button>
           </div>
@@ -779,47 +779,47 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
       </div>
 
       {/* STREAMLINED TABLE: MASTER BAHAN KEMAS */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-2xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-slate-600 text-[10px] font-bold uppercase tracking-wider">
-                <th className="py-3 px-3 text-center w-12">No</th>
-                <th className="py-3 px-4">Kode PM</th>
-                <th className="py-3 px-4">Nama Kemasan</th>
-                <th className="py-3 px-4">Tipe Kemasan</th>
-                <th className="py-3 px-4">Kapasitas</th>
-                <th className="py-3 px-4">Satuan</th>
-                <th className="py-3 px-4">Supplier</th>
-                <th className="py-3 px-4">Kondisi Penyimpanan</th>
-                <th className="py-3 px-4 text-right">Aksi</th>
+                <th className="py-2 px-2.5 text-center w-10">No</th>
+                <th className="py-2 px-3">Kode PM</th>
+                <th className="py-2 px-3">Nama Kemasan</th>
+                <th className="py-2 px-3">Tipe Kemasan</th>
+                <th className="py-2 px-3">Kapasitas</th>
+                <th className="py-2 px-3">Satuan</th>
+                <th className="py-2 px-3">Supplier</th>
+                <th className="py-2 px-3">Kondisi Penyimpanan</th>
+                <th className="py-2 px-3 text-right">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
               {currentItems.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-slate-400">
-                    <Boxes className="w-10 h-10 mx-auto mb-2 text-slate-300" />
-                    <p className="font-semibold text-slate-600">Tidak ada data bahan kemas yang cocok</p>
-                    <p className="text-xs text-slate-400 mt-1">Coba gunakan kata kunci pencarian lain atau klik Tambah Bahan Kemas.</p>
+                  <td colSpan={9} className="py-8 text-center text-slate-400">
+                    <Boxes className="w-8 h-8 mx-auto mb-1.5 text-slate-300" />
+                    <p className="font-semibold text-slate-600 text-xs">Tidak ada data bahan kemas yang cocok</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Coba gunakan kata kunci pencarian lain atau klik Tambah Bahan Kemas.</p>
                   </td>
                 </tr>
               ) : (
                 currentItems.map((pm, idx) => (
                   <tr key={pm.id} className="hover:bg-purple-50/40 transition-colors">
-                    <td className="py-3.5 px-3 text-center font-mono text-slate-400 font-bold text-xs">
+                    <td className="py-1.5 px-2.5 text-center font-mono text-slate-400 font-bold text-[11px]">
                       {indexOfFirstItem + idx + 1}
                     </td>
-                    <td className="py-3.5 px-4 font-mono">
-                      <div className="font-bold text-purple-700">{pm.code}</div>
+                    <td className="py-1.5 px-3 font-mono">
+                      <div className="font-bold text-purple-700 text-xs">{pm.code}</div>
                       <div className="text-[10px] font-mono text-slate-500 font-semibold">{pm.specNumber || `SP-BK-${pm.code}`}</div>
                     </td>
-                    <td className="py-3.5 px-4">
-                      <div className="font-bold text-slate-800">{pm.name}</div>
+                    <td className="py-1.5 px-3">
+                      <div className="font-bold text-slate-800 text-xs">{pm.name}</div>
                     </td>
-                    <td className="py-3.5 px-4">
+                    <td className="py-1.5 px-3">
                       <span
-                        className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold border uppercase ${
+                        className={`px-2 py-0.25 rounded-full text-[9px] font-bold border uppercase ${
                           pm.type === 'primary'
                             ? 'bg-purple-50 border-purple-200 text-purple-700'
                             : pm.type === 'secondary'
@@ -834,26 +834,26 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
                           : 'Tersier'}
                       </span>
                     </td>
-                    <td className="py-3.5 px-4 font-mono text-[11px] font-semibold text-slate-700">
+                    <td className="py-1.5 px-3 font-mono text-[11px] font-semibold text-slate-700">
                       {pm.type === 'primary' && pm.unitCapacityGrams ? `${pm.unitCapacityGrams} g/mL` : '-'}
                     </td>
-                    <td className="py-3.5 px-4 font-bold text-purple-900">
-                      <span className="bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-lg text-[11px]">
+                    <td className="py-1.5 px-3 font-bold text-purple-900">
+                      <span className="bg-purple-50 border border-purple-200 px-1.5 py-0.25 rounded text-[10px]">
                         {pm.unit || 'Pcs'}
                       </span>
                     </td>
-                    <td className="py-3.5 px-4 font-medium text-slate-800">
+                    <td className="py-1.5 px-3 font-medium text-slate-800 text-xs">
                       {pm.supplier || pm.manufacturer || <span className="text-slate-400 italic">-</span>}
                     </td>
-                    <td className="py-3.5 px-4 text-slate-600 text-[11px]">
+                    <td className="py-1.5 px-3 text-slate-600 text-[11px]">
                       {pm.storageConditions || DEFAULT_STORAGE_CONDITIONS}
                     </td>
-                    <td className="py-3.5 px-4 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
+                    <td className="py-1.5 px-3 text-right">
+                      <div className="flex items-center justify-end gap-1">
                         {/* Tombol Lihat Detail */}
                         <button
                           onClick={() => setSelectedPMForDetails(pm)}
-                          className="p-1.5 rounded-lg bg-slate-50 border border-slate-200 hover:bg-purple-50 hover:border-purple-200 hover:text-purple-700 text-slate-600 transition-colors cursor-pointer"
+                          className="p-1 rounded bg-slate-50 border border-slate-200 hover:bg-purple-50 hover:border-purple-200 hover:text-purple-700 text-slate-600 transition-colors cursor-pointer"
                           title="Lihat Detail & QC"
                         >
                           <Eye className="w-3.5 h-3.5" />
@@ -864,7 +864,7 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
                           <>
                             <button
                               onClick={() => handleEditPMClick(pm)}
-                              className="p-1.5 rounded-lg bg-slate-50 border border-slate-200 hover:bg-purple-50 hover:border-purple-200 hover:text-purple-700 text-slate-600 transition-colors cursor-pointer"
+                              className="p-1 rounded bg-slate-50 border border-slate-200 hover:bg-purple-50 hover:border-purple-200 hover:text-purple-700 text-slate-600 transition-colors cursor-pointer"
                               title="Edit Kemasan"
                             >
                               <Edit2 className="w-3.5 h-3.5" />
@@ -875,7 +875,7 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
                                 setDeletePassword('');
                                 setDeletePasswordError(null);
                               }}
-                              className="p-1.5 rounded-lg bg-slate-50 border border-slate-200 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-700 text-slate-600 transition-colors cursor-pointer"
+                              className="p-1 rounded bg-slate-50 border border-slate-200 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-700 text-slate-600 transition-colors cursor-pointer"
                               title="Hapus Kemasan (Konfirmasi Kata Sandi)"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -892,7 +892,7 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
         </div>
 
         {/* Pagination Controls */}
-        <div className="px-4 pb-2">
+        <div className="px-3 pb-1.5">
           <Pagination
             currentPage={currentPage}
             totalItems={filteredPM.length}
@@ -1664,39 +1664,39 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
       {/* MODAL 4: DETAIL LENGKAP BAHAN KEMAS    */}
       {/* ======================================= */}
       {selectedPMForDetails && (
-        <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-3">
           <div
             className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity"
             onClick={() => setSelectedPMForDetails(null)}
           ></div>
 
-          <div className="relative bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col">
+          <div className="relative bg-white rounded-2xl max-w-2xl w-full p-4 sm:p-5 shadow-2xl border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col">
             <button
               onClick={() => setSelectedPMForDetails(null)}
-              className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+              className="absolute top-3 right-3 p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
 
             {/* Header */}
-            <div className="border-b border-slate-100 pb-4 mb-5 shrink-0">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center text-purple-700 shrink-0">
-                  <Eye className="w-4 h-4" />
+            <div className="border-b border-slate-100 pb-3 mb-3 shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-purple-100 flex items-center justify-center text-purple-700 shrink-0">
+                  <Eye className="w-3.5 h-3.5" />
                 </div>
                 <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono font-bold text-xs text-purple-700 bg-slate-100 px-2 py-0.5 rounded-md">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="font-mono font-bold text-[11px] text-purple-700 bg-slate-100 px-1.5 py-0.25 rounded">
                       Kode: {selectedPMForDetails.code}
                     </span>
-                    <span className="font-mono font-bold text-xs text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md">
+                    <span className="font-mono font-bold text-[11px] text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.25 rounded">
                       No. Spesifikasi: {selectedPMForDetails.specNumber || `SP-BK-${selectedPMForDetails.code}`}
                     </span>
-                    <span className="px-2 py-0.5 rounded-full text-[9px] font-bold border uppercase bg-purple-100 text-purple-800 border-purple-200">
+                    <span className="px-1.5 py-0.25 rounded-full text-[9px] font-bold border uppercase bg-purple-100 text-purple-800 border-purple-200">
                       {selectedPMForDetails.type === 'primary' ? 'Primer' : selectedPMForDetails.type === 'secondary' ? 'Sekunder' : 'Tersier'}
                     </span>
                   </div>
-                  <h3 className="text-base font-black text-slate-800 mt-1">
+                  <h3 className="text-sm font-black text-slate-800 mt-0.5">
                     {selectedPMForDetails.name}
                   </h3>
                 </div>
@@ -1704,41 +1704,41 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
             </div>
 
             {/* Content */}
-            <div className="flex-1 overflow-y-auto pr-1 space-y-6">
+            <div className="flex-1 overflow-y-auto pr-1 space-y-3">
               {/* Bagian A */}
               <div>
-                <h4 className="text-[11px] font-extrabold text-purple-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                <h4 className="text-[10px] font-extrabold text-purple-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-purple-700"></span>
                   Bagian A: Identitas & Data Utama Bahan Kemas
                 </h4>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 border border-slate-200/60 p-4 rounded-2xl text-xs">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 bg-slate-50 border border-slate-200/60 p-3 rounded-xl text-xs">
                   <div>
-                    <span className="block text-[10px] font-bold text-slate-400 uppercase">Satuan</span>
-                    <span className="font-bold text-purple-900 mt-0.5 block">
+                    <span className="block text-[9px] font-bold text-slate-400 uppercase">Satuan</span>
+                    <span className="font-bold text-purple-900 mt-0.5 block text-xs">
                       {selectedPMForDetails.unit || 'Pcs'}
                     </span>
                   </div>
 
                   {selectedPMForDetails.type === 'primary' && (
                     <div>
-                      <span className="block text-[10px] font-bold text-slate-400 uppercase">Kapasitas Bersih</span>
-                      <span className="font-bold text-slate-800 mt-0.5 block font-mono">
+                      <span className="block text-[9px] font-bold text-slate-400 uppercase">Kapasitas Bersih</span>
+                      <span className="font-bold text-slate-800 mt-0.5 block font-mono text-xs">
                         {selectedPMForDetails.unitCapacityGrams || 0} g/mL
                       </span>
                     </div>
                   )}
 
                   <div>
-                    <span className="block text-[10px] font-bold text-slate-400 uppercase">Supplier</span>
-                    <span className="font-bold text-slate-800 mt-0.5 block">
+                    <span className="block text-[9px] font-bold text-slate-400 uppercase">Supplier</span>
+                    <span className="font-bold text-slate-800 mt-0.5 block text-xs">
                       {selectedPMForDetails.supplier || selectedPMForDetails.manufacturer || '-'}
                     </span>
                   </div>
 
                   <div className="md:col-span-2">
-                    <span className="block text-[10px] font-bold text-slate-400 uppercase">Kondisi Penyimpanan</span>
-                    <span className="font-semibold text-slate-700 mt-0.5 block">
+                    <span className="block text-[9px] font-bold text-slate-400 uppercase">Kondisi Penyimpanan</span>
+                    <span className="font-medium text-slate-700 mt-0.5 block text-xs">
                       {selectedPMForDetails.storageConditions || DEFAULT_STORAGE_CONDITIONS}
                     </span>
                   </div>
@@ -1747,34 +1747,34 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
 
               {/* Bagian B */}
               <div>
-                <h4 className="text-[11px] font-extrabold text-purple-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                <h4 className="text-[10px] font-extrabold text-purple-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-purple-700"></span>
                   Bagian B: Spesifikasi Mutu QC Kemasan ({selectedPMForDetails.qcParameters?.length || 0} Kriteria)
                 </h4>
 
                 {selectedPMForDetails.qcParameters && selectedPMForDetails.qcParameters.length > 0 ? (
-                  <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
+                  <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
                     <table className="w-full text-left border-collapse text-xs">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[9px] tracking-wider">
-                          <th className="py-2.5 px-4 w-12 text-center">No</th>
-                          <th className="py-2.5 px-4 w-5/12">Parameter Analisa / Pengujian</th>
-                          <th className="py-2.5 px-4 w-6/12">Syarat / Batas Penerimaan Mutu</th>
+                          <th className="py-1.5 px-3 w-10 text-center">No</th>
+                          <th className="py-1.5 px-3 w-5/12">Parameter Analisa / Pengujian</th>
+                          <th className="py-1.5 px-3 w-6/12">Syarat / Batas Penerimaan Mutu</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 text-slate-700 bg-white font-medium">
                         {selectedPMForDetails.qcParameters.map((param, idx) => (
                           <tr key={idx} className="hover:bg-slate-50/40">
-                            <td className="py-2.5 px-4 text-center font-mono text-[10px] text-slate-400 font-bold">{idx + 1}</td>
-                            <td className="py-2.5 px-4 font-bold text-slate-800">{param.name}</td>
-                            <td className="py-2.5 px-4 text-slate-700">{param.specification}</td>
+                            <td className="py-1.5 px-3 text-center font-mono text-[10px] text-slate-400 font-bold">{idx + 1}</td>
+                            <td className="py-1.5 px-3 font-bold text-slate-800">{param.name}</td>
+                            <td className="py-1.5 px-3 text-slate-700">{param.specification}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
                 ) : (
-                  <div className="text-center py-6 border border-dashed border-slate-200 rounded-2xl bg-slate-50 text-xs text-slate-400">
+                  <div className="text-center py-4 border border-dashed border-slate-200 rounded-xl bg-slate-50 text-xs text-slate-400">
                     Bahan kemas ini tidak memiliki kriteria QC.
                   </div>
                 )}
@@ -1782,11 +1782,11 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
             </div>
 
             {/* Actions */}
-            <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3 shrink-0">
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2 shrink-0">
               <button
                 type="button"
                 onClick={() => setSelectedPMForDetails(null)}
-                className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-xs font-bold text-white transition-all cursor-pointer shadow-xs"
+                className="px-4 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-xs font-bold text-white transition-all cursor-pointer shadow-2xs"
               >
                 Tutup Detail
               </button>

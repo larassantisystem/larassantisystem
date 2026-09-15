@@ -267,47 +267,44 @@ export const RndModule: React.FC<RndModuleProps> = ({
   };
 
   return (
-    <div className="space-y-6 font-sans">
-      {/* Header Banner */}
-      <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="px-2.5 py-0.5 rounded-full bg-purple-50 border border-purple-200 text-purple-700 text-[10px] font-bold uppercase tracking-wider">
+    <div className="space-y-3.5 font-sans">
+      {/* Header Banner - Compact Slim Bar */}
+      <div className="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <span className="px-2 py-0.5 rounded-full bg-purple-50 border border-purple-200 text-purple-700 text-[9px] font-bold uppercase tracking-wider">
               Master Data CPKB / GMP
             </span>
-            <span className="text-slate-400 text-xs">•</span>
-            <span className="text-xs text-slate-500 font-medium">Pengkodean B0001, K0001, PJ0001 & Dynamic BOM</span>
+            <span className="text-slate-300 text-xs">•</span>
+            <span className="text-[11px] text-slate-500 font-medium truncate">B0001, K0001, PJ0001 & Dynamic BOM</span>
           </div>
-          <h1 className="text-xl font-black text-slate-800 tracking-tight">
+          <h1 className="text-base sm:text-lg font-black text-slate-800 tracking-tight flex items-center gap-2">
             Research & Development (RnD Master Data)
           </h1>
-          <p className="text-xs text-slate-500 mt-1 max-w-2xl leading-relaxed">
-            Pusat master data Bahan Baku (<span className="font-mono font-bold text-purple-700">B0001 dst</span>), Bahan Kemas (<span className="font-mono font-bold text-purple-700">K0001 dst</span>), Produk Jadi Multi-Varian (<span className="font-mono font-bold text-purple-700">PJ0001 dst</span>), standarisasi formulasi bulk, dan kalkulator kebutuhan material yang terverifikasi BPOM.
-          </p>
         </div>
 
-        <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
-          <div className="px-3.5 py-2 rounded-2xl bg-purple-50/70 border border-purple-100 text-center">
-            <span className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Produk (PJ)</span>
-            <span className="text-base font-black text-purple-700 font-mono">{products.length} ({totalVariantsCount} Varian)</span>
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          <div className="px-2.5 py-1 rounded-xl bg-purple-50/80 border border-purple-100 flex items-center gap-1.5">
+            <span className="text-[10px] font-bold text-slate-500 uppercase">PJ:</span>
+            <span className="text-xs font-black text-purple-700 font-mono">{products.length} ({totalVariantsCount} Var)</span>
           </div>
-          <div className="px-3.5 py-2 rounded-2xl bg-slate-50 border border-slate-200 text-center">
-            <span className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Bahan Baku (B)</span>
-            <span className="text-base font-black text-slate-800 font-mono">{rawMaterials.length} Item</span>
+          <div className="px-2.5 py-1 rounded-xl bg-slate-50 border border-slate-200 flex items-center gap-1.5">
+            <span className="text-[10px] font-bold text-slate-500 uppercase">Bahan:</span>
+            <span className="text-xs font-black text-slate-800 font-mono">{rawMaterials.length} BB</span>
           </div>
-          <div className="px-3.5 py-2 rounded-2xl bg-slate-50 border border-slate-200 text-center">
-            <span className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Bahan Kemas (K)</span>
-            <span className="text-base font-black text-slate-800 font-mono">{packagingMaterials.length} Item</span>
+          <div className="px-2.5 py-1 rounded-xl bg-slate-50 border border-slate-200 flex items-center gap-1.5">
+            <span className="text-[10px] font-bold text-slate-500 uppercase">Kemas:</span>
+            <span className="text-xs font-black text-slate-800 font-mono">{packagingMaterials.length} BK</span>
           </div>
 
           {(rawMaterials.length > 0 || packagingMaterials.length > 0) && (
             <button
               onClick={handleClearAllMaterials}
-              className="px-3 py-2 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-2xl transition-all flex items-center gap-1.5 cursor-pointer"
+              className="px-2.5 py-1 text-[11px] font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-all flex items-center gap-1 cursor-pointer"
               title="Hapus data sementara / demo agar bisa diinput dari awal melalui aplikasi"
             >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>Bersihkan Data BB & BK</span>
+              <Trash2 className="w-3 h-3" />
+              <span>Bersihkan BB & BK</span>
             </button>
           )}
         </div>
@@ -358,6 +355,7 @@ export const RndModule: React.FC<RndModuleProps> = ({
 
       {activeSubTab === 'bom-calculator' && (
         <RndBomCalculatorTab
+          products={products}
           formulations={formulations}
           packagingMaterials={packagingMaterials}
           rawMaterials={rawMaterials}

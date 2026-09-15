@@ -28,8 +28,22 @@ import {
   Download,
   Upload,
   RefreshCw,
-  Info
+  Info,
+  FileText,
+  Sliders,
+  Calculator,
+  ArrowUp,
+  ArrowDown,
+  Thermometer,
+  Clock,
+  RotateCw,
+  Wrench,
+  Printer,
+  ArrowRight,
+  ArrowLeft
 } from 'lucide-react';
+import { CpbDocumentModal } from './CpbDocumentModal';
+import type { DynamicProcessStep } from './TechnicalNotesModal';
 
 interface RndFormulaTabProps {
   formulations: BulkFormulation[];
@@ -73,6 +87,12 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
   const [formMixingInstructions, setFormMixingInstructions] = useState('');
   const [formIngredients, setFormIngredients] = useState<FormulationIngredient[]>([]);
 
+  // --- INTEGRATED CATATAN TEKNIS & DYNAMIC PROCESS BUILDER IN MASTER BOM MODAL ---
+  const [formModalTab, setFormModalTab] = useState<'COMPOSITION' | 'PROCESS_BUILDER'>('COMPOSITION');
+  const [formMachine1, setFormMachine1] = useState<string>('PRD-057 Wadah Stainless Steel 300 kg (5)');
+  const [formMachine2, setFormMachine2] = useState<string>('PRD-049 Homogenizer 70 kg');
+  const [formProcessSteps, setFormProcessSteps] = useState<DynamicProcessStep[]>([]);
+
   // --- POPUP STATES ---
   // Popup 1: Bahan Baku Terdaftar (saat klik kode produk / nama produk)
   const [viewingFormulaIngredients, setViewingFormulaIngredients] = useState<BulkFormulation | null>(null);
@@ -95,6 +115,10 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
   const [showImportModal, setShowImportModal] = useState(false);
   const [importCsvText, setImportCsvText] = useState('');
   const [importError, setImportError] = useState<string | null>(null);
+
+  // --- CPB MODAL STATE ---
+  const [showCpbModal, setShowCpbModal] = useState(false);
+  const [activeModalFormulation, setActiveModalFormulation] = useState<BulkFormulation | null>(null);
 
   // --- TOAST NOTIFICATION ---
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
@@ -174,6 +198,178 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
     return (totalPercentage * (formBulkQuantityKg || 100)) / 100;
   }, [totalPercentage, formBulkQuantityKg]);
 
+  // --- HELPER: GENERATE DEFAULT PROCESS STEPS ---
+  const generateDefaultProcessSteps = (ingredients: FormulationIngredient[]): DynamicProcessStep[] => {
+    return [
+      {
+        id: 'step-1',
+        stepNumber: 1,
+        title: 'Peleburan & Pemanasan Fase Minyak (Oil Phase)',
+        phaseCode: 'Fase B',
+        ingredientCodes: ingredients
+          .filter(
+            (i) =>
+              (i.phase || '').toLowerCase().includes('b') ||
+              (i.phase || '').toLowerCase().includes('minyak') ||
+              (i.phase || '').toLowerCase().includes('oil')
+          )
+          .map((i) => i.rawMaterialCode),
+        instruction: 'Pada wadah pendukung, masukkan bahan Fase Minyak. Panaskan hingga larut dan homogen (tercampur rata).',
+        targetTemp: '85-90°C',
+        targetRpm: '-',
+        durationMin: '20 menit',
+      },
+      {
+        id: 'step-2',
+        stepNumber: 2,
+        title: 'Pelarutan & Pemanasan Fase Air (Water Phase)',
+        phaseCode: 'Fase A',
+        ingredientCodes: ingredients
+          .filter(
+            (i) =>
+              (i.phase || '').toLowerCase().includes('a') ||
+              (i.phase || '').toLowerCase().includes('air') ||
+              (i.phase || '').toLowerCase().includes('water')
+          )
+          .map((i) => i.rawMaterialCode),
+        instruction: 'Pada wadah utama, masukkan bahan Fase Air. Panaskan hingga larut dan homogen.',
+        targetTemp: '85-90°C',
+        targetRpm: '300 RPM',
+        durationMin: '15 menit',
+      },
+      {
+        id: 'step-3',
+        stepNumber: 3,
+        title: 'Pencampuran / Emulsifikasi (Fase Minyak ke Fase Air)',
+        phaseCode: 'Emulsifikasi',
+        ingredientCodes: [],
+        instruction: 'Masukkan FASE MINYAK ke dalam FASE AIR. Aduk hingga terbentuk massa Cream / Emulsi homogen.',
+        targetTemp: '80-85°C',
+        targetRpm: '700 RPM (Homogenizer)',
+        durationMin: '30 menit',
+      },
+      {
+        id: 'step-4',
+        stepNumber: 4,
+        title: 'Penurunan Suhu Adonan (Cooling Down)',
+        phaseCode: 'Pendinginan',
+        ingredientCodes: [],
+        instruction: 'Turunkan suhu adonan secara bertahap sambil diaduk perlahan.',
+        targetTemp: '55-40°C',
+        targetRpm: '300 RPM',
+        durationMin: '45 menit',
+      },
+      {
+        id: 'step-5',
+        stepNumber: 5,
+        title: 'Penambahan Active Ingredient, Pengawet & Fragrance',
+        phaseCode: 'Fase C',
+        ingredientCodes: ingredients
+          .filter(
+            (i) =>
+              (i.phase || '').toLowerCase().includes('c') ||
+              (i.phase || '').toLowerCase().includes('aktif') ||
+              (i.phase || '').toLowerCase().includes('parfum') ||
+              (i.phase || '').toLowerCase().includes('fragrance')
+          )
+          .map((i) => i.rawMaterialCode),
+        instruction: 'Setelah suhu di bawah 40°C, tambahkan bahan Fase C (Zat Aktif, Pewangi, Pengawet). Aduk hingga homogen.',
+        targetTemp: '30-35°C',
+        targetRpm: '550 RPM',
+        durationMin: '20 menit',
+      },
+    ];
+  };
+
+  // --- DYNAMIC PROCESS BUILDER STEP HANDLERS ---
+  const handleAddProcessStep = () => {
+    const newStepNum = formProcessSteps.length + 1;
+    const newStep: DynamicProcessStep = {
+      id: `step-${Date.now()}`,
+      stepNumber: newStepNum,
+      title: `Tahap ${newStepNum}: Proses Tambahan`,
+      phaseCode: `Fase ${String.fromCharCode(65 + Math.min(newStepNum - 1, 25))}`,
+      ingredientCodes: [],
+      instruction: 'Masukkan bahan tambahan, aduk hingga homogen.',
+      targetTemp: 'Suhu Ruang',
+      targetRpm: '300 RPM',
+      durationMin: '15 menit',
+    };
+    setFormProcessSteps([...formProcessSteps, newStep]);
+  };
+
+  const handleRemoveProcessStep = (id: string) => {
+    if (formProcessSteps.length <= 1) {
+      showToast('Minimal harus ada 1 langkah proses CPKB.', 'error');
+      return;
+    }
+    const updated = formProcessSteps
+      .filter((s) => s.id !== id)
+      .map((s, idx) => ({ ...s, stepNumber: idx + 1 }));
+    setFormProcessSteps(updated);
+  };
+
+  const handleMoveProcessStep = (index: number, direction: 'UP' | 'DOWN') => {
+    if (
+      (direction === 'UP' && index === 0) ||
+      (direction === 'DOWN' && index === formProcessSteps.length - 1)
+    ) {
+      return;
+    }
+    const newSteps = [...formProcessSteps];
+    const targetIndex = direction === 'UP' ? index - 1 : index + 1;
+    const temp = newSteps[index];
+    newSteps[index] = newSteps[targetIndex];
+    newSteps[targetIndex] = temp;
+
+    const reordered = newSteps.map((s, idx) => ({ ...s, stepNumber: idx + 1 }));
+    setFormProcessSteps(reordered);
+  };
+
+  const handleUpdateProcessStep = (id: string, field: keyof DynamicProcessStep, value: any) => {
+    setFormProcessSteps(
+      formProcessSteps.map((s) => (s.id === id ? { ...s, [field]: value } : s))
+    );
+  };
+
+  const handleToggleIngredientInStep = (stepId: string, rmCode: string) => {
+    const targetStep = formProcessSteps.find((s) => s.id === stepId);
+    if (!targetStep) return;
+
+    const currentCodes = targetStep.ingredientCodes || [];
+    const isAdding = !currentCodes.includes(rmCode);
+
+    setFormProcessSteps((prev) =>
+      prev.map((step) => {
+        const codes = step.ingredientCodes || [];
+        if (step.id === stepId) {
+          return {
+            ...step,
+            ingredientCodes: isAdding ? [...codes, rmCode] : codes.filter((c) => c !== rmCode),
+          };
+        } else {
+          // Setiap bahan baku hanya dialokasikan pada 1 langkah utama
+          return {
+            ...step,
+            ingredientCodes: codes.filter((c) => c !== rmCode),
+          };
+        }
+      })
+    );
+
+    // Sinkronkan fase bahan di formIngredients bila fase langkah terisi
+    if (isAdding && targetStep.phaseCode && targetStep.phaseCode.trim()) {
+      setFormIngredients((prev) =>
+        prev.map((ing) => {
+          if (ing.rawMaterialCode === rmCode) {
+            return { ...ing, phase: targetStep.phaseCode!.trim() };
+          }
+          return ing;
+        })
+      );
+    }
+  };
+
   // --- HANDLER: OPEN FORM MODAL UNTUK BUAT MASTER BOM BARU (GAMBAR 1) ---
   const handleOpenAddForm = (defaultProd?: Product) => {
     const targetProduct = defaultProd || products[0];
@@ -186,6 +382,7 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
     const initialBomCode = `BOM-${initialProductCode.toUpperCase()}-${nextVer.toUpperCase()}`;
 
     setEditingFormulaId(null);
+    setFormModalTab('COMPOSITION');
     setFormProductCode(initialProductCode);
     setFormProductId(initialProductId);
     setFormProductName(initialProductName);
@@ -194,11 +391,12 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
     setFormStatus('ACTIVE');
     setFormBulkQuantityKg(100);
     setFormPurposeDescription('Formula Master Ruahan standar CPKB basis 100 kg.');
-    setFormMixingInstructions('Larutkan fase A pada suhu 70°C, homogenisasi pada 3000 RPM selama 15 menit.');
+    setFormMachine1('PRD-057 Wadah Stainless Steel 300 kg (5)');
+    setFormMachine2('PRD-049 Homogenizer 70 kg');
 
     // Seed 1 baris bahan baku awal jika ada
     const defaultRmCode = rawMaterials[0]?.code || 'B0001';
-    setFormIngredients([
+    const initIngredients = [
       {
         rawMaterialCode: defaultRmCode,
         percentage: 0,
@@ -206,7 +404,16 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
         phase: 'Fase A',
         description: 'Bahan dasar pelarut utama',
       },
-    ]);
+    ];
+    setFormIngredients(initIngredients);
+
+    const initialSteps = generateDefaultProcessSteps(initIngredients);
+    setFormProcessSteps(initialSteps);
+
+    const compiled = initialSteps
+      .map((s) => `${s.stepNumber}. [${s.title}] (${s.targetTemp || '-'}, ${s.targetRpm || '-'}) - ${s.instruction}`)
+      .join('\n');
+    setFormMixingInstructions(compiled);
 
     setIsFormModalOpen(true);
   };
@@ -214,6 +421,7 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
   // --- HANDLER: OPEN EDIT MODAL ---
   const handleOpenEditForm = (formula: BulkFormulation) => {
     setEditingFormulaId(formula.id);
+    setFormModalTab('COMPOSITION');
     setFormProductCode(formula.productCode || '');
     setFormProductId(formula.productId || '');
     setFormProductName(formula.productName || formula.name || '');
@@ -223,12 +431,31 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
     setFormBulkQuantityKg(formula.bulkQuantityKg || 100);
     setFormPurposeDescription(formula.purposeDescription || 'Formula Master Ruahan standar CPKB basis 100 kg.');
     setFormMixingInstructions(formula.mixingInstructions || '');
-    setFormIngredients(
-      formula.ingredients.map((ing) => ({
-        ...ing,
-        qtyBasisKg: Number((((Number(ing.percentage) || 0) * (formula.bulkQuantityKg || 100)) / 100).toFixed(4)),
-      }))
-    );
+
+    // Parse nama mesin dari technicalNotes jika ada
+    let m1 = 'PRD-057 Wadah Stainless Steel 300 kg (5)';
+    let m2 = 'PRD-049 Homogenizer 70 kg';
+    if (formula.technicalNotes) {
+      const parts = formula.technicalNotes.split('|');
+      parts.forEach((p) => {
+        if (p.includes('Mesin Utama:')) m1 = p.replace('Mesin Utama:', '').trim();
+        if (p.includes('Homogenizer:')) m2 = p.replace('Homogenizer:', '').trim();
+      });
+    }
+    setFormMachine1(m1);
+    setFormMachine2(m2);
+
+    const mappedIngredients = formula.ingredients.map((ing) => ({
+      ...ing,
+      qtyBasisKg: Number((((Number(ing.percentage) || 0) * (formula.bulkQuantityKg || 100)) / 100).toFixed(4)),
+    }));
+    setFormIngredients(mappedIngredients);
+
+    if (formula.dynamicProcessSteps && Array.isArray(formula.dynamicProcessSteps) && formula.dynamicProcessSteps.length > 0) {
+      setFormProcessSteps(formula.dynamicProcessSteps);
+    } else {
+      setFormProcessSteps(generateDefaultProcessSteps(mappedIngredients));
+    }
 
     setIsFormModalOpen(true);
   };
@@ -240,6 +467,7 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
     const newBomCode = `BOM-${formula.productCode.toUpperCase()}-${nextVer.toUpperCase()}`;
 
     setEditingFormulaId(null); // mode buat baru
+    setFormModalTab('COMPOSITION');
     setFormProductCode(formula.productCode);
     setFormProductId(formula.productId || '');
     setFormProductName(formula.productName);
@@ -249,15 +477,33 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
     setFormBulkQuantityKg(formula.bulkQuantityKg || 100);
     setFormPurposeDescription(`Revisi dari ${formula.code} (${formula.version}). ${formula.purposeDescription || ''}`);
     setFormMixingInstructions(formula.mixingInstructions || '');
-    setFormIngredients(
-      formula.ingredients.map((ing) => ({
-        ...ing,
-        qtyBasisKg: Number((((Number(ing.percentage) || 0) * (formula.bulkQuantityKg || 100)) / 100).toFixed(4)),
-      }))
-    );
+
+    let m1 = 'PRD-057 Wadah Stainless Steel 300 kg (5)';
+    let m2 = 'PRD-049 Homogenizer 70 kg';
+    if (formula.technicalNotes) {
+      const parts = formula.technicalNotes.split('|');
+      parts.forEach((p) => {
+        if (p.includes('Mesin Utama:')) m1 = p.replace('Mesin Utama:', '').trim();
+        if (p.includes('Homogenizer:')) m2 = p.replace('Homogenizer:', '').trim();
+      });
+    }
+    setFormMachine1(m1);
+    setFormMachine2(m2);
+
+    const mappedIngredients = formula.ingredients.map((ing) => ({
+      ...ing,
+      qtyBasisKg: Number((((Number(ing.percentage) || 0) * (formula.bulkQuantityKg || 100)) / 100).toFixed(4)),
+    }));
+    setFormIngredients(mappedIngredients);
+
+    if (formula.dynamicProcessSteps && Array.isArray(formula.dynamicProcessSteps) && formula.dynamicProcessSteps.length > 0) {
+      setFormProcessSteps(formula.dynamicProcessSteps);
+    } else {
+      setFormProcessSteps(generateDefaultProcessSteps(mappedIngredients));
+    }
 
     setIsFormModalOpen(true);
-    showToast(`Menduplikasi formula untuk versi baru (${nextVer}). Silakan sesuaikan komposisi dan simpan.`, 'success');
+    showToast(`Menduplikasi formula untuk versi baru (${nextVer}). Silakan sesuaikan komposisi dan langkah proses.`, 'success');
   };
 
   // --- HANDLER: PRODUK JADI BERUBAH DI DALAM MODAL FORM ---
@@ -376,6 +622,30 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
       }
     }
 
+    // Sinkronisasi penamaan fase di ingredients berdasarkan assignment langkah proses CPKB
+    const updatedIngredients = formIngredients.map((ing) => {
+      const matchingStep = formProcessSteps.find((s) => s.ingredientCodes?.includes(ing.rawMaterialCode));
+      let newPhase = ing.phase;
+      if (matchingStep) {
+        if (matchingStep.phaseCode && matchingStep.phaseCode.trim() !== '') {
+          newPhase = matchingStep.phaseCode.trim();
+        } else if (matchingStep.title) {
+          newPhase = matchingStep.title.trim();
+        }
+      }
+      return {
+        ...ing,
+        phase: newPhase || 'Fase A',
+      };
+    });
+
+    // Otomatis kompilasi instruksi dari langkah CPKB bila formMixingInstructions kosong
+    const compiledInstructions = formProcessSteps
+      .map((s) => `${s.stepNumber}. [${s.title}] (${s.targetTemp || '-'}, ${s.targetRpm || '-'}) - ${s.instruction}`)
+      .join('\n');
+
+    const techNotes = `Mesin Utama: ${formMachine1} | Homogenizer: ${formMachine2}`;
+
     const payload: BulkFormulation = {
       id: editingFormulaId || `bom-${Date.now()}`,
       code: formBomCode.trim().toUpperCase(),
@@ -387,14 +657,16 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
       status: formStatus,
       bulkQuantityKg: formBulkQuantityKg || 100,
       purposeDescription: formPurposeDescription.trim(),
-      ingredients: formIngredients.map((ing) => ({
+      ingredients: updatedIngredients.map((ing) => ({
         rawMaterialCode: ing.rawMaterialCode.trim().toUpperCase(),
         percentage: Number(ing.percentage) || 0,
         qtyBasisKg: Number(ing.qtyBasisKg) || Number((((Number(ing.percentage) || 0) * (formBulkQuantityKg || 100)) / 100).toFixed(4)),
         phase: ing.phase || 'Fase A',
         description: ing.description || '',
       })),
-      mixingInstructions: formMixingInstructions.trim(),
+      mixingInstructions: formMixingInstructions.trim() || compiledInstructions,
+      dynamicProcessSteps: formProcessSteps,
+      technicalNotes: techNotes,
       createdBy: user?.nik || 'admin',
       updatedAt: new Date().toISOString(),
       createdAt: editingFormulaId ? undefined : new Date().toISOString(),
@@ -696,7 +968,7 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
   };
 
   return (
-    <div className="space-y-6 font-sans">
+    <div className="space-y-3 font-sans">
       {/* Toast Notification */}
       {toastMessage && (
         <div
@@ -717,14 +989,14 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
 
       {/* Permission Warning */}
       {!canWrite && (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center justify-between gap-3 text-amber-800">
-          <div className="flex items-center gap-2.5">
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center justify-between gap-3 text-amber-800">
+          <div className="flex items-center gap-2">
             <Lock className="w-4 h-4 text-amber-600 shrink-0" />
             <div className="text-xs leading-relaxed">
               <span className="font-bold">Mode Akses Terbatas (Read-Only):</span> Anda memiliki hak akses baca khusus R&D. Formulir penambahan, pengubahan, dan penghapusan Master BOM dinonaktifkan.
             </div>
           </div>
-          <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-amber-200/80 text-amber-900 uppercase">
+          <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-amber-200/80 text-amber-900 uppercase">
             Hanya Lihat
           </span>
         </div>
@@ -733,15 +1005,15 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
       {/* QA Automation Banner */}
       {qaReport && (
         <div
-          className={`p-4 rounded-2xl border flex flex-col md:flex-row items-start md:items-center justify-between gap-3 ${
+          className={`p-3 rounded-xl border flex flex-col md:flex-row items-start md:items-center justify-between gap-2.5 ${
             qaReport.allPassed ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-rose-50 border-rose-200 text-rose-900'
           }`}
         >
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             {qaReport.allPassed ? (
-              <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0" />
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
             ) : (
-              <AlertTriangle className="w-6 h-6 text-rose-600 shrink-0" />
+              <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
             )}
             <div>
               <div className="text-xs font-extrabold flex items-center gap-2">
@@ -755,44 +1027,44 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
             <button
               onClick={handleRunQA}
               disabled={isTestingQA}
-              className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 flex items-center gap-1.5 shadow-2xs cursor-pointer"
+              className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 flex items-center gap-1.5 shadow-2xs cursor-pointer"
             >
-              <RefreshCw className="w-3.5 h-3.5 text-emerald-600" />
+              <RefreshCw className="w-3 h-3 text-emerald-600" />
               <span>Uji Ulang</span>
             </button>
             <button
               onClick={() => setQaReport(null)}
               className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
             >
-              <X className="w-4 h-4" />
+              <X className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
       )}
 
       {/* ========================================================================= */}
-      {/* HEADER TOOLBAR & FILTER (GAMBAR 2)                                         */}
+      {/* HEADER TOOLBAR & FILTER (COMPACT)                                          */}
       {/* ========================================================================= */}
-      <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs flex flex-col lg:flex-row items-center justify-between gap-3">
+      <div className="bg-white p-2.5 sm:p-3 rounded-2xl border border-slate-200 shadow-xs flex flex-col lg:flex-row items-center justify-between gap-2.5">
         {/* Search Input */}
         <div className="relative flex-1 w-full">
-          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             placeholder="Cari BOM, produk, atau nama bahan baku..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-teal-600 transition-all font-medium"
+            className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-teal-600 transition-all font-medium"
           />
         </div>
 
         {/* Filters and Actions */}
-        <div className="flex items-center gap-2.5 w-full lg:w-auto flex-wrap justify-end">
+        <div className="flex items-center gap-2 w-full lg:w-auto flex-wrap justify-end">
           {/* Dropdown Filter Produk Jadi */}
           <select
             value={productFilter}
             onChange={(e) => setProductFilter(e.target.value)}
-            className="bg-slate-50 border border-slate-200 rounded-2xl py-2 px-3 text-xs text-slate-700 font-medium focus:outline-none focus:border-teal-600 cursor-pointer"
+            className="bg-slate-50 border border-slate-200 rounded-xl py-1.5 px-2.5 text-xs text-slate-700 font-medium focus:outline-none focus:border-teal-600 cursor-pointer"
           >
             <option value="all">Semua Produk Jadi</option>
             {products.map((p) => (
@@ -806,7 +1078,7 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-slate-50 border border-slate-200 rounded-2xl py-2 px-3 text-xs text-slate-700 font-medium focus:outline-none focus:border-teal-600 cursor-pointer"
+            className="bg-slate-50 border border-slate-200 rounded-xl py-1.5 px-2.5 text-xs text-slate-700 font-medium focus:outline-none focus:border-teal-600 cursor-pointer"
           >
             <option value="all">Semua Status</option>
             <option value="ACTIVE">ACTIVE (Resmi)</option>
@@ -818,9 +1090,9 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
           <button
             type="button"
             onClick={() => setShowImportModal(true)}
-            className="px-3.5 py-2 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+            className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
           >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
             <span>Import Excel</span>
           </button>
 
@@ -829,7 +1101,7 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
             type="button"
             onClick={handleRunQA}
             disabled={isTestingQA}
-            className="px-3.5 py-2 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+            className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
             title="Jalankan paket uji otomatis untuk integritas Master BOM & Standar CPKB"
           >
             <RefreshCw className={`w-3.5 h-3.5 text-purple-600 ${isTestingQA ? 'animate-spin' : ''}`} />
@@ -841,9 +1113,9 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
             <button
               type="button"
               onClick={() => handleOpenAddForm()}
-              className="px-4 py-2 rounded-2xl bg-teal-700 hover:bg-teal-800 text-white text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer shadow-md shadow-teal-700/20"
+              className="px-3 py-1.5 rounded-xl bg-teal-700 hover:bg-teal-800 text-white text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm shadow-teal-700/20"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-3.5 h-3.5" />
               <span>Buat Master BOM</span>
             </button>
           )}
@@ -851,21 +1123,21 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
       </div>
 
       {/* ========================================================================= */}
-      {/* TABEL MASTER BOM FORMULASI BULK (GAMBAR 2)                                */}
+      {/* TABEL MASTER BOM FORMULASI BULK (COMPACT DENSE VIEW)                       */}
       {/* ========================================================================= */}
-      <div className="bg-white border border-slate-200 rounded-3xl shadow-xs overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
         {filteredFormulations.length === 0 ? (
-          <div className="p-12 text-center space-y-4">
-            <div className="w-16 h-16 rounded-2xl bg-teal-50 border border-teal-100 flex items-center justify-center mx-auto text-teal-700">
-              <FlaskConical className="w-8 h-8" />
+          <div className="p-8 text-center space-y-3">
+            <div className="w-12 h-12 rounded-xl bg-teal-50 border border-teal-100 flex items-center justify-center mx-auto text-teal-700">
+              <FlaskConical className="w-6 h-6" />
             </div>
             <div className="space-y-1">
-              <h3 className="text-sm font-bold text-slate-800">
+              <h3 className="text-xs font-bold text-slate-800">
                 {searchQuery || productFilter !== 'all' || statusFilter !== 'all'
                   ? 'Tidak ada Master BOM yang sesuai filter'
                   : 'Belum Ada Master BOM Formulasi Ruahan'}
               </h3>
-              <p className="text-xs text-slate-500 max-w-md mx-auto">
+              <p className="text-[11px] text-slate-500 max-w-md mx-auto">
                 {searchQuery || productFilter !== 'all' || statusFilter !== 'all'
                   ? 'Coba ubah kata kunci pencarian atau sesuaikan opsi filter status dan produk jadi.'
                   : 'Master BOM menghubungkan Produk Jadi Target dengan komposisi bahan baku (Formula Matrix) standar CPKB basis 100 kg.'}
@@ -875,9 +1147,9 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
               <button
                 type="button"
                 onClick={() => handleOpenAddForm()}
-                className="px-4 py-2 rounded-2xl bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold inline-flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                className="px-3.5 py-1.5 rounded-xl bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold inline-flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
               >
-                <Plus className="w-4 h-4" />
+                <Plus className="w-3.5 h-3.5" />
                 <span>Buat Master BOM Pertama</span>
               </button>
             )}
@@ -887,14 +1159,14 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-slate-50/90 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200">
-                  <th className="py-3 px-4 w-12 text-center">No</th>
-                  <th className="py-3 px-4 w-48">Nomor BOM</th>
-                  <th className="py-3 px-4 min-w-[220px]">Produk Jadi Target</th>
-                  <th className="py-3 px-4 w-28 text-center">Versi</th>
-                  <th className="py-3 px-4 w-32">Basis Ukuran</th>
-                  <th className="py-3 px-4 w-32 text-center">Jumlah Bahan</th>
-                  <th className="py-3 px-4 w-32 text-center">Status</th>
-                  <th className="py-3 px-4 w-36 text-right">Aksi</th>
+                  <th className="py-2 px-3 w-10 text-center">No</th>
+                  <th className="py-2 px-3 w-40">Nomor BOM</th>
+                  <th className="py-2 px-3 min-w-[200px]">Produk Jadi Target</th>
+                  <th className="py-2 px-3 w-24 text-center">Versi</th>
+                  <th className="py-2 px-3 w-28">Basis Ukuran</th>
+                  <th className="py-2 px-3 w-28 text-center">Jumlah Bahan</th>
+                  <th className="py-2 px-3 w-28 text-center">Status</th>
+                  <th className="py-2 px-3 w-32 text-right">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
@@ -908,22 +1180,22 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
                       className="hover:bg-teal-50/20 transition-colors group"
                     >
                       {/* 1. No */}
-                      <td className="py-3.5 px-4 text-center font-mono font-bold text-slate-400 text-[11px]">
+                      <td className="py-1.5 px-3 text-center font-mono font-bold text-slate-400 text-[11px]">
                         {idx + 1}
                       </td>
 
                       {/* 2. Nomor BOM */}
-                      <td className="py-3.5 px-4">
+                      <td className="py-1.5 px-3">
                         <div className="font-mono font-bold text-xs text-teal-800 group-hover:text-teal-900 transition-colors">
                           {f.code}
                         </div>
-                        <span className="text-[10px] text-slate-400 block mt-0.5">
+                        <span className="text-[9px] text-slate-400 block">
                           Dibuat: {f.createdAt ? new Date(f.createdAt).toLocaleDateString('id-ID') : '31/8/2026'}
                         </span>
                       </td>
 
-                      {/* 3. Produk Jadi Target (Klik kode/nama muncul bahan baku terdaftar) */}
-                      <td className="py-3.5 px-4">
+                      {/* 3. Produk Jadi Target */}
+                      <td className="py-1.5 px-3">
                         <div
                           onClick={() => setViewingFormulaIngredients(f)}
                           className="cursor-pointer group/target"
@@ -932,19 +1204,19 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
                           <div className="font-bold text-xs text-slate-900 group-hover/target:text-teal-700 transition-colors">
                             {f.productName || f.name}
                           </div>
-                          <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className="font-mono text-[10px] font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 px-1.5 py-0.5 rounded border border-teal-200 transition-colors">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono text-[9px] font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 px-1.5 py-0.25 rounded border border-teal-200 transition-colors">
                               Kode: {f.productCode}
                             </span>
-                            <span className="text-[10px] text-slate-400 italic group-hover/target:underline">
+                            <span className="text-[9px] text-slate-400 italic group-hover/target:underline">
                               (Lihat Bahan)
                             </span>
                           </div>
                         </div>
                       </td>
 
-                      {/* 4. Versi (Klik versi muncul riwayat versi yang terdaftar) */}
-                      <td className="py-3.5 px-4 text-center">
+                      {/* 4. Versi */}
+                      <td className="py-1.5 px-3 text-center">
                         <button
                           type="button"
                           onClick={() =>
@@ -953,55 +1225,55 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
                               productName: f.productName,
                             })
                           }
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-teal-200 bg-teal-50/60 hover:bg-teal-100 text-teal-800 font-mono font-bold text-[11px] transition-colors cursor-pointer"
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border border-teal-200 bg-teal-50/60 hover:bg-teal-100 text-teal-800 font-mono font-bold text-[10px] transition-colors cursor-pointer"
                           title="Klik untuk melihat seluruh riwayat versi untuk produk ini"
                         >
-                          <History className="w-3 h-3 text-teal-600" />
+                          <History className="w-2.5 h-2.5 text-teal-600" />
                           <span>{f.version || 'v1.0'}</span>
                         </button>
                       </td>
 
                       {/* 5. Basis Ukuran */}
-                      <td className="py-3.5 px-4 font-mono text-xs font-semibold text-slate-800">
+                      <td className="py-1.5 px-3 font-mono text-xs font-semibold text-slate-800">
                         {f.bulkQuantityKg || 100} kg
                       </td>
 
                       {/* 6. Jumlah Bahan */}
-                      <td className="py-3.5 px-4 text-center">
-                        <span className="px-2.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-700 font-semibold text-[11px]">
+                      <td className="py-1.5 px-3 text-center">
+                        <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-700 font-semibold text-[10px]">
                           {f.ingredients.length} bahan
                         </span>
                       </td>
 
                       {/* 7. Status */}
-                      <td className="py-3.5 px-4 text-center">
+                      <td className="py-1.5 px-3 text-center">
                         {isMatchActive ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 font-extrabold text-[10px] tracking-wide uppercase">
-                            <Check className="w-3 h-3 text-emerald-600" />
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 font-extrabold text-[9px] tracking-wide uppercase">
+                            <Check className="w-2.5 h-2.5 text-emerald-600" />
                             <span>ACTIVE</span>
                           </span>
                         ) : isMatchDraft ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 font-extrabold text-[10px] tracking-wide uppercase">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 font-extrabold text-[9px] tracking-wide uppercase">
                             <span>DRAFT</span>
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-slate-600 font-extrabold text-[10px] tracking-wide uppercase">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-slate-600 font-extrabold text-[9px] tracking-wide uppercase">
                             <span>ARCHIVED</span>
                           </span>
                         )}
                       </td>
 
-                      {/* 8. Aksi (Preview, Duplicate versi baru, Edit, Delete) */}
-                      <td className="py-3.5 px-4 text-right">
+                      {/* 8. Aksi (Preview, Duplicate, Edit, Delete) */}
+                      <td className="py-1.5 px-3 text-right">
                         <div className="flex items-center justify-end gap-1">
                           {/* Preview Bahan */}
                           <button
                             type="button"
                             onClick={() => setViewingFormulaIngredients(f)}
-                            className="p-1.5 text-slate-500 hover:text-teal-700 hover:bg-teal-50 rounded-lg transition-colors cursor-pointer"
+                            className="p-1 text-slate-500 hover:text-teal-700 hover:bg-teal-50 rounded-md transition-colors cursor-pointer"
                             title="Lihat Komposisi Formula Matrix"
                           >
-                            <Eye className="w-4 h-4" />
+                            <Eye className="w-3.5 h-3.5" />
                           </button>
 
                           {/* Duplikat / Buat Versi Baru */}
@@ -1009,10 +1281,10 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
                             <button
                               type="button"
                               onClick={() => handleOpenDuplicateForm(f)}
-                              className="p-1.5 text-slate-500 hover:text-teal-700 hover:bg-teal-50 rounded-lg transition-colors cursor-pointer"
+                              className="p-1 text-slate-500 hover:text-teal-700 hover:bg-teal-50 rounded-md transition-colors cursor-pointer"
                               title="Duplikat / Buat Versi Baru (Auto-Increment Versi)"
                             >
-                              <Copy className="w-4 h-4" />
+                              <Copy className="w-3.5 h-3.5" />
                             </button>
                           )}
 
@@ -1021,10 +1293,10 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
                             <button
                               type="button"
                               onClick={() => handleOpenEditForm(f)}
-                              className="p-1.5 text-slate-500 hover:text-teal-700 hover:bg-teal-50 rounded-lg transition-colors cursor-pointer"
+                              className="p-1 text-slate-500 hover:text-teal-700 hover:bg-teal-50 rounded-md transition-colors cursor-pointer"
                               title="Edit Master BOM"
                             >
-                              <Edit2 className="w-4 h-4" />
+                              <Edit2 className="w-3.5 h-3.5" />
                             </button>
                           )}
 
@@ -1033,10 +1305,10 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
                             <button
                               type="button"
                               onClick={() => handlePreDeleteFormula(f)}
-                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                              className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors cursor-pointer"
                               title="Hapus Master BOM (Memerlukan Otorisasi Sandi)"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           )}
                         </div>
@@ -1049,23 +1321,23 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
           </div>
         )}
 
-        {/* Footer Statistics */}
-        <div className="bg-slate-50/70 border-t border-slate-100 px-6 py-3.5 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-2">
+        {/* Footer Statistics (Compact) */}
+        <div className="bg-slate-50/70 border-t border-slate-100 px-4 py-2 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-1.5">
           <div>
             Menampilkan <strong className="text-slate-800">{filteredFormulations.length}</strong> dari{' '}
             <strong className="text-slate-800">{formulations.length}</strong> Master BOM
           </div>
           <div className="flex items-center gap-3 font-semibold text-[11px]">
-            <span className="flex items-center gap-1.5 text-emerald-700">
-              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span className="flex items-center gap-1 text-emerald-700">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
               ACTIVE: {statusStats.active}
             </span>
-            <span className="flex items-center gap-1.5 text-amber-700">
-              <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+            <span className="flex items-center gap-1 text-amber-700">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
               DRAFT: {statusStats.draft}
             </span>
-            <span className="flex items-center gap-1.5 text-slate-500">
-              <span className="w-2 h-2 rounded-full bg-slate-400"></span>
+            <span className="flex items-center gap-1 text-slate-500">
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
               ARCHIVED: {statusStats.archived}
             </span>
           </div>
@@ -1073,13 +1345,13 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
       </div>
 
       {/* ========================================================================= */}
-      {/* MODAL FORM: BUAT / EDIT MASTER BOM (GAMBAR 1)                              */}
+      {/* MODAL FORM: BUAT / EDIT MASTER BOM (UNIFIED CPKB WORKFLOW)                */}
       {/* ========================================================================= */}
       {isFormModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
-          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-4xl shadow-2xl text-slate-800 relative max-h-[92vh] flex flex-col overflow-hidden">
+          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-5xl shadow-2xl text-slate-800 relative max-h-[94vh] flex flex-col overflow-hidden">
             {/* Modal Header */}
-            <div className="bg-gradient-to-r from-teal-900 to-slate-900 text-white p-5 flex items-start justify-between shrink-0">
+            <div className="bg-gradient-to-r from-teal-900 via-slate-900 to-purple-950 text-white p-5 flex items-start justify-between shrink-0">
               <div className="flex items-center gap-3.5">
                 <div className="w-10 h-10 rounded-2xl bg-teal-500/20 border border-teal-400/30 flex items-center justify-center text-teal-300 shrink-0 shadow-inner">
                   <Layers className="w-5 h-5" />
@@ -1094,7 +1366,7 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
                     </span>
                   </div>
                   <p className="text-xs text-teal-200/80 mt-0.5">
-                    Formula Ruahan Master (Bulk Formula) Basis Ukuran Batch ({formBulkQuantityKg} kg) Standar CPKB
+                    Formula Ruahan Master (Bulk Formula) Basis Ukuran Batch ({formBulkQuantityKg} kg) Terintegrasi Catatan Pengolahan Bets (CPKB)
                   </p>
                 </div>
               </div>
@@ -1108,8 +1380,51 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
               </button>
             </div>
 
+            {/* Sub-Header Tab Navigation */}
+            <div className="flex border-b border-slate-200 bg-slate-100/90 px-6 pt-2.5 shrink-0 gap-2">
+              <button
+                type="button"
+                onClick={() => setFormModalTab('COMPOSITION')}
+                className={`px-4 py-2.5 rounded-t-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer border-t border-x ${
+                  formModalTab === 'COMPOSITION'
+                    ? 'bg-white text-teal-900 border-slate-200 -mb-px shadow-2xs'
+                    : 'bg-transparent text-slate-500 hover:text-slate-800 border-transparent'
+                }`}
+              >
+                <FlaskConical className="w-4 h-4 text-teal-600" />
+                <span>1. Komposisi Bahan Baku (Formula Matrix)</span>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                    Math.abs(totalPercentage - 100) < 0.01
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-amber-100 text-amber-800'
+                  }`}
+                >
+                  {totalPercentage.toFixed(1)}% • {formIngredients.length} Bahan
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setFormModalTab('PROCESS_BUILDER')}
+                className={`px-4 py-2.5 rounded-t-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer border-t border-x ${
+                  formModalTab === 'PROCESS_BUILDER'
+                    ? 'bg-white text-purple-950 border-slate-200 -mb-px shadow-2xs'
+                    : 'bg-transparent text-slate-500 hover:text-slate-800 border-transparent'
+                }`}
+              >
+                <Sliders className="w-4 h-4 text-purple-600" />
+                <span>2. Catatan Teknis & Dynamic Process Builder CPKB</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-purple-100 text-purple-800">
+                  {formProcessSteps.length} Langkah
+                </span>
+              </button>
+            </div>
+
             {/* Modal Scrollable Body */}
             <form id="master-bom-form" onSubmit={handlePreSaveForm} className="p-6 overflow-y-auto space-y-6 flex-1">
+              {formModalTab === 'COMPOSITION' ? (
+                <>
               {/* KARTU 1: INFORMASI PRODUK JADI & PARAMETER BATCH */}
               <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
                 <div className="flex items-center gap-2 pb-2 border-b border-slate-200 text-slate-800">
@@ -1428,75 +1743,401 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
                 </div>
               </div>
 
-              {/* KARTU 3: CATATAN TEKNIS FORMULASI / PETUNJUK PENGOLAHAN */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Catatan Teknis Formulasi / Petunjuk Pengolahan
-                </label>
+              {/* Navigasi Cepat ke Tab 2 */}
+              <div className="p-4 rounded-2xl bg-teal-50/80 border border-teal-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-teal-100 text-teal-800 flex items-center justify-center font-bold shrink-0">
+                    <Sliders className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-extrabold text-teal-900">
+                      Lanjut: Tentukan Catatan Teknis & Dynamic Process Builder CPKB
+                    </p>
+                    <p className="text-[11px] text-teal-700">
+                      Atur mesin wadah utama, homogenizer, urutan langkah peleburan, suhu (°C), pengadukan (RPM), dan penugasan bahan per fase.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFormModalTab('PROCESS_BUILDER')}
+                  className="px-4 py-2 rounded-xl bg-teal-700 hover:bg-teal-800 text-white text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 shadow-2xs self-start sm:self-center"
+                >
+                  <span>Lanjut ke Process Builder</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </>
+          ) : (
+            /* TAB 2: CATATAN TEKNIS & DYNAMIC PROCESS BUILDER CPKB */
+            <div className="space-y-6 animate-fade-in">
+              {/* KARTU 1: PERALATAN & MESIN PRODUKSI CPKB */}
+              <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
+                <div className="flex items-center gap-2 pb-2 border-b border-slate-200 text-slate-800">
+                  <Wrench className="w-4 h-4 text-purple-600" />
+                  <h4 className="text-xs font-black uppercase tracking-wider">
+                    PERALATAN & MESIN PRODUKSI CPKB (BATCH EQUIPMENT)
+                  </h4>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Mesin Utama (Wadah Stainless Steel) <span className="text-purple-600">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formMachine1}
+                      onChange={(e) => setFormMachine1(e.target.value)}
+                      placeholder="PRD-057 Wadah Stainless Steel 300 kg (5)"
+                      className="w-full bg-white border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-800 focus:outline-none focus:border-purple-600 font-semibold"
+                    />
+                    <span className="text-[10px] text-slate-400 mt-1 block">
+                      Tangki / bejana utama yang digunakan untuk pengolahan bets ruahan.
+                    </span>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Mesin Homogenizer / Mixer Pendukung <span className="text-purple-600">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formMachine2}
+                      onChange={(e) => setFormMachine2(e.target.value)}
+                      placeholder="PRD-049 Homogenizer 70 kg"
+                      className="w-full bg-white border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-800 focus:outline-none focus:border-purple-600 font-semibold"
+                    />
+                    <span className="text-[10px] text-slate-400 mt-1 block">
+                      Peralatan pencampur berkecepatan tinggi / mixer pendukung fase minyak/air.
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* KARTU 2: DYNAMIC PROCESS BUILDER */}
+              <div className="space-y-3.5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                      <Sliders className="w-4 h-4 text-purple-600" />
+                      <span>DYNAMIC PROCESS BUILDER (ALUR PENGOLAHAN BETS CPKB)</span>
+                    </h4>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Tentukan urutan langkah pengerjaan, suhu (°C), kecepatan (RPM), durasi, dan centang bahan baku yang masuk pada setiap langkah.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleAddProcessStep}
+                    className="px-3 py-1.5 rounded-xl bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs self-start sm:self-auto"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Tambah Langkah Proses</span>
+                  </button>
+                </div>
+
+                {/* Status Alokasi Bahan Baku */}
+                <div className="p-3 rounded-xl bg-purple-50/70 border border-purple-200 text-xs text-purple-900 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Info className="w-4 h-4 text-purple-600 shrink-0" />
+                    <span>
+                      Alokasikan bahan baku dari Tab 1 ke langkah pengolahan di bawah ini dengan mengklik chip bahan baku.
+                    </span>
+                  </div>
+                  <span className="font-mono font-bold text-[11px] bg-white px-2 py-0.5 rounded-lg border border-purple-200">
+                    {formProcessSteps.reduce((sum, s) => sum + (s.ingredientCodes?.length || 0), 0)} / {formIngredients.length} Bahan Terpetakan
+                  </span>
+                </div>
+
+                {/* Step Cards List */}
+                <div className="space-y-4">
+                  {formProcessSteps.map((step, index) => (
+                    <div
+                      key={step.id}
+                      className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-purple-300 shadow-2xs transition-all space-y-3.5"
+                    >
+                      {/* Step Top Bar */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-slate-100">
+                        <div className="flex items-center gap-2.5 flex-1">
+                          <span className="w-7 h-7 rounded-xl bg-purple-100 border border-purple-200 text-purple-900 font-black text-xs flex items-center justify-center shrink-0 shadow-2xs">
+                            {step.stepNumber}
+                          </span>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 flex-1">
+                            <div className="sm:col-span-2">
+                              <input
+                                type="text"
+                                value={step.title}
+                                onChange={(e) => handleUpdateProcessStep(step.id, 'title', e.target.value)}
+                                placeholder="Judul Langkah (contoh: Peleburan Fase Minyak)"
+                                className="w-full bg-slate-50 border border-slate-200 rounded-lg py-1.5 px-2.5 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-purple-600"
+                              />
+                            </div>
+                            <div>
+                              <input
+                                type="text"
+                                value={step.phaseCode || ''}
+                                onChange={(e) => handleUpdateProcessStep(step.id, 'phaseCode', e.target.value)}
+                                placeholder="Nama Fase (Fase A, B, C)"
+                                className="w-full bg-slate-50 border border-slate-200 rounded-lg py-1.5 px-2.5 text-xs font-semibold text-purple-900 focus:bg-white focus:outline-none focus:border-purple-600"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0 self-end sm:self-center">
+                          <button
+                            type="button"
+                            onClick={() => handleMoveProcessStep(index, 'UP')}
+                            disabled={index === 0}
+                            className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 disabled:opacity-30 cursor-pointer"
+                            title="Geser Langkah ke Atas"
+                          >
+                            <ArrowUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleMoveProcessStep(index, 'DOWN')}
+                            disabled={index === formProcessSteps.length - 1}
+                            className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 disabled:opacity-30 cursor-pointer"
+                            title="Geser Langkah ke Bawah"
+                          >
+                            <ArrowDown className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveProcessStep(step.id)}
+                            disabled={formProcessSteps.length <= 1}
+                            className="p-1.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-600 disabled:opacity-30 cursor-pointer"
+                            title="Hapus Langkah Proses"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Penugasan Bahan Baku (Chips Selector) */}
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1.5">
+                          Bahan Baku yang Dimasukkan pada Langkah Ini (Klik untuk Memilih):
+                        </label>
+                        <div className="flex flex-wrap gap-1.5">
+                          {formIngredients.map((ing) => {
+                            const isSelected = (step.ingredientCodes || []).includes(ing.rawMaterialCode);
+                            const rm = rawMaterialMap.get(ing.rawMaterialCode.toUpperCase());
+                            return (
+                              <button
+                                key={ing.rawMaterialCode}
+                                type="button"
+                                onClick={() => handleToggleIngredientInStep(step.id, ing.rawMaterialCode)}
+                                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer border ${
+                                  isSelected
+                                    ? 'bg-purple-700 border-purple-800 text-white shadow-2xs'
+                                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                                }`}
+                              >
+                                {isSelected && <Check className="w-3 h-3 text-white" />}
+                                <span className="font-mono font-bold">{ing.rawMaterialCode}</span>
+                                <span className="truncate max-w-[120px]">{rm?.name || ing.rawMaterialCode}</span>
+                                <span className="font-mono text-[10px] opacity-80 font-normal">
+                                  ({Number(ing.percentage).toFixed(1)}%)
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Parameter Teknis CPKB (Grid 3 Kolom) */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200/70">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1 flex items-center gap-1">
+                            <Thermometer className="w-3 h-3 text-rose-500" />
+                            <span>Target Suhu (°C)</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={step.targetTemp || ''}
+                            onChange={(e) => handleUpdateProcessStep(step.id, 'targetTemp', e.target.value)}
+                            placeholder="Contoh: 85-90°C / Suhu Ruang"
+                            className="w-full bg-white border border-slate-200 rounded-lg py-1 px-2.5 text-xs text-slate-800 font-medium focus:outline-none focus:border-purple-600"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1 flex items-center gap-1">
+                            <RotateCw className="w-3 h-3 text-indigo-500" />
+                            <span>Kecepatan Pengaduk (RPM)</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={step.targetRpm || ''}
+                            onChange={(e) => handleUpdateProcessStep(step.id, 'targetRpm', e.target.value)}
+                            placeholder="Contoh: 700 RPM / 300 RPM"
+                            className="w-full bg-white border border-slate-200 rounded-lg py-1 px-2.5 text-xs text-slate-800 font-medium focus:outline-none focus:border-purple-600"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1 flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-amber-500" />
+                            <span>Durasi Waktu</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={step.durationMin || ''}
+                            onChange={(e) => handleUpdateProcessStep(step.id, 'durationMin', e.target.value)}
+                            placeholder="Contoh: 20 menit / 15 menit"
+                            className="w-full bg-white border border-slate-200 rounded-lg py-1 px-2.5 text-xs text-slate-800 font-medium focus:outline-none focus:border-purple-600"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Detailed Instruction */}
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                          Instruksi Detail Pengerjaan:
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={step.instruction}
+                          onChange={(e) => handleUpdateProcessStep(step.id, 'instruction', e.target.value)}
+                          placeholder="Tuliskan petunjuk teknis pengolahan bets untuk langkah ini..."
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 focus:bg-white focus:outline-none focus:border-purple-600 font-sans"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* KARTU 3: CATATAN TAMBAHAN & PETUNJUK PENGOLAHAN RINGKAS */}
+              <div className="space-y-1.5 p-4 rounded-2xl bg-slate-50 border border-slate-200">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Ringkasan Petunjuk Pengolahan & Catatan Tambahan Formulasi
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const compiled = formProcessSteps
+                        .map((s) => `${s.stepNumber}. [${s.title}] (${s.targetTemp || '-'}, ${s.targetRpm || '-'}) - ${s.instruction}`)
+                        .join('\n');
+                      setFormMixingInstructions(compiled);
+                      showToast('Petunjuk pengolahan berhasil disinkronkan dari langkah proses di atas.', 'success');
+                    }}
+                    className="text-[11px] text-purple-700 hover:text-purple-900 font-bold flex items-center gap-1 cursor-pointer"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span>Sinkronkan dari Langkah Proses</span>
+                  </button>
+                </div>
                 <textarea
                   rows={3}
                   value={formMixingInstructions}
                   onChange={(e) => setFormMixingInstructions(e.target.value)}
                   placeholder="Contoh: Larutkan fase A pada suhu 70°C, homogenisasi pada 3000 RPM selama 15 menit..."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-teal-600 leading-relaxed font-sans"
+                  className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-800 focus:outline-none focus:border-purple-600 leading-relaxed font-sans"
                 />
               </div>
-            </form>
 
-            {/* Modal Footer */}
-            <div className="bg-slate-50 border-t border-slate-200 p-4 px-6 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2 text-xs text-slate-500 font-mono">
-                <FlaskConical className="w-4 h-4 text-teal-600" />
-                <span>
-                  Basis: <strong>{formBulkQuantityKg} kg</strong> • Total Bahan:{' '}
-                  <strong>{formIngredients.length}</strong>
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2.5">
+              {/* Tombol Balik ke Tab 1 */}
+              <div className="flex items-center justify-between pt-1">
                 <button
                   type="button"
-                  onClick={() => setIsFormModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+                  onClick={() => setFormModalTab('COMPOSITION')}
+                  className="px-4 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
-                  Batal
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Kembali ke Komposisi Formula Matrix</span>
                 </button>
-                <button
-                  type="submit"
-                  form="master-bom-form"
-                  className="px-5 py-2 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-extrabold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md shadow-teal-700/20"
-                >
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>Simpan Master BOM</span>
-                </button>
+                <span className="text-[11px] text-slate-400 font-medium">
+                  Data komposisi dan langkah proses akan tersimpan bersamaan saat Anda menekan Simpan Master BOM.
+                </span>
               </div>
             </div>
+          )}
+        </form>
+
+        {/* Modal Footer */}
+        <div className="bg-slate-50 border-t border-slate-200 p-4 px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 font-mono">
+            <FlaskConical className="w-4 h-4 text-teal-600" />
+            <span>
+              Basis: <strong>{formBulkQuantityKg} kg</strong>
+            </span>
+            <span>•</span>
+            <span>
+              Bahan: <strong>{formIngredients.length}</strong> ({totalPercentage.toFixed(1)}%)
+            </span>
+            <span>•</span>
+            <span className="text-purple-700 font-bold">
+              Langkah CPKB: <strong>{formProcessSteps.length}</strong>
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2.5 self-end sm:self-auto">
+            <button
+              type="button"
+              onClick={() => setIsFormModalOpen(false)}
+              className="px-4 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+            >
+              Batal
+            </button>
+
+            {formModalTab === 'COMPOSITION' ? (
+              <button
+                type="button"
+                onClick={() => setFormModalTab('PROCESS_BUILDER')}
+                className="px-4 py-2 rounded-xl border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-900 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <span>Lanjut ke Proses CPKB</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setFormModalTab('COMPOSITION')}
+                className="px-4 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Ke Komposisi</span>
+              </button>
+            )}
+
+            <button
+              type="submit"
+              form="master-bom-form"
+              className="px-5 py-2 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-extrabold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md shadow-teal-700/20"
+            >
+              <ShieldCheck className="w-4 h-4" />
+              <span>Simpan Master BOM</span>
+            </button>
           </div>
         </div>
-      )}
+      </div>
+    </div>
+  )}
 
       {/* ========================================================================= */}
-      {/* POPUP 1: BAHAN BAKU TERDAFTAR (SAAT KLIK KODE/NAMA PRODUK)                */}
+      {/* POPUP 1: BAHAN BAKU TERDAFTAR (SAAT KLIK KODE/NAMA PRODUK) - COMPACT      */}
       {/* ========================================================================= */}
       {viewingFormulaIngredients && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
-          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-3xl shadow-2xl text-slate-800 relative max-h-[90vh] flex flex-col overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-3xl shadow-2xl text-slate-800 relative max-h-[90vh] flex flex-col overflow-hidden">
             {/* Header */}
-            <div className="p-5 border-b border-slate-100 flex items-start justify-between bg-teal-50/50">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-teal-100 text-teal-800 flex items-center justify-center font-bold">
-                  <Beaker className="w-5 h-5" />
+            <div className="p-3.5 border-b border-slate-100 flex items-start justify-between bg-teal-50/50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-teal-100 text-teal-800 flex items-center justify-center font-bold">
+                  <Beaker className="w-4 h-4" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-base font-extrabold text-slate-900">
+                    <h3 className="text-sm font-extrabold text-slate-900">
                       {viewingFormulaIngredients.productName || viewingFormulaIngredients.name}
                     </h3>
-                    <span className="font-mono text-xs font-bold text-teal-800 bg-teal-100 px-2 py-0.5 rounded-lg">
+                    <span className="font-mono text-[10px] font-bold text-teal-800 bg-teal-100 px-1.5 py-0.25 rounded">
                       {viewingFormulaIngredients.productCode}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-500 mt-0.5">
+                  <p className="text-[11px] text-slate-500 mt-0.5">
                     Nomor BOM: <strong className="font-mono text-slate-700">{viewingFormulaIngredients.code}</strong> • Versi:{' '}
                     <strong className="font-mono text-teal-700">{viewingFormulaIngredients.version}</strong> • Basis:{' '}
                     <strong>{viewingFormulaIngredients.bulkQuantityKg || 100} kg</strong>
@@ -1507,28 +2148,28 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
               <button
                 type="button"
                 onClick={() => setViewingFormulaIngredients(null)}
-                className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                className="p-1 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Content Table */}
-            <div className="p-6 overflow-y-auto space-y-4 flex-1">
+            <div className="p-3.5 overflow-y-auto space-y-3 flex-1">
               <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
+                <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
                   Daftar Bahan Baku Terdaftar ({viewingFormulaIngredients.ingredients.length} Bahan)
                 </h4>
-                <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
+                <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
                       <tr className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200">
-                        <th className="py-2.5 px-3 w-10 text-center">No</th>
-                        <th className="py-2.5 px-3 w-28">Fase</th>
-                        <th className="py-2.5 px-3 w-28">Kode Bahan</th>
-                        <th className="py-2.5 px-3 min-w-[160px]">Nama Bahan Baku (Master & INCI)</th>
-                        <th className="py-2.5 px-3 w-24 text-right">Persen (%)</th>
-                        <th className="py-2.5 px-3 w-28 text-right">Qty Basis (kg)</th>
+                        <th className="py-1.5 px-2.5 w-8 text-center">No</th>
+                        <th className="py-1.5 px-2.5 w-24">Fase</th>
+                        <th className="py-1.5 px-2.5 w-24">Kode Bahan</th>
+                        <th className="py-1.5 px-2.5 min-w-[150px]">Nama Bahan Baku (Master & INCI)</th>
+                        <th className="py-1.5 px-2.5 w-20 text-right">Persen (%)</th>
+                        <th className="py-1.5 px-2.5 w-24 text-right">Qty Basis (kg)</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-medium">
@@ -1540,27 +2181,27 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
 
                         return (
                           <tr key={idx} className="hover:bg-teal-50/20">
-                            <td className="py-2.5 px-3 text-center font-mono font-bold text-slate-400 text-[11px]">
+                            <td className="py-1.5 px-2.5 text-center font-mono font-bold text-slate-400 text-[10px]">
                               {idx + 1}
                             </td>
-                            <td className="py-2.5 px-3">
-                              <span className="font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[11px]">
+                            <td className="py-1.5 px-2.5">
+                              <span className="font-semibold px-1.5 py-0.25 rounded bg-slate-100 text-slate-700 text-[10px]">
                                 {ing.phase || 'Fase A'}
                               </span>
                             </td>
-                            <td className="py-2.5 px-3 font-mono font-bold text-teal-800">
+                            <td className="py-1.5 px-2.5 font-mono font-bold text-teal-800 text-[11px]">
                               {ing.rawMaterialCode}
                             </td>
-                            <td className="py-2.5 px-3">
-                              <div className="font-bold text-slate-900">{rm?.name || ing.rawMaterialCode}</div>
+                            <td className="py-1.5 px-2.5">
+                              <div className="font-bold text-slate-900 text-xs">{rm?.name || ing.rawMaterialCode}</div>
                               {rm?.chemicalName && (
-                                <span className="text-[10px] text-slate-400 block">{rm.chemicalName}</span>
+                                <span className="text-[9px] text-slate-400 block">{rm.chemicalName}</span>
                               )}
                             </td>
-                            <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-800">
+                            <td className="py-1.5 px-2.5 text-right font-mono font-bold text-slate-800 text-xs">
                               {ing.percentage.toFixed(2)} %
                             </td>
-                            <td className="py-2.5 px-3 text-right font-mono font-bold text-teal-800">
+                            <td className="py-1.5 px-2.5 text-right font-mono font-bold text-teal-800 text-xs">
                               {kg.toFixed(3)} kg
                             </td>
                           </tr>
@@ -1569,16 +2210,16 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
                     </tbody>
                     <tfoot>
                       <tr className="bg-slate-50 font-bold border-t border-slate-200 text-xs">
-                        <td colSpan={4} className="py-2.5 px-3 text-right uppercase tracking-wider text-slate-600">
+                        <td colSpan={4} className="py-1.5 px-2.5 text-right uppercase tracking-wider text-slate-600 text-[10px]">
                           TOTAL KOMPOSISI:
                         </td>
-                        <td className="py-2.5 px-3 text-right font-mono text-teal-800">
+                        <td className="py-1.5 px-2.5 text-right font-mono text-teal-800">
                           {viewingFormulaIngredients.ingredients
                             .reduce((s, i) => s + (i.percentage || 0), 0)
                             .toFixed(2)}{' '}
                           %
                         </td>
-                        <td className="py-2.5 px-3 text-right font-mono text-teal-800">
+                        <td className="py-1.5 px-2.5 text-right font-mono text-teal-800">
                           {(viewingFormulaIngredients.bulkQuantityKg || 100).toFixed(3)} kg
                         </td>
                       </tr>
@@ -1590,10 +2231,10 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
               {/* Petunjuk Pengolahan */}
               {viewingFormulaIngredients.mixingInstructions && (
                 <div>
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
                     Petunjuk Pengolahan & Catatan Teknis
                   </h4>
-                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs text-slate-700 leading-relaxed">
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-700 leading-relaxed">
                     {viewingFormulaIngredients.mixingInstructions}
                   </div>
                 </div>
@@ -1601,11 +2242,11 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
             </div>
 
             {/* Footer */}
-            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end">
+            <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-end">
               <button
                 type="button"
                 onClick={() => setViewingFormulaIngredients(null)}
-                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs cursor-pointer"
+                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs cursor-pointer"
               >
                 Tutup
               </button>
@@ -1615,22 +2256,22 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* POPUP 2: RIWAYAT VERSI TERDAFTAR (SAAT KLIK BADGE VERSI)                   */}
+      {/* POPUP 2: RIWAYAT VERSI TERDAFTAR (SAAT KLIK BADGE VERSI) - COMPACT        */}
       {/* ========================================================================= */}
       {viewingProductVersions && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
-          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-2xl shadow-2xl text-slate-800 relative max-h-[85vh] flex flex-col overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-2xl shadow-2xl text-slate-800 relative max-h-[85vh] flex flex-col overflow-hidden">
             {/* Header */}
-            <div className="p-5 border-b border-slate-100 flex items-start justify-between bg-teal-50/60">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-teal-600 text-white flex items-center justify-center font-bold">
-                  <History className="w-5 h-5" />
+            <div className="p-3.5 border-b border-slate-100 flex items-start justify-between bg-teal-50/60">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-teal-600 text-white flex items-center justify-center font-bold">
+                  <History className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-base font-extrabold text-slate-900">
+                  <h3 className="text-sm font-extrabold text-slate-900">
                     Riwayat Versi Master BOM
                   </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
+                  <p className="text-[11px] text-slate-500 mt-0.5">
                     Produk: <strong className="text-slate-800">{viewingProductVersions.productName}</strong> (
                     <span className="font-mono font-bold text-teal-800">{viewingProductVersions.productCode}</span>)
                   </p>
@@ -1640,14 +2281,14 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
               <button
                 type="button"
                 onClick={() => setViewingProductVersions(null)}
-                className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                className="p-1 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Version List */}
-            <div className="p-6 overflow-y-auto space-y-3 flex-1">
+            <div className="p-3.5 overflow-y-auto space-y-2 flex-1">
               {(() => {
                 const productVersions = formulations.filter(
                   (f) => f.productCode?.toUpperCase() === viewingProductVersions.productCode.toUpperCase()
@@ -1655,7 +2296,7 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
 
                 if (productVersions.length === 0) {
                   return (
-                    <div className="text-center py-8 text-slate-400 text-xs italic">
+                    <div className="text-center py-6 text-slate-400 text-xs italic">
                       Belum ada versi lain yang tercatat untuk produk ini.
                     </div>
                   );
@@ -1664,16 +2305,16 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
                 return productVersions.map((verFormula) => (
                   <div
                     key={verFormula.id}
-                    className="p-4 rounded-2xl border border-slate-200 hover:border-teal-300 hover:bg-teal-50/20 transition-all flex items-center justify-between gap-4"
+                    className="p-2.5 rounded-xl border border-slate-200 hover:border-teal-300 hover:bg-teal-50/20 transition-all flex items-center justify-between gap-3"
                   >
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-mono font-extrabold text-xs px-2.5 py-0.5 rounded-lg bg-teal-100 text-teal-900 border border-teal-200">
+                        <span className="font-mono font-extrabold text-[11px] px-2 py-0.5 rounded-md bg-teal-100 text-teal-900 border border-teal-200">
                           {verFormula.version}
                         </span>
                         <span className="font-mono font-bold text-xs text-slate-800">{verFormula.code}</span>
                         <span
-                          className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase ${
+                          className={`text-[9px] font-extrabold px-1.5 py-0.25 rounded-full uppercase ${
                             verFormula.status === 'ACTIVE'
                               ? 'bg-emerald-100 text-emerald-800'
                               : 'bg-slate-100 text-slate-600'
@@ -1682,20 +2323,20 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
                           {verFormula.status}
                         </span>
                       </div>
-                      <p className="text-[11px] text-slate-500 mt-1">
+                      <p className="text-[10px] text-slate-500 mt-1">
                         {verFormula.ingredients.length} Bahan Baku • Basis: {verFormula.bulkQuantityKg || 100} kg •{' '}
                         {verFormula.createdAt ? new Date(verFormula.createdAt).toLocaleDateString('id-ID') : '31/8/2026'}
                       </p>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
                       <button
                         type="button"
                         onClick={() => {
                           setViewingProductVersions(null);
                           setViewingFormulaIngredients(verFormula);
                         }}
-                        className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold"
+                        className="px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold"
                       >
                         Lihat Bahan
                       </button>
@@ -1707,7 +2348,7 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
                             setViewingProductVersions(null);
                             handleOpenDuplicateForm(verFormula);
                           }}
-                          className="px-3 py-1.5 rounded-xl bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold"
+                          className="px-2.5 py-1 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold"
                           title="Duplikasi dan naikkan versi baru"
                         >
                           Revisi Versi Baru
@@ -1720,11 +2361,11 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
             </div>
 
             {/* Footer */}
-            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end">
+            <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-end">
               <button
                 type="button"
                 onClick={() => setViewingProductVersions(null)}
-                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs cursor-pointer"
+                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs cursor-pointer"
               >
                 Tutup
               </button>
@@ -1929,6 +2570,18 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* CPB DIRECT PRINT MODAL */}
+      {activeModalFormulation && showCpbModal && (
+        <CpbDocumentModal
+          isOpen={showCpbModal}
+          onClose={() => setShowCpbModal(false)}
+          formulation={activeModalFormulation}
+          product={products.find(p => p.id === activeModalFormulation.productId || p.code === activeModalFormulation.productCode)}
+          rawMaterials={rawMaterials}
+          processSteps={activeModalFormulation.dynamicProcessSteps}
+        />
       )}
     </div>
   );

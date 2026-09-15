@@ -20,8 +20,6 @@ import {
   Sparkles,
   ArrowUpDown,
   Pencil,
-  Minimize2,
-  Maximize2,
   Lock,
   RotateCcw,
   X,
@@ -30,6 +28,7 @@ import { GrnRecord, GrnMaterialType, GrnQcStatus } from '../types/grnTypes';
 import { Pagination } from '../../../core/ui-components/Pagination';
 import { QuarantineLabelModal } from './QuarantineLabelModal';
 import { GrnEditModal } from './GrnEditModal';
+import { GrnDetailModal } from './GrnDetailModal';
 import { useAuth } from '../../../core/auth/AuthContext';
 import { authService } from '../../../core/auth/authService';
 
@@ -52,7 +51,7 @@ export const GrnTable: React.FC<GrnTableProps> = ({
   const [activeCategory, setActiveCategory] = useState<'raw' | 'packaging'>('raw');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | GrnQcStatus>('ALL');
-  const [isCompactMode, setIsCompactMode] = useState<boolean>(false);
+  const isCompactMode = true;
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -272,21 +271,6 @@ export const GrnTable: React.FC<GrnTableProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Compact Mode Toggle */}
-          <button
-            type="button"
-            onClick={() => setIsCompactMode(!isCompactMode)}
-            className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${
-              isCompactMode
-                ? 'bg-slate-900 text-white border-slate-900'
-                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-            }`}
-            title="Kurangi padding dan font untuk melihat lebih banyak data per layar"
-          >
-            {isCompactMode ? <Minimize2 className="w-3.5 h-3.5 text-teal-400" /> : <Maximize2 className="w-3.5 h-3.5 text-slate-500" />}
-            <span>Mode Ringkas {isCompactMode ? '(Aktif)' : ''}</span>
-          </button>
-
           {/* QC Status Filter */}
           <select
             value={statusFilter}
@@ -359,10 +343,20 @@ export const GrnTable: React.FC<GrnTableProps> = ({
 
                       {/* 2. No Grn */}
                       <td className={isCompactMode ? 'py-1.5 px-3' : 'py-3 px-4'}>
-                        <div className="font-mono font-bold text-slate-900 flex items-center gap-1.5">
-                          <span>{rec.grnNumber}</span>
-                        </div>
-                        <div className={`${isCompactMode ? 'text-[9.5px]' : 'text-[11px]'} text-slate-400 flex items-center gap-1 mt-0.5`}>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedRecord(rec);
+                          }}
+                          className="font-mono font-bold text-blue-700 hover:text-blue-900 group/grn flex items-center gap-1.5 text-left cursor-pointer transition-colors"
+                          title="Klik untuk membuka detail bukti penerimaan barang (GRN)"
+                        >
+                          <span className="bg-blue-50/90 group-hover/grn:bg-blue-100/90 group-hover/grn:underline text-blue-800 px-1.5 py-0.5 rounded border border-blue-200/80 shadow-2xs">
+                            {rec.grnNumber}
+                          </span>
+                        </button>
+                        <div className={`${isCompactMode ? 'text-[9.5px]' : 'text-[11px]'} text-slate-400 flex items-center gap-1 mt-1`}>
                           <Clock className="w-3 h-3 text-slate-400" />
                           <span>{rec.receivedDate}</span>
                         </div>
@@ -569,154 +563,18 @@ export const GrnTable: React.FC<GrnTableProps> = ({
       />
 
       {/* Record Detail Modal */}
-      {selectedRecord && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-800">
-                  <FileText className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-black text-slate-900">
-                    Detail Bukti Penerimaan Barang (GRN)
-                  </h3>
-                  <span className="font-mono text-xs text-slate-500 font-bold">
-                    {selectedRecord.grnNumber}
-                  </span>
-                </div>
-              </div>
-              <button
-                onClick={() => setSelectedRecord(null)}
-                className="w-7 h-7 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4 text-xs text-slate-700 max-h-[75vh] overflow-y-auto">
-              {selectedRecord.qcStatus === 'REVERTED_TO_WAREHOUSE' && (
-                <div className="p-4 rounded-2xl bg-orange-50 border border-orange-200 text-orange-950 space-y-1.5 animate-in fade-in">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-orange-800 font-bold text-xs">
-                      <RotateCcw className="w-4 h-4 text-orange-600" />
-                      <span>CATATAN PENGEMBALIAN DARI QUALITY CONTROL (REVERT)</span>
-                    </div>
-                    <span className="text-[10px] font-bold bg-orange-200 text-orange-900 px-2 py-0.5 rounded-full">
-                      Perlu Tindakan Gudang
-                    </span>
-                  </div>
-                  <p className="text-xs text-orange-900 font-medium pl-6">
-                    "{selectedRecord.notes || 'Pengujian dibatalkan/dikembalikan oleh QC untuk verifikasi data penerimaan fisik.'}"
-                  </p>
-                  <p className="text-[10.5px] text-orange-700 pl-6 pt-0.5">
-                    Status penerimaan telah dibuka kembali. Tim gudang dapat mengedit data (nomor batch/surat jalan/kemasan) atau membatalkan penerimaan.
-                  </p>
-                </div>
-              )}
-
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                    Status Karantina CPKB
-                  </span>
-                  <div className="mt-1">{renderStatusBadge(selectedRecord.qcStatus)}</div>
-                </div>
-                <div className="text-right">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                    Parameter Pengujian QC
-                  </span>
-                  <span className="text-xs font-black text-slate-800 mt-1 block">
-                    {selectedRecord.qcParametersCount ?? 0} Parameter Uji Terdaftar
-                  </span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-3.5 rounded-xl border border-slate-100 bg-white">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Item Material</span>
-                  <p className="font-bold text-slate-900 text-sm mt-1">{selectedRecord.materialName}</p>
-                  <p className="font-mono text-slate-500 mt-0.5">Kode: {selectedRecord.materialCode}</p>
-                  <p className="text-slate-500 mt-0.5">Produsen: {selectedRecord.manufacturer}</p>
-                </div>
-
-                <div className="p-3.5 rounded-xl border border-slate-100 bg-white">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Pemasok & Pengiriman</span>
-                  <p className="font-bold text-slate-900 mt-1">{selectedRecord.distributor}</p>
-                  <p className="text-slate-500 mt-0.5">Surat Jalan: <span className="font-mono font-semibold text-slate-800">{selectedRecord.deliveryNoteNumber}</span></p>
-                  <p className="text-slate-500 mt-0.5">PO: <span className="font-mono">{selectedRecord.poNumber}</span></p>
-                </div>
-
-                <div className="p-3.5 rounded-xl border border-slate-100 bg-white">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                    {selectedRecord.materialType === 'raw' ? 'Wadah / Keterangan' : 'Keterangan'} & Kuantitas
-                  </span>
-                  <p className="font-black text-slate-900 text-base mt-1">
-                    {selectedRecord.quantityReceived.toLocaleString()} {selectedRecord.unit}
-                  </p>
-                  <p className="text-slate-500 mt-0.5">
-                    {selectedRecord.containerCount} koli • {selectedRecord.containerType}
-                  </p>
-                </div>
-
-                <div className="p-3.5 rounded-xl border border-slate-100 bg-white">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Penyimpanan & Suhu</span>
-                  <p className="font-bold text-slate-900 mt-1">{selectedRecord.storageLocation}</p>
-                  <p className="text-slate-500 mt-0.5">{selectedRecord.storageConditions}</p>
-                </div>
-              </div>
-
-              {(selectedRecord.sealCondition || selectedRecord.packagingCondition || selectedRecord.coaAttachment || selectedRecord.notes) && (
-                <div className="p-3.5 rounded-xl border border-slate-100 bg-slate-50/50 space-y-2">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                    Kondisi Fisik & Dokumen Mutu
-                  </span>
-                  <div className="grid grid-cols-2 gap-2 text-[11px]">
-                    {selectedRecord.sealCondition && (
-                      <div>
-                        <span className="text-slate-400">Segel: </span>
-                        <span className="font-semibold text-slate-700">{selectedRecord.sealCondition}</span>
-                      </div>
-                    )}
-                    {selectedRecord.packagingCondition && (
-                      <div>
-                        <span className="text-slate-400">Kemasan: </span>
-                        <span className="font-semibold text-slate-700">{selectedRecord.packagingCondition}</span>
-                      </div>
-                    )}
-                    {selectedRecord.coaAttachment && (
-                      <div className="col-span-2">
-                        <span className="text-slate-400">Dokumen CoA: </span>
-                        <span className="font-semibold text-emerald-700 font-mono">✓ {selectedRecord.coaAttachment}</span>
-                      </div>
-                    )}
-                    {selectedRecord.notes && (
-                      <div className="col-span-2">
-                        <span className="text-slate-400">Catatan: </span>
-                        <span className="text-slate-700 italic">{selectedRecord.notes}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              <div className="pt-2 flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-100">
-                <span>Diterima oleh: <strong className="text-slate-700">{selectedRecord.receivedBy}</strong></span>
-                <span>Waktu Catat: {new Date(selectedRecord.createdAt).toLocaleString('id-ID')}</span>
-              </div>
-            </div>
-
-            <div className="px-6 py-3 border-t border-slate-100 bg-slate-50 flex justify-end">
-              <button
-                onClick={() => setSelectedRecord(null)}
-                className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-colors"
-              >
-                Tutup
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <GrnDetailModal
+        isOpen={!!selectedRecord}
+        record={selectedRecord}
+        onClose={() => setSelectedRecord(null)}
+        onPrintLabel={(rec) => {
+          if (onPrintLabel) {
+            onPrintLabel(rec);
+          } else {
+            setLabelRecordToPrint(rec);
+          }
+        }}
+      />
 
       {/* Edit GRN Modal */}
       {editRecordToUpdate && (

@@ -864,21 +864,21 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
       )}
 
       {/* FILTER TABS: Semua Produk vs Peringatan EXP NA (< 6 Bulan) */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200/80 pb-3">
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/80 pb-2">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
           <button
             type="button"
             onClick={() => setActiveExpFilterTab('all')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
               activeExpFilterTab === 'all'
-                ? 'bg-purple-700 text-white shadow-xs'
+                ? 'bg-purple-700 text-white shadow-2xs'
                 : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
             }`}
           >
-            <PackageCheck className="w-4 h-4" />
+            <PackageCheck className="w-3.5 h-3.5" />
             <span>Semua Produk Jadi</span>
             <span
-              className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+              className={`px-1.5 py-0.25 rounded-full text-[10px] font-mono font-bold ${
                 activeExpFilterTab === 'all'
                   ? 'bg-purple-900/40 text-purple-100'
                   : 'bg-slate-100 text-slate-600'
@@ -891,16 +891,16 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
           <button
             type="button"
             onClick={() => setActiveExpFilterTab('expiring_soon')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
               activeExpFilterTab === 'expiring_soon'
-                ? 'bg-amber-600 text-white shadow-xs'
+                ? 'bg-amber-600 text-white shadow-2xs'
                 : expiringSoonCount > 0
                 ? 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-300'
                 : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
             }`}
           >
             <AlertTriangle
-              className={`w-4 h-4 ${
+              className={`w-3.5 h-3.5 ${
                 activeExpFilterTab === 'expiring_soon'
                   ? 'text-white'
                   : expiringSoonCount > 0
@@ -910,7 +910,7 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
             />
             <span>Peringatan EXP NA (&lt; 6 Bulan)</span>
             <span
-              className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+              className={`px-1.5 py-0.25 rounded-full text-[10px] font-mono font-bold ${
                 activeExpFilterTab === 'expiring_soon'
                   ? 'bg-amber-800/50 text-white'
                   : expiringSoonCount > 0
@@ -924,8 +924,8 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
         </div>
 
         {activeExpFilterTab === 'expiring_soon' && (
-          <div className="text-[11px] font-medium text-amber-800 flex items-center gap-1.5 bg-amber-50/80 px-3 py-1.5 rounded-xl border border-amber-200">
-            <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+          <div className="text-[10px] font-medium text-amber-800 flex items-center gap-1 bg-amber-50/80 px-2 py-1 rounded-lg border border-amber-200">
+            <Clock className="w-3 h-3 text-amber-600 shrink-0" />
             <span>Kriteria: Masa berlaku izin edar BPOM &le; 180 hari atau telah lewat tanggal</span>
           </div>
         )}
@@ -933,87 +933,86 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
 
       {/* Info Alert jika tab EXP NA aktif */}
       {activeExpFilterTab === 'expiring_soon' && (
-        <div className="bg-amber-50/80 border border-amber-200/90 rounded-2xl p-4 flex items-start gap-3 text-slate-700">
-          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-          <div className="text-xs leading-relaxed">
+        <div className="bg-amber-50/80 border border-amber-200/90 rounded-xl p-2.5 flex items-start gap-2 text-slate-700">
+          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+          <div className="text-[11px] leading-snug">
             <span className="font-bold text-amber-950 block mb-0.5">
               Monitoring Notifikasi Izin Edar BPOM RI (Kepatuhan Regulasi Kosmetika):
             </span>
-            Menampilkan <span className="font-bold text-amber-900">{filteredProducts.length} produk</span> yang memiliki masa berlaku nomor notifikasi BPOM (NA) kurang dari 6 bulan atau sudah kedaluwarsa. Berdasarkan peraturan BPOM RI, permohonan perpanjangan (re-notifikasi) sebaiknya diajukan minimal 1-3 bulan sebelum masa berlaku habis guna mencegah penghentian distribusi produk jadi.
+            Menampilkan <span className="font-bold text-amber-900">{filteredProducts.length} produk</span> yang memiliki masa berlaku nomor notifikasi BPOM (NA) kurang dari 6 bulan atau sudah kedaluwarsa.
           </div>
         </div>
       )}
 
-      {/* Top Action & Search Bar (Matches Gambar 2 Layout) */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+      {/* Top Action & Search Bar */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
         <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3.5 top-2.5 h-4 w-4 text-slate-400" />
+          <Search className="absolute left-3 top-2 h-3.5 w-3.5 text-slate-400" />
           <input
             type="text"
-            placeholder="Cari kode PJ0001, nama produk, brand, atau varian..."
+            placeholder="Cari kode PJ0001, nama produk, brand..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-white border border-slate-200 rounded-xl py-2 pl-10 pr-4 text-xs text-slate-800 placeholder-slate-400 focus:border-purple-600 focus:outline-none focus:ring-1 focus:ring-purple-600 shadow-2xs"
+            className="w-full bg-white border border-slate-200 rounded-lg py-1.5 pl-8 pr-3 text-xs text-slate-800 placeholder-slate-400 focus:border-purple-600 focus:outline-none focus:ring-1 focus:ring-purple-600 shadow-2xs"
           />
         </div>
 
         {canWrite && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <button
               onClick={() => setShowImportModal(true)}
-              className="px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-bold text-slate-700 flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+              className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-bold text-slate-700 flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs"
               title="Import produk dari file Excel atau salin data"
             >
-              <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-              <span>Import Excel / Salin Data</span>
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Import Excel</span>
             </button>
 
             <button
               onClick={handleOpenAddProduct}
-              className="px-4 py-2 rounded-xl bg-purple-700 hover:bg-purple-800 text-xs font-bold text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs"
+              className="px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-800 text-xs font-bold text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-3.5 h-3.5" />
               <span>Tambah Produk Jadi</span>
             </button>
 
             <button
               onClick={() => handleOpenAddVariant()}
-              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs"
+              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs"
               title="Tambah Varian Produk Baru"
             >
-              <Tag className="w-4 h-4" />
+              <Tag className="w-3.5 h-3.5" />
               <span>Tambah Varian</span>
             </button>
 
             <button
               onClick={handleRunQA}
-              className="p-2 rounded-xl border border-slate-200 bg-white hover:bg-purple-50 text-purple-700 transition-all cursor-pointer shadow-2xs"
+              className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-purple-50 text-purple-700 transition-all cursor-pointer shadow-2xs"
               title="Jalankan QA Automation Supabase"
             >
-              <ShieldCheck className="w-4 h-4" />
+              <ShieldCheck className="w-3.5 h-3.5" />
             </button>
           </div>
         )}
       </div>
 
       {/* Info Callout for 1 Product Code -> Multi Variants */}
-      <div className="bg-purple-50/60 border border-purple-200/80 rounded-2xl p-4 flex items-start gap-3 text-slate-700">
-        <Boxes className="w-5 h-5 text-purple-700 shrink-0 mt-0.5" />
-        <div className="text-xs leading-relaxed">
-          <span className="font-bold text-purple-900 block mb-0.5">
-            Struktur Hirarki Produk & Multi-Variant Pabrik:
-          </span>
-          Satu Kode Produk Jadi (<span className="font-mono font-bold text-purple-800">PJ0001, PJ0002</span>) memayungi beberapa varian ukuran/kemasan (<span className="font-mono font-bold text-purple-800">PJ0001-V1, PJ0001-V2</span>). Setiap varian terikat pada Formula Bulk dan Bill of Materials (BOM) Kemasannya masing-masing.
+      <div className="bg-purple-50/60 border border-purple-200/80 rounded-xl p-2.5 flex items-center gap-2 text-slate-700">
+        <Boxes className="w-4 h-4 text-purple-700 shrink-0" />
+        <div className="text-[11px] leading-snug">
+          <span className="font-bold text-purple-900">
+            Hirarki Produk Jadi:
+          </span> Satu Kode Produk (<span className="font-mono font-bold text-purple-800">PJ0001</span>) memayungi varian ukuran/kemasan (<span className="font-mono font-bold text-purple-800">PJ0001-V1</span>) terikat Formula Bulk & BOM Kemasan.
         </div>
       </div>
 
       {/* Products List & Variants Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-2xs">
         {filteredProducts.length === 0 ? (
-          <div className="p-12 text-center text-slate-400">
-            <PackageCheck className="w-12 h-12 mx-auto mb-3 text-slate-300" />
-            <p className="text-sm font-semibold text-slate-600">Tidak ada produk jadi ditemukan</p>
-            <p className="text-xs text-slate-400 mt-1">
+          <div className="p-8 text-center text-slate-400">
+            <PackageCheck className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+            <p className="text-xs font-semibold text-slate-600">Tidak ada produk jadi ditemukan</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">
               {activeExpFilterTab === 'expiring_soon'
                 ? 'Tidak ada produk yang memiliki masa berlaku BPOM kurang dari 6 bulan.'
                 : 'Gunakan tombol "Tambah Produk Jadi" untuk membuat master produk baru.'}
@@ -1023,14 +1022,14 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                  <th className="py-3.5 px-4 w-12 text-center">No</th>
-                  <th className="py-3.5 px-4 w-28">Kode PJ</th>
-                  <th className="py-3.5 px-4 min-w-[220px]">Nama Produk Jadi & Brand</th>
-                  <th className="py-3.5 px-4 w-44">Kategori & Sediaan</th>
-                  <th className="py-3.5 px-4 min-w-[190px]">No. Notifikasi BPOM</th>
-                  <th className="py-3.5 px-4 w-36 text-center">Varian</th>
-                  <th className="py-3.5 px-4 w-40 text-right">Aksi</th>
+                <tr className="bg-slate-50/80 border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  <th className="py-2 px-2.5 w-10 text-center">No</th>
+                  <th className="py-2 px-3 w-24">Kode PJ</th>
+                  <th className="py-2 px-3 min-w-[200px]">Nama Produk Jadi & Brand</th>
+                  <th className="py-2 px-3 w-40">Kategori & Sediaan</th>
+                  <th className="py-2 px-3 min-w-[170px]">No. Notifikasi BPOM</th>
+                  <th className="py-2 px-3 w-32 text-center">Varian</th>
+                  <th className="py-2 px-3 w-36 text-right">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
@@ -1038,70 +1037,70 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
                   const expInfo = getBpomExpInfo(prod);
                   return (
                     <tr key={prod.id} className="hover:bg-purple-50/20 transition-colors">
-                      <td className="py-3.5 px-4 text-center font-mono font-bold text-slate-400 text-[11px]">
+                      <td className="py-1.5 px-2.5 text-center font-mono font-bold text-slate-400 text-[11px]">
                         {pIdx + 1}
                       </td>
-                      <td className="py-3.5 px-4">
+                      <td className="py-1.5 px-3">
                         <button
                           type="button"
                           onClick={() => setViewingProductDetail(prod)}
-                          className="font-mono font-bold text-xs text-purple-700 bg-purple-50 hover:bg-purple-100 hover:border-purple-300 px-2.5 py-1 rounded-lg border border-purple-200 inline-block transition-all cursor-pointer text-left"
+                          className="font-mono font-bold text-[11px] text-purple-700 bg-purple-50 hover:bg-purple-100 hover:border-purple-300 px-1.5 py-0.5 rounded border border-purple-200 inline-block transition-all cursor-pointer text-left"
                           title="Klik untuk melihat detail produk jadi"
                         >
                           {prod.code}
                         </button>
                       </td>
-                      <td className="py-3.5 px-4">
+                      <td className="py-1.5 px-3">
                         <button
                           type="button"
                           onClick={() => setViewingProductDetail(prod)}
-                          className="font-extrabold text-slate-900 text-xs sm:text-sm hover:text-purple-700 transition-colors text-left block cursor-pointer"
+                          className="font-extrabold text-slate-900 text-xs hover:text-purple-700 transition-colors text-left block cursor-pointer"
                           title="Klik untuk melihat detail produk jadi"
                         >
                           {prod.name}
                         </button>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-[11px] font-bold text-purple-700">
+                        <div className="flex items-center gap-1.5 mt-0.25">
+                          <span className="text-[10px] font-bold text-purple-700">
                             {prod.brand}
                           </span>
                           {prod.description && (
-                            <span className="text-[11px] text-slate-400 truncate max-w-md hidden sm:inline">
+                            <span className="text-[10px] text-slate-400 truncate max-w-xs hidden sm:inline">
                               • {prod.description}
                             </span>
                           )}
                         </div>
                       </td>
-                      <td className="py-3.5 px-4">
-                        <span className="px-2.5 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200 inline-block">
+                      <td className="py-1.5 px-3">
+                        <span className="px-1.5 py-0.25 rounded text-[9px] font-semibold bg-slate-100 text-slate-600 border border-slate-200 inline-block">
                           {prod.category}
                         </span>
                       </td>
-                      <td className="py-3.5 px-4">
-                        <div className="space-y-1">
+                      <td className="py-1.5 px-3">
+                        <div className="space-y-0.5">
                           {prod.bpomNotificationNumber ? (
-                            <div className="font-mono text-[11px] font-bold text-slate-800 flex items-center gap-1.5">
-                              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            <div className="font-mono text-[10px] font-bold text-slate-800 flex items-center gap-1">
+                              <ShieldCheck className="w-3 h-3 text-emerald-600 shrink-0" />
                               <span>{prod.bpomNotificationNumber}</span>
                             </div>
                           ) : (
-                            <span className="text-slate-400 italic text-[11px]">Belum ada No. BPOM</span>
+                            <span className="text-slate-400 italic text-[10px]">Belum ada No. BPOM</span>
                           )}
 
                           {/* Status Masa Berlaku Notifikasi BPOM */}
                           {expInfo.hasDate ? (
                             expInfo.status === 'expired' ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 border border-rose-200 text-rose-700">
-                                <AlertTriangle className="w-3 h-3 text-rose-600 shrink-0" />
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.25 rounded text-[9px] font-bold bg-rose-50 border border-rose-200 text-rose-700">
+                                <AlertTriangle className="w-2.5 h-2.5 text-rose-600 shrink-0" />
                                 <span>Kedaluwarsa ({Math.abs(expInfo.daysLeft!)} hari lalu)</span>
                               </span>
                             ) : expInfo.status === 'expiring_soon' ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 border border-amber-300 text-amber-900 animate-pulse">
-                                <Clock className="w-3 h-3 text-amber-600 shrink-0" />
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.25 rounded text-[9px] font-bold bg-amber-50 border border-amber-300 text-amber-900 animate-pulse">
+                                <Clock className="w-2.5 h-2.5 text-amber-600 shrink-0" />
                                 <span>Sisa {expInfo.daysLeft} hari (EXP: {expInfo.dateFormatted})</span>
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-1 text-[10px] text-slate-500 font-mono">
-                                <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
+                                <Calendar className="w-2.5 h-2.5 text-slate-400 shrink-0" />
                                 <span>Exp: {expInfo.dateFormatted}</span>
                               </span>
                             )
@@ -1112,25 +1111,25 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
                           )}
                         </div>
                       </td>
-                      <td className="py-3.5 px-4 text-center">
+                      <td className="py-1.5 px-3 text-center">
                         <button
                           type="button"
                           onClick={() => setViewingProductVariants(prod)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border bg-purple-50 text-purple-700 hover:bg-purple-100 hover:border-purple-300 border-purple-200 shadow-2xs"
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer border bg-purple-50 text-purple-700 hover:bg-purple-100 hover:border-purple-300 border-purple-200 shadow-2xs"
                           title="Klik untuk membuka popup rincian varian produk"
                         >
-                          <Layers className="w-3.5 h-3.5" />
+                          <Layers className="w-3 h-3" />
                           <span>{prod.variants.length} Varian</span>
                         </button>
                       </td>
-                      <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
+                      <td className="py-1.5 px-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
                           {canWrite && (
                             <>
                               <button
                                 type="button"
                                 onClick={() => handleOpenAddVariant(prod)}
-                                className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                                className="px-2 py-0.5 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
                                 title="Tambah Varian Ukuran/Kemasan"
                               >
                                 <Plus className="w-3 h-3" />
@@ -1139,10 +1138,10 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
                               <button
                                 type="button"
                                 onClick={() => handleOpenEditProduct(prod)}
-                                className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
+                                className="p-1 rounded border border-slate-200 hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
                                 title="Edit Master Produk Jadi"
                               >
-                                <Edit2 className="w-3.5 h-3.5" />
+                                <Edit2 className="w-3 h-3" />
                               </button>
                               <button
                                 type="button"
@@ -1156,10 +1155,10 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
                                   setDeletePassword('');
                                   setDeletePasswordError(null);
                                 }}
-                                className="p-1.5 rounded-lg border border-slate-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 text-slate-600 transition-colors cursor-pointer"
+                                className="p-1 rounded border border-slate-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 text-slate-600 transition-colors cursor-pointer"
                                 title="Hapus Master Produk Jadi"
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
+                                <Trash2 className="w-3 h-3" />
                               </button>
                             </>
                           )}
@@ -2354,24 +2353,24 @@ PJ0001\tPJ0001-60G\t60 g\t60\tg\t8993219584732\tBotol Pump 60ml`;
       {/* POPUP MODAL: DETAIL PRODUK JADI                                            */}
       {/* ========================================================================= */}
       {activeViewingDetailProduct && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
-          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-2xl p-6 shadow-2xl text-slate-800 relative max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-2xl p-4 sm:p-5 shadow-xl text-slate-800 relative max-h-[90vh] overflow-y-auto">
             {/* Header */}
-            <div className="flex items-start justify-between pb-4 border-b border-slate-100 mb-5">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-purple-100 border border-purple-200 text-purple-700 flex items-center justify-center shrink-0 font-mono font-bold text-sm">
+            <div className="flex items-start justify-between pb-3 border-b border-slate-100 mb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-purple-100 border border-purple-200 text-purple-700 flex items-center justify-center shrink-0 font-mono font-bold text-xs">
                   {activeViewingDetailProduct.code}
                 </div>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-base font-extrabold text-slate-900">
+                    <h3 className="text-sm font-extrabold text-slate-900">
                       {activeViewingDetailProduct.name}
                     </h3>
-                    <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                    <span className="px-2 py-0.25 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
                       {activeViewingDetailProduct.brand}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-500 mt-0.5">
+                  <p className="text-[11px] text-slate-500 mt-0.5">
                     Master Produk Jadi • {activeViewingDetailProduct.category}
                   </p>
                 </div>
@@ -2379,28 +2378,28 @@ PJ0001\tPJ0001-60G\t60 g\t60\tg\t8993219584732\tBotol Pump 60ml`;
               <button
                 type="button"
                 onClick={() => setViewingProductDetail(null)}
-                className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                className="p-1 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
                 title="Tutup Modal"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Body */}
-            <div className="space-y-5">
+            <div className="space-y-3.5">
               {/* Informasi Utama Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 bg-slate-50/80 p-4 rounded-2xl border border-slate-200">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-slate-50/80 p-3 rounded-xl border border-slate-200">
                 <div>
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">
                     Kode Produk Jadi (PJ)
                   </span>
-                  <span className="font-mono font-bold text-sm text-purple-700 bg-purple-50 px-2.5 py-1 rounded-lg border border-purple-200 inline-block">
+                  <span className="font-mono font-bold text-xs text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200 inline-block">
                     {activeViewingDetailProduct.code}
                   </span>
                 </div>
 
                 <div>
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">
                     Brand / Merek
                   </span>
                   <span className="text-xs font-bold text-slate-800">
@@ -2409,7 +2408,7 @@ PJ0001\tPJ0001-60G\t60 g\t60\tg\t8993219584732\tBotol Pump 60ml`;
                 </div>
 
                 <div>
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">
                     Kategori & Sediaan
                   </span>
                   <span className="text-xs font-medium text-slate-800">
@@ -2418,7 +2417,7 @@ PJ0001\tPJ0001-60G\t60 g\t60\tg\t8993219584732\tBotol Pump 60ml`;
                 </div>
 
                 <div>
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">
                     Satuan Dasar
                   </span>
                   <span className="text-xs font-medium text-slate-800">
@@ -2427,11 +2426,11 @@ PJ0001\tPJ0001-60G\t60 g\t60\tg\t8993219584732\tBotol Pump 60ml`;
                 </div>
 
                 <div>
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">
                     No. Notifikasi BPOM
                   </span>
                   {activeViewingDetailProduct.bpomNotificationNumber ? (
-                    <div className="flex items-center gap-1.5 text-xs font-mono font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 inline-flex">
+                    <div className="flex items-center gap-1.5 text-xs font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 inline-flex">
                       <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
                       <span>{activeViewingDetailProduct.bpomNotificationNumber}</span>
                     </div>
@@ -2441,7 +2440,7 @@ PJ0001\tPJ0001-60G\t60 g\t60\tg\t8993219584732\tBotol Pump 60ml`;
                 </div>
 
                 <div>
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">
                     Masa Berlaku BPOM / Exp Date
                   </span>
                   {(() => {
@@ -2451,7 +2450,7 @@ PJ0001\tPJ0001-60G\t60 g\t60\tg\t8993219584732\tBotol Pump 60ml`;
                     }
                     if (expInfo.status === 'expired') {
                       return (
-                        <div className="flex items-center gap-1.5 text-xs font-bold text-rose-700 bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200 inline-flex">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 inline-flex">
                           <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
                           <span>Kedaluwarsa ({Math.abs(expInfo.daysLeft!)} hari lalu) • {expInfo.dateFormatted}</span>
                         </div>
@@ -2459,15 +2458,15 @@ PJ0001\tPJ0001-60G\t60 g\t60\tg\t8993219584732\tBotol Pump 60ml`;
                     }
                     if (expInfo.status === 'expiring_soon') {
                       return (
-                        <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-300 inline-flex animate-pulse">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900 bg-amber-50 px-2 py-0.5 rounded border border-amber-300 inline-flex animate-pulse">
                           <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                           <span>Sisa {expInfo.daysLeft} hari (&lt; 6 Bulan) • {expInfo.dateFormatted}</span>
                         </div>
                       );
                     }
                     return (
-                      <div className="flex items-center gap-1.5 text-xs font-mono font-medium text-slate-700 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200 inline-flex">
-                        <Calendar className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                      <div className="flex items-center gap-1.5 text-xs font-mono font-medium text-slate-700 bg-slate-50 px-2 py-0.5 rounded border border-slate-200 inline-flex">
+                        <Calendar className="w-3 h-3 text-slate-500 shrink-0" />
                         <span>Berlaku s/d: {expInfo.dateFormatted} ({expInfo.daysLeft} hari)</span>
                       </div>
                     );
@@ -2475,7 +2474,7 @@ PJ0001\tPJ0001-60G\t60 g\t60\tg\t8993219584732\tBotol Pump 60ml`;
                 </div>
 
                 <div className="sm:col-span-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">
                     Petunjuk / Kondisi Penyimpanan
                   </span>
                   <span className="text-xs text-slate-700">
@@ -2486,10 +2485,10 @@ PJ0001\tPJ0001-60G\t60 g\t60\tg\t8993219584732\tBotol Pump 60ml`;
 
               {/* Deskripsi Produk */}
               <div>
-                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                <h4 className="text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                   Deskripsi Produk
                 </h4>
-                <div className="bg-white border border-slate-200 rounded-2xl p-4 text-xs text-slate-700 leading-relaxed">
+                <div className="bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-700 leading-relaxed">
                   {activeViewingDetailProduct.description || (
                     <span className="text-slate-400 italic">Tidak ada deskripsi untuk produk ini.</span>
                   )}
@@ -2499,24 +2498,24 @@ PJ0001\tPJ0001-60G\t60 g\t60\tg\t8993219584732\tBotol Pump 60ml`;
               {/* Parameter QC jika ada */}
               {activeViewingDetailProduct.qcParameters && activeViewingDetailProduct.qcParameters.length > 0 && (
                 <div>
-                  <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                  <h4 className="text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                     Parameter QC Produk
                   </h4>
-                  <div className="border border-slate-200 rounded-2xl overflow-hidden">
+                  <div className="border border-slate-200 rounded-xl overflow-hidden">
                     <table className="w-full text-left text-xs border-collapse">
                       <thead className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase font-bold text-slate-500">
                         <tr>
-                          <th className="p-2.5">Parameter</th>
-                          <th className="p-2.5">Kondisi / Standar</th>
-                          <th className="p-2.5">Satuan</th>
+                          <th className="py-1.5 px-2.5">Parameter</th>
+                          <th className="py-1.5 px-2.5">Kondisi / Standar</th>
+                          <th className="py-1.5 px-2.5">Satuan</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {activeViewingDetailProduct.qcParameters.map((qc, qIdx) => (
                           <tr key={qIdx}>
-                            <td className="p-2.5 font-bold text-slate-800">{qc.name || qc.parameterName}</td>
-                            <td className="p-2.5 text-slate-600">{qc.specification || qc.acceptanceCondition}</td>
-                            <td className="p-2.5 text-slate-500 font-mono">{qc.unit || '-'}</td>
+                            <td className="py-1.5 px-2.5 font-bold text-slate-800">{qc.name || qc.parameterName}</td>
+                            <td className="py-1.5 px-2.5 text-slate-600">{qc.specification || qc.acceptanceCondition}</td>
+                            <td className="py-1.5 px-2.5 text-slate-500 font-mono">{qc.unit || '-'}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -2527,8 +2526,8 @@ PJ0001\tPJ0001-60G\t60 g\t60\tg\t8993219584732\tBotol Pump 60ml`;
 
               {/* Ringkasan Varian Produk */}
               <div>
-                <div className="flex items-center justify-between mb-2.5">
-                  <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
                     <Layers className="w-3.5 h-3.5 text-purple-600" />
                     <span>Varian Terdaftar ({activeViewingDetailProduct.variants.length} Varian)</span>
                   </h4>
@@ -2547,23 +2546,23 @@ PJ0001\tPJ0001-60G\t60 g\t60\tg\t8993219584732\tBotol Pump 60ml`;
                 </div>
 
                 {activeViewingDetailProduct.variants.length === 0 ? (
-                  <div className="p-4 border border-dashed border-slate-200 rounded-2xl text-center text-xs text-slate-400">
+                  <div className="p-3 border border-dashed border-slate-200 rounded-xl text-center text-xs text-slate-400">
                     Belum ada varian terdaftar untuk produk ini.
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {activeViewingDetailProduct.variants.map((v) => (
                       <div
                         key={v.id}
-                        className="p-3 rounded-xl border border-slate-200 bg-slate-50/50 flex items-center justify-between text-xs"
+                        className="p-2.5 rounded-lg border border-slate-200 bg-slate-50/50 flex items-center justify-between text-xs"
                       >
                         <div>
-                          <span className="font-mono font-bold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-100 text-[11px] mr-1.5">
+                          <span className="font-mono font-bold text-purple-700 bg-purple-50 px-1.5 py-0.25 rounded border border-purple-100 text-[10px] mr-1">
                             {v.variantCode || v.sku}
                           </span>
                           <span className="font-bold text-slate-800">{v.variantName}</span>
                         </div>
-                        <span className="text-[11px] font-mono font-semibold text-slate-600 bg-white px-2 py-0.5 rounded border border-slate-200">
+                        <span className="text-[10px] font-mono font-semibold text-slate-600 bg-white px-1.5 py-0.25 rounded border border-slate-200">
                           {v.netVolumeGrams}g / ml
                         </span>
                       </div>
@@ -2574,7 +2573,7 @@ PJ0001\tPJ0001-60G\t60 g\t60\tg\t8993219584732\tBotol Pump 60ml`;
             </div>
 
             {/* Footer Modal */}
-            <div className="flex items-center justify-between pt-4 mt-6 border-t border-slate-100">
+            <div className="flex items-center justify-between pt-3 mt-4 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => {
@@ -2582,13 +2581,13 @@ PJ0001\tPJ0001-60G\t60 g\t60\tg\t8993219584732\tBotol Pump 60ml`;
                   setViewingProductDetail(null);
                   setViewingProductVariants(p);
                 }}
-                className="px-3.5 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="px-3 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <Layers className="w-3.5 h-3.5" />
                 <span>Lihat Semua Varian ({activeViewingDetailProduct.variants.length})</span>
               </button>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 {canWrite && (
                   <button
                     type="button"
@@ -2597,7 +2596,7 @@ PJ0001\tPJ0001-60G\t60 g\t60\tg\t8993219584732\tBotol Pump 60ml`;
                       setViewingProductDetail(null);
                       handleOpenEditProduct(prodToEdit);
                     }}
-                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
                   >
                     <Edit2 className="w-3.5 h-3.5" />
                     <span>Edit Produk</span>
@@ -2606,7 +2605,7 @@ PJ0001\tPJ0001-60G\t60 g\t60\tg\t8993219584732\tBotol Pump 60ml`;
                 <button
                   type="button"
                   onClick={() => setViewingProductDetail(null)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 font-bold text-xs transition-colors cursor-pointer"
+                  className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 font-bold text-xs transition-colors cursor-pointer"
                 >
                   Tutup
                 </button>
@@ -2620,33 +2619,33 @@ PJ0001\tPJ0001-60G\t60 g\t60\tg\t8993219584732\tBotol Pump 60ml`;
       {/* POPUP MODAL: DETAIL VARIAN PRODUK                                          */}
       {/* ========================================================================= */}
       {activeViewingVariantsProduct && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
-          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-4xl p-6 shadow-2xl text-slate-800 relative max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-4xl p-4 sm:p-5 shadow-xl text-slate-800 relative max-h-[90vh] overflow-y-auto">
             {/* Header */}
-            <div className="flex items-start justify-between pb-4 border-b border-slate-100 mb-4">
+            <div className="flex items-start justify-between pb-3 border-b border-slate-100 mb-3">
               <div>
-                <div className="flex items-center gap-2.5 flex-wrap">
-                  <span className="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-mono font-bold text-xs">
-                    <Tag className="w-4 h-4" />
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="w-7 h-7 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center font-mono font-bold text-xs">
+                    <Tag className="w-3.5 h-3.5" />
                   </span>
-                  <h3 className="text-base font-extrabold text-slate-900">
+                  <h3 className="text-sm font-extrabold text-slate-900">
                     Daftar Varian: {activeViewingVariantsProduct.name}
                   </h3>
-                  <span className="font-mono font-bold text-xs text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded-lg border border-purple-200">
+                  <span className="font-mono font-bold text-[11px] text-purple-700 bg-purple-50 px-2 py-0.25 rounded border border-purple-200">
                     {activeViewingVariantsProduct.code}
                   </span>
                 </div>
-                <p className="text-xs text-slate-500 mt-1">
+                <p className="text-[11px] text-slate-500 mt-0.5">
                   Brand: <strong className="text-slate-700">{activeViewingVariantsProduct.brand}</strong> • Kategori: <span className="text-slate-700">{activeViewingVariantsProduct.category}</span> • Total {activeViewingVariantsProduct.variants.length} SKU terdaftar
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 {canWrite && (
                   <button
                     type="button"
                     onClick={() => handleOpenAddVariant(activeViewingVariantsProduct)}
-                    className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                    className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>Tambah Varian Baru</span>
@@ -2655,28 +2654,28 @@ PJ0001\tPJ0001-60G\t60 g\t60\tg\t8993219584732\tBotol Pump 60ml`;
                 <button
                   type="button"
                   onClick={() => setViewingProductVariants(null)}
-                  className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                  className="p-1 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
                   title="Tutup Modal"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-4 h-4" />
                 </button>
               </div>
             </div>
 
             {/* Content Table */}
-            <div className="space-y-4">
+            <div className="space-y-3">
               {activeViewingVariantsProduct.variants.length === 0 ? (
-                <div className="p-12 border border-dashed border-slate-200 rounded-2xl text-center">
-                  <Layers className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                  <p className="text-sm font-bold text-slate-700">Belum Ada Varian Terdaftar</p>
-                  <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                <div className="p-8 border border-dashed border-slate-200 rounded-xl text-center">
+                  <Layers className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                  <p className="text-xs font-bold text-slate-700">Belum Ada Varian Terdaftar</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5 max-w-sm mx-auto">
                     Produk {activeViewingVariantsProduct.code} ({activeViewingVariantsProduct.name}) belum memiliki varian ukuran atau kemasan.
                   </p>
                   {canWrite && (
                     <button
                       type="button"
                       onClick={() => handleOpenAddVariant(activeViewingVariantsProduct)}
-                      className="mt-4 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                      className="mt-3 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       <span>Tambah Varian Sekarang</span>
@@ -2684,18 +2683,18 @@ PJ0001\tPJ0001-60G\t60 g\t60\tg\t8993219584732\tBotol Pump 60ml`;
                   )}
                 </div>
               ) : (
-                <div className="overflow-x-auto border border-slate-200 rounded-2xl">
+                <div className="overflow-x-auto border border-slate-200 rounded-xl">
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
                       <tr className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200">
-                        <th className="py-3 px-3.5 w-10 text-center">No</th>
-                        <th className="py-3 px-3.5 w-36">Kode Varian / SKU</th>
-                        <th className="py-3 px-3.5 min-w-[150px]">Nama Varian (Label)</th>
-                        <th className="py-3 px-3.5 w-28">Netto / Bobot</th>
-                        <th className="py-3 px-3.5 w-36">Master Bulk</th>
-                        <th className="py-3 px-3.5 w-40">Barcode EAN-13</th>
-                        <th className="py-3 px-3.5">BOM Kemasan & Keterangan</th>
-                        <th className="py-3 px-3.5 w-24 text-right">Aksi</th>
+                        <th className="py-2 px-2.5 w-10 text-center">No</th>
+                        <th className="py-2 px-2.5 w-32">Kode Varian / SKU</th>
+                        <th className="py-2 px-2.5 min-w-[140px]">Nama Varian (Label)</th>
+                        <th className="py-2 px-2.5 w-24">Netto / Bobot</th>
+                        <th className="py-2 px-2.5 w-32">Master Bulk</th>
+                        <th className="py-2 px-2.5 w-36">Barcode EAN-13</th>
+                        <th className="py-2 px-2.5">BOM Kemasan & Keterangan</th>
+                        <th className="py-2 px-2.5 w-20 text-right">Aksi</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -2704,53 +2703,53 @@ PJ0001\tPJ0001-60G\t60 g\t60\tg\t8993219584732\tBotol Pump 60ml`;
 
                         return (
                           <tr key={variant.id} className="hover:bg-purple-50/20 transition-colors">
-                            <td className="py-3 px-3.5 text-center font-mono text-[11px] text-slate-400 font-bold">
+                            <td className="py-1.5 px-2.5 text-center font-mono text-[10px] text-slate-400 font-bold">
                               {vIdx + 1}
                             </td>
-                            <td className="py-3 px-3.5">
-                              <span className="font-mono font-bold text-xs text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-100 inline-block">
+                            <td className="py-1.5 px-2.5">
+                              <span className="font-mono font-bold text-[11px] text-purple-700 bg-purple-50 px-1.5 py-0.25 rounded border border-purple-100 inline-block">
                                 {variant.variantCode || variant.sku}
                               </span>
                             </td>
-                            <td className="py-3 px-3.5 font-bold text-slate-900">
+                            <td className="py-1.5 px-2.5 font-bold text-slate-900">
                               {variant.variantName}
                             </td>
-                            <td className="py-3 px-3.5 font-mono font-semibold text-slate-700">
+                            <td className="py-1.5 px-2.5 font-mono font-semibold text-slate-700 text-[11px]">
                               {variant.netVolumeGrams} g / ml
                             </td>
-                            <td className="py-3 px-3.5">
+                            <td className="py-1.5 px-2.5">
                               {variant.bulkFormulaCode ? (
                                 <div>
-                                  <span className="font-mono text-[11px] text-purple-700 font-semibold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-100 inline-block">
+                                  <span className="font-mono text-[10px] text-purple-700 font-semibold bg-purple-50 px-1 py-0.25 rounded border border-purple-100 inline-block">
                                     {variant.bulkFormulaCode}
                                   </span>
                                   {linkedFormula && (
-                                    <span className="text-[10px] text-slate-400 block truncate max-w-[140px] mt-0.5">
+                                    <span className="text-[9px] text-slate-400 block truncate max-w-[130px] mt-0.25">
                                       {linkedFormula.name}
                                     </span>
                                   )}
                                 </div>
                               ) : (
-                                <span className="text-slate-400 italic text-[11px]">-</span>
+                                <span className="text-slate-400 italic text-[10px]">-</span>
                               )}
                             </td>
-                            <td className="py-3 px-3.5">
+                            <td className="py-1.5 px-2.5">
                               {variant.barcode ? (
-                                <div className="flex items-center gap-1.5 font-mono text-[11px] text-slate-800">
-                                  <Barcode className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                <div className="flex items-center gap-1 font-mono text-[10px] text-slate-800">
+                                  <Barcode className="w-3 h-3 text-slate-400 shrink-0" />
                                   <span>{variant.barcode}</span>
                                 </div>
                               ) : (
                                 <span className="text-slate-400 italic text-[10px]">-</span>
                               )}
                             </td>
-                            <td className="py-3 px-3.5">
+                            <td className="py-1.5 px-2.5">
                               {variant.packagingBom && variant.packagingBom.length > 0 ? (
-                                <div className="flex flex-wrap gap-1 mb-1">
+                                <div className="flex flex-wrap gap-1 mb-0.5">
                                   {variant.packagingBom.map((item, idx) => (
                                     <span
                                       key={idx}
-                                      className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border ${
+                                      className={`px-1 py-0.25 rounded text-[9px] font-mono font-bold border ${
                                         item.type === 'primary'
                                           ? 'bg-purple-50 border-purple-200 text-purple-700'
                                           : item.type === 'secondary'
@@ -2764,23 +2763,23 @@ PJ0001\tPJ0001-60G\t60 g\t60\tg\t8993219584732\tBotol Pump 60ml`;
                                 </div>
                               ) : null}
                               {variant.description ? (
-                                <span className="text-[11px] text-slate-500 block">
+                                <span className="text-[10px] text-slate-500 block">
                                   {variant.description}
                                 </span>
                               ) : (
-                                !variant.packagingBom?.length && <span className="text-slate-400 italic text-[11px]">-</span>
+                                !variant.packagingBom?.length && <span className="text-slate-400 italic text-[10px]">-</span>
                               )}
                             </td>
-                            <td className="py-3 px-3.5 text-right">
+                            <td className="py-1.5 px-2.5 text-right">
                               {canWrite && (
-                                <div className="flex items-center justify-end gap-1.5">
+                                <div className="flex items-center justify-end gap-1">
                                   <button
                                     type="button"
                                     onClick={() => handleOpenEditVariant(activeViewingVariantsProduct.id, variant)}
-                                    className="p-1.5 text-slate-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg border border-slate-200 transition-colors cursor-pointer"
+                                    className="p-1 text-slate-600 hover:text-purple-700 hover:bg-purple-50 rounded border border-slate-200 transition-colors cursor-pointer"
                                     title="Edit Varian"
                                   >
-                                    <Edit2 className="w-3.5 h-3.5" />
+                                    <Edit2 className="w-3 h-3" />
                                   </button>
                                   <button
                                     type="button"
@@ -2795,10 +2794,10 @@ PJ0001\tPJ0001-60G\t60 g\t60\tg\t8993219584732\tBotol Pump 60ml`;
                                       setDeletePassword('');
                                       setDeletePasswordError(null);
                                     }}
-                                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg border border-slate-200 transition-colors cursor-pointer"
+                                    className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded border border-slate-200 transition-colors cursor-pointer"
                                     title="Hapus Varian"
                                   >
-                                    <Trash2 className="w-3.5 h-3.5" />
+                                    <Trash2 className="w-3 h-3" />
                                   </button>
                                 </div>
                               )}
@@ -2813,7 +2812,7 @@ PJ0001\tPJ0001-60G\t60 g\t60\tg\t8993219584732\tBotol Pump 60ml`;
             </div>
 
             {/* Footer Modal */}
-            <div className="flex items-center justify-between pt-4 mt-6 border-t border-slate-100">
+            <div className="flex items-center justify-between pt-3 mt-4 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => {
@@ -2821,7 +2820,7 @@ PJ0001\tPJ0001-60G\t60 g\t60\tg\t8993219584732\tBotol Pump 60ml`;
                   setViewingProductVariants(null);
                   setViewingProductDetail(p);
                 }}
-                className="px-3.5 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <PackageCheck className="w-3.5 h-3.5 text-purple-600" />
                 <span>Lihat Detail Master Produk Jadi</span>
@@ -2830,7 +2829,7 @@ PJ0001\tPJ0001-60G\t60 g\t60\tg\t8993219584732\tBotol Pump 60ml`;
               <button
                 type="button"
                 onClick={() => setViewingProductVariants(null)}
-                className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs transition-colors cursor-pointer shadow-xs"
+                className="px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs transition-colors cursor-pointer shadow-2xs"
               >
                 Tutup
               </button>

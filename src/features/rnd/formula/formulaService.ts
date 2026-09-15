@@ -54,6 +54,8 @@ export const formulaService = {
             purposeDescription: row.purpose_description || '',
             ingredients: Array.isArray(row.ingredients) ? row.ingredients : [],
             mixingInstructions: row.mixing_instructions || '',
+            dynamicProcessSteps: row.dynamic_process_steps || undefined,
+            technicalNotes: row.technical_notes || '',
             createdBy: row.created_by || '',
             createdAt: row.created_at || new Date().toISOString(),
             updatedAt: row.updated_at || new Date().toISOString(),
@@ -101,6 +103,8 @@ export const formulaService = {
       purpose_description: formula.purposeDescription || '',
       ingredients: formula.ingredients || [],
       mixing_instructions: formula.mixingInstructions || '',
+      dynamic_process_steps: formula.dynamicProcessSteps || null,
+      technical_notes: formula.technicalNotes || '',
       created_by: formula.createdBy || '',
       updated_at: new Date().toISOString(),
     };
@@ -113,8 +117,19 @@ export const formulaService = {
           .upsert(payload, { onConflict: 'id' });
 
         if (error) {
-          console.error('Supabase upsert error (bulk_formulations):', error);
-          // Bila gagal simpan ke DB, tetap simpan ke cache agar data formulator tidak hilang
+          // Bila gagal karena kolom tidak ada, coba upsert tanpa kolom baru
+          if (error.code === 'PGRST204' || error.message?.includes('column')) {
+            console.warn('Supabase schema cache miss for new columns, falling back to core columns.');
+            const fallbackPayload = { ...payload };
+            delete (fallbackPayload as any).dynamic_process_steps;
+            delete (fallbackPayload as any).technical_notes;
+            const { error: fallbackError } = await supabase.from('bulk_formulations').upsert(fallbackPayload, { onConflict: 'id' });
+            if (fallbackError) {
+               console.error('Supabase fallback upsert error (bulk_formulations):', fallbackError);
+            }
+          } else {
+            console.error('Supabase upsert error (bulk_formulations):', error);
+          }
         }
       } catch (dbErr: any) {
         console.warn('Supabase request failed, saving to local cache:', dbErr);

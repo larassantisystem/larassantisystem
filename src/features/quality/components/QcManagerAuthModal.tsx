@@ -10,6 +10,8 @@ import {
   Sparkles,
   HelpCircle,
   AlertTriangle,
+  RotateCcw,
+  FlaskConical,
 } from 'lucide-react';
 import { QcInspectionReport } from '../types/qcTypes';
 import { useAuth } from '../../../core/auth/AuthContext';
@@ -25,6 +27,11 @@ interface QcManagerAuthModalProps {
     qmNotes: string,
     passwordInput: string
   ) => Promise<void>;
+  onRevertToLab?: (
+    reportId: string,
+    revisionInstruction: string,
+    passwordInput: string
+  ) => Promise<void>;
 }
 
 export const QcManagerAuthModal: React.FC<QcManagerAuthModalProps> = ({
@@ -32,18 +39,22 @@ export const QcManagerAuthModal: React.FC<QcManagerAuthModalProps> = ({
   onClose,
   report,
   onAuthorize,
+  onRevertToLab,
 }) => {
   const { user } = useAuth();
 
+  const [activeMode, setActiveMode] = useState<'AUTHORIZE' | 'REVERT_TO_LAB'>('AUTHORIZE');
   const [decision, setDecision] = useState<'RELEASE' | 'RELEASE_BY_DEVIATION' | 'REJECT'>('RELEASE');
   const [deviationNumber, setDeviationNumber] = useState('');
   const [qmNotes, setQmNotes] = useState('');
+  const [revertToLabInstruction, setRevertToLabInstruction] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     if (report) {
+      setActiveMode('AUTHORIZE');
       if (report.staffDecision === 'REJECT') {
         setDecision('REJECT');
       } else {
@@ -51,6 +62,7 @@ export const QcManagerAuthModal: React.FC<QcManagerAuthModalProps> = ({
       }
       setDeviationNumber('');
       setQmNotes('');
+      setRevertToLabInstruction('');
       setPasswordInput('');
       setErrorMessage('');
     }
@@ -63,6 +75,30 @@ export const QcManagerAuthModal: React.FC<QcManagerAuthModalProps> = ({
 
     if (!passwordInput) {
       setErrorMessage('Kata sandi Quality Manager wajib diisi untuk otorisasi digital.');
+      return;
+    }
+
+    if (activeMode === 'REVERT_TO_LAB') {
+      if (!revertToLabInstruction || revertToLabInstruction.trim().length < 5) {
+        setErrorMessage('Instruksi/alasan perbaikan uji lab wajib diisi (minimal 5 karakter).');
+        return;
+      }
+
+      if (!onRevertToLab) {
+        setErrorMessage('Fungsi pengembalian ke lab belum tersedia.');
+        return;
+      }
+
+      try {
+        setIsSubmitting(true);
+        setErrorMessage('');
+        await onRevertToLab(report.id, revertToLabInstruction.trim(), passwordInput);
+        onClose();
+      } catch (err: any) {
+        setErrorMessage(err.message || 'Gagal mengembalikan laporan ke proses uji lab');
+      } finally {
+        setIsSubmitting(false);
+      }
       return;
     }
 
@@ -276,132 +312,201 @@ export const QcManagerAuthModal: React.FC<QcManagerAuthModalProps> = ({
             )}
           </div>
 
-          {/* Manager Decision Matrix Selection */}
-          <div className="space-y-2">
-            <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
-              Keputusan Otorisasi Quality Manager <span className="text-red-500">*</span>
-            </label>
-
-            {!isStaffRejected ? (
-              // If Staff = MS -> Manager options: RELEASE
-              <div className="grid grid-cols-1 gap-2">
-                <label
-                  className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
-                    decision === 'RELEASE'
-                      ? 'border-emerald-600 bg-emerald-50/70 text-emerald-950 shadow-xs'
-                      : 'border-slate-200 bg-white hover:bg-slate-50'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="qmDecision"
-                    value="RELEASE"
-                    checked={decision === 'RELEASE'}
-                    onChange={() => setDecision('RELEASE')}
-                    className="text-emerald-600 focus:ring-emerald-500"
-                  />
-                  <div className="grow">
-                    <div className="font-bold text-xs flex items-center gap-1.5 text-emerald-900">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      1. OTORISASI RELEASE (DILULUSKAN PENUH)
-                    </div>
-                    <div className="text-[11px] text-slate-600">
-                      Bahan memenuhi semua spesifikasi CPKB. Stok langsung rilis ke Ruang Timbang (FEFO).
-                    </div>
-                  </div>
-                </label>
-              </div>
-            ) : (
-              // If Staff = TMS -> Manager options: RELEASE_BY_DEVIATION or REJECT
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <label
-                  className={`flex items-start gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
-                    decision === 'RELEASE_BY_DEVIATION'
-                      ? 'border-amber-600 bg-amber-50/70 text-amber-950 shadow-xs'
-                      : 'border-slate-200 bg-white hover:bg-slate-50'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="qmDecision"
-                    value="RELEASE_BY_DEVIATION"
-                    checked={decision === 'RELEASE_BY_DEVIATION'}
-                    onChange={() => setDecision('RELEASE_BY_DEVIATION')}
-                    className="text-amber-600 focus:ring-amber-500 mt-0.5"
-                  />
-                  <div>
-                    <div className="font-bold text-xs flex items-center gap-1.5 text-amber-900">
-                      <AlertTriangle className="w-4 h-4 text-amber-600" />
-                      Release by Deviation
-                    </div>
-                    <div className="text-[11px] text-slate-600 mt-1">
-                      Rilis dengan deviasi terkontrol berdasarkan kajian risiko mutu yang disetujui.
-                    </div>
-                  </div>
-                </label>
-
-                <label
-                  className={`flex items-start gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
-                    decision === 'REJECT'
-                      ? 'border-red-600 bg-red-50/70 text-red-950 shadow-xs'
-                      : 'border-slate-200 bg-white hover:bg-slate-50'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="qmDecision"
-                    value="REJECT"
-                    checked={decision === 'REJECT'}
-                    onChange={() => setDecision('REJECT')}
-                    className="text-red-600 focus:ring-red-500 mt-0.5"
-                  />
-                  <div>
-                    <div className="font-bold text-xs flex items-center gap-1.5 text-red-900">
-                      <AlertOctagon className="w-4 h-4 text-red-600" />
-                      Tolak Bahan (Reject)
-                    </div>
-                    <div className="text-[11px] text-slate-600 mt-1">
-                      Penolakan permanen. Bahan dipindahkan ke karantina tolak untuk retur pemasok.
-                    </div>
-                  </div>
-                </label>
-              </div>
-            )}
+          {/* Mode Switcher: Otorisasi Mutu vs Revert ke Uji Lab */}
+          <div className="flex rounded-xl bg-slate-100 p-1 border border-slate-200">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveMode('AUTHORIZE');
+                setErrorMessage('');
+              }}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+                activeMode === 'AUTHORIZE'
+                  ? 'bg-white text-indigo-950 shadow-xs border border-slate-200/80'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+              }`}
+            >
+              <ShieldCheck className="w-4 h-4 text-indigo-600" />
+              Otorisasi Keputusan Mutu (Rilis / Tolak)
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveMode('REVERT_TO_LAB');
+                setErrorMessage('');
+              }}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+                activeMode === 'REVERT_TO_LAB'
+                  ? 'bg-amber-500 text-white shadow-xs'
+                  : 'text-amber-800 hover:text-amber-900 hover:bg-amber-100/60'
+              }`}
+            >
+              <RotateCcw className="w-4 h-4" />
+              Kembalikan ke Uji Lab (Re-Test / Revisi)
+            </button>
           </div>
 
-          {/* Deviation Number (Required if RELEASE_BY_DEVIATION) */}
-          {decision === 'RELEASE_BY_DEVIATION' && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 space-y-1.5 animate-in fade-in duration-150">
-              <label className="block text-xs font-bold text-amber-900 uppercase tracking-wider">
-                Nomor Form Deviasi / Kajian Risiko Mutu <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="Contoh: DEV-2026-09-004 / CAPA-QC-881"
-                value={deviationNumber}
-                onChange={(e) => setDeviationNumber(e.target.value)}
-                className="w-full text-xs font-mono font-bold border border-amber-300 rounded-lg p-2.5 focus:outline-hidden focus:ring-2 focus:ring-amber-500 text-slate-900 bg-white"
-              />
-              <p className="text-[11px] text-amber-800">
-                Wajib mencantumkan nomor dokumen kajian risiko mutu yang telah ditandatangani QA/QC.
-              </p>
+          {activeMode === 'REVERT_TO_LAB' ? (
+            /* Mode 2: Revert to Lab Testing */
+            <div className="space-y-4 animate-in fade-in duration-150">
+              <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 space-y-2">
+                <div className="flex items-center gap-2 font-bold text-sm text-amber-950">
+                  <FlaskConical className="w-5 h-5 text-amber-600" />
+                  Instruksi Pengembalian ke Proses Uji Lab (Analis QC)
+                </div>
+                <p className="text-xs text-amber-800 leading-relaxed">
+                  Laporan akan dikembalikan ke tab <strong>"Proses Uji Lab"</strong> untuk dilakukan pengujian ulang (re-test) atau revisi data analisa oleh analis. Status GRN gudang tetap berada pada proses QC.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-1.5">
+                  Catatan Revisi / Parameter yang Wajib Diuji Ulang <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  rows={3}
+                  required
+                  value={revertToLabInstruction}
+                  onChange={(e) => setRevertToLabInstruction(e.target.value)}
+                  placeholder="Contoh: Hasil uji pH meragukan, mohon dilakukan replikasi 3x menggunakan pH meter terkalibrasi. Lampirkan logbook..."
+                  className="w-full text-xs border border-amber-300 rounded-xl p-3 focus:outline-hidden focus:ring-2 focus:ring-amber-500 text-slate-900 bg-white"
+                />
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Catatan ini akan tampil secara jelas sebagai banner instruksi pada form analisa analis.
+                </p>
+              </div>
             </div>
-          )}
+          ) : (
+            /* Mode 1: Authorize Decision Matrix */
+            <>
+              {/* Manager Decision Matrix Selection */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                  Keputusan Otorisasi Quality Manager <span className="text-red-500">*</span>
+                </label>
 
-          {/* Disposisi & Catatan Mutu Manager */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-              Catatan Disposisi Mutu Quality Manager
-            </label>
-            <textarea
-              rows={2}
-              value={qmNotes}
-              onChange={(e) => setQmNotes(e.target.value)}
-              placeholder="Contoh: Disetujui untuk rilis penimbangan bets formulasi..."
-              className="w-full text-xs border border-slate-300 rounded-xl p-2.5 focus:outline-hidden focus:ring-2 focus:ring-blue-500 text-slate-800"
-            />
-          </div>
+                {!isStaffRejected ? (
+                  // If Staff = MS -> Manager options: RELEASE
+                  <div className="grid grid-cols-1 gap-2">
+                    <label
+                      className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
+                        decision === 'RELEASE'
+                          ? 'border-emerald-600 bg-emerald-50/70 text-emerald-950 shadow-xs'
+                          : 'border-slate-200 bg-white hover:bg-slate-50'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="qmDecision"
+                        value="RELEASE"
+                        checked={decision === 'RELEASE'}
+                        onChange={() => setDecision('RELEASE')}
+                        className="text-emerald-600 focus:ring-emerald-500"
+                      />
+                      <div className="grow">
+                        <div className="font-bold text-xs flex items-center gap-1.5 text-emerald-900">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                          1. OTORISASI RELEASE (DILULUSKAN PENUH)
+                        </div>
+                        <div className="text-[11px] text-slate-600">
+                          Bahan memenuhi semua spesifikasi CPKB. Stok langsung rilis ke Ruang Timbang (FEFO).
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+                ) : (
+                  // If Staff = TMS -> Manager options: RELEASE_BY_DEVIATION or REJECT
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label
+                      className={`flex items-start gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
+                        decision === 'RELEASE_BY_DEVIATION'
+                          ? 'border-amber-600 bg-amber-50/70 text-amber-950 shadow-xs'
+                          : 'border-slate-200 bg-white hover:bg-slate-50'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="qmDecision"
+                        value="RELEASE_BY_DEVIATION"
+                        checked={decision === 'RELEASE_BY_DEVIATION'}
+                        onChange={() => setDecision('RELEASE_BY_DEVIATION')}
+                        className="text-amber-600 focus:ring-amber-500 mt-0.5"
+                      />
+                      <div>
+                        <div className="font-bold text-xs flex items-center gap-1.5 text-amber-900">
+                          <AlertTriangle className="w-4 h-4 text-amber-600" />
+                          Release by Deviation
+                        </div>
+                        <div className="text-[11px] text-slate-600 mt-1">
+                          Rilis dengan deviasi terkontrol berdasarkan kajian risiko mutu yang disetujui.
+                        </div>
+                      </div>
+                    </label>
+
+                    <label
+                      className={`flex items-start gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
+                        decision === 'REJECT'
+                          ? 'border-red-600 bg-red-50/70 text-red-950 shadow-xs'
+                          : 'border-slate-200 bg-white hover:bg-slate-50'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="qmDecision"
+                        value="REJECT"
+                        checked={decision === 'REJECT'}
+                        onChange={() => setDecision('REJECT')}
+                        className="text-red-600 focus:ring-red-500 mt-0.5"
+                      />
+                      <div>
+                        <div className="font-bold text-xs flex items-center gap-1.5 text-red-900">
+                          <AlertOctagon className="w-4 h-4 text-red-600" />
+                          Tolak Bahan (Reject)
+                        </div>
+                        <div className="text-[11px] text-slate-600 mt-1">
+                          Penolakan permanen. Bahan dipindahkan ke karantina tolak untuk retur pemasok.
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              {/* Deviation Number (Required if RELEASE_BY_DEVIATION) */}
+              {decision === 'RELEASE_BY_DEVIATION' && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 space-y-1.5 animate-in fade-in duration-150">
+                  <label className="block text-xs font-bold text-amber-900 uppercase tracking-wider">
+                    Nomor Form Deviasi / Kajian Risiko Mutu <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Contoh: DEV-2026-09-004 / CAPA-QC-881"
+                    value={deviationNumber}
+                    onChange={(e) => setDeviationNumber(e.target.value)}
+                    className="w-full text-xs font-mono font-bold border border-amber-300 rounded-lg p-2.5 focus:outline-hidden focus:ring-2 focus:ring-amber-500 text-slate-900 bg-white"
+                  />
+                  <p className="text-[11px] text-amber-800">
+                    Wajib mencantumkan nomor dokumen kajian risiko mutu yang telah ditandatangani QA/QC.
+                  </p>
+                </div>
+              )}
+
+              {/* Disposisi & Catatan Mutu Manager */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Catatan Disposisi Mutu Quality Manager
+                </label>
+                <textarea
+                  rows={2}
+                  value={qmNotes}
+                  onChange={(e) => setQmNotes(e.target.value)}
+                  placeholder="Contoh: Disetujui untuk rilis penimbangan bets formulasi..."
+                  className="w-full text-xs border border-slate-300 rounded-xl p-2.5 focus:outline-hidden focus:ring-2 focus:ring-blue-500 text-slate-800"
+                />
+              </div>
+            </>
+          )}
 
           {/* Electronic Signature: Password Verification */}
           <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4 space-y-2">
@@ -439,15 +544,17 @@ export const QcManagerAuthModal: React.FC<QcManagerAuthModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+              className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
             >
               Batal
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className={`px-6 py-2.5 text-xs font-bold text-white rounded-xl shadow-md transition-all active:scale-98 flex items-center gap-2 ${
-                decision === 'REJECT'
+              className={`px-6 py-2.5 text-xs font-bold text-white rounded-xl shadow-md transition-all active:scale-98 flex items-center gap-2 cursor-pointer ${
+                activeMode === 'REVERT_TO_LAB'
+                  ? 'bg-amber-600 hover:bg-amber-700'
+                  : decision === 'REJECT'
                   ? 'bg-red-600 hover:bg-red-700'
                   : decision === 'RELEASE_BY_DEVIATION'
                   ? 'bg-amber-600 hover:bg-amber-700'
@@ -455,7 +562,12 @@ export const QcManagerAuthModal: React.FC<QcManagerAuthModalProps> = ({
               }`}
             >
               {isSubmitting ? (
-                'Memproses Otorisasi...'
+                'Memproses...'
+              ) : activeMode === 'REVERT_TO_LAB' ? (
+                <>
+                  <RotateCcw className="w-4 h-4" />
+                  Konfirmasi Kembalikan ke Uji Lab
+                </>
               ) : (
                 <>
                   <ShieldCheck className="w-4 h-4" />

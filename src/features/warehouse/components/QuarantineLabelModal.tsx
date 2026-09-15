@@ -9,11 +9,11 @@ import {
   Package,
   Calendar,
   Layers,
-  MapPin,
   Building2,
   FileText,
 } from 'lucide-react';
 import { GrnRecord } from '../types/grnTypes';
+import { QrCodeBadge } from '../../../components/QrCodeBadge';
 
 interface QuarantineLabelModalProps {
   isOpen: boolean;
@@ -146,10 +146,15 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
                 className="bg-white rounded-2xl border-4 border-amber-400 p-5 shadow-md max-w-xl mx-auto break-inside-avoid print:shadow-none print:max-w-none print:border-4 print:border-amber-400 print:my-4 print:p-6"
               >
                 {/* Header CPKB */}
-                <div className="border-b-2 border-amber-300 pb-3 mb-3 flex items-center justify-between">
+                <div className="border-b-2 border-amber-300 pb-3 mb-3 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-amber-400 text-slate-900 flex items-center justify-center font-black text-sm shrink-0">
-                      CPKB
+                    <div className="p-1 bg-white rounded-xl border border-amber-200 shrink-0 shadow-2xs flex items-center justify-center">
+                      <img
+                        src="/logo.png"
+                        alt="Logo Larassanti"
+                        className="h-10 w-auto max-w-[90px] object-contain"
+                        referrerPolicy="no-referrer"
+                      />
                     </div>
                     <div>
                       <h1 className="font-black text-slate-900 text-sm tracking-tight leading-none">
@@ -252,17 +257,14 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
                   </div>
 
                   <div className="col-span-2 sm:col-span-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px]">
-                    <div>
-                      <span className="text-[10px] font-extrabold text-slate-400 uppercase block">Lokasi Karantina:</span>
-                      <span className="font-bold text-slate-900">{record.storageLocation}</span>
-                    </div>
-                    <div className="text-slate-500">
-                      Suhu: <span className="font-semibold text-slate-700">{record.storageConditions}</span>
-                    </div>
+                    <span className="text-[10px] font-extrabold text-slate-500 uppercase block">Kondisi Simpan:</span>
+                    <span className="font-bold text-slate-800">
+                      {record.storageConditions || 'Suhu Ruang Terkendali (15-30°C), Kering & Terlindung Cahaya'}
+                    </span>
                   </div>
                 </div>
 
-                {/* Footer Signatures & Barcode */}
+                {/* Footer Signatures & QR Code */}
                 <div className="mt-4 pt-3 border-t-2 border-dashed border-amber-300 grid grid-cols-3 gap-3 items-end">
                   <div className="border border-slate-200 rounded-xl p-2 text-center bg-slate-50">
                     <span className="text-[9px] font-extrabold text-slate-400 uppercase block">Petugas Penerima Gudang</span>
@@ -285,18 +287,12 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
                   </div>
 
                   <div className="flex flex-col items-center justify-center">
-                    {/* Simulated SVG Barcode */}
-                    <div className="w-full flex items-center justify-center gap-0.5 h-7">
-                      {[1, 2, 1, 3, 1, 2, 4, 1, 2, 1, 3, 2, 1, 4, 1, 2, 3, 1, 2, 1, 3, 2].map((w, i) => (
-                        <div
-                          key={i}
-                          className="bg-slate-900 h-full"
-                          style={{ width: `${w * 1.5}px` }}
-                        />
-                      ))}
-                    </div>
-                    <span className="font-mono text-[9px] text-slate-500 mt-1 font-bold">
-                      *{record.grnNumber}-W{containerIndex}*
+                    <QrCodeBadge
+                      value={`GRN|NO:${record.grnNumber}|W:${containerIndex}/${totalContainers}|CODE:${record.materialCode}|BATCH:${record.batchNumber || '-'}`}
+                      size={54}
+                    />
+                    <span className="font-mono text-[9px] text-slate-600 mt-1 font-bold">
+                      {record.grnNumber}-W{containerIndex}
                     </span>
                   </div>
                 </div>

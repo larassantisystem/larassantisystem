@@ -89,17 +89,27 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
           >
             {/* Header Perusahaan PT. LARASSANTI MAKMUR SEJAHTERA */}
             <div className="border-b-2 border-slate-900 pb-4">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h1 className="text-xl font-black tracking-tight text-slate-900 uppercase">
-                    PT. LARASSANTI MAKMUR SEJAHTERA
-                  </h1>
-                  <p className="text-xs text-slate-700 font-medium">
-                    Industri Kosmetika & Personal Care • Sertifikasi CPKB Golongan A
-                  </p>
-                  <p className="text-[11px] text-slate-600 max-w-lg leading-tight mt-0.5">
-                    Jl. Pembangunan 3 No.38 A, RT.005/RW.004, Batusari, Kec. Batuceper, Kota Tangerang, Banten 15121
-                  </p>
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="p-1 bg-white rounded-xl border border-slate-200 shrink-0 shadow-2xs flex items-center justify-center">
+                    <img
+                      src="/logo.png"
+                      alt="Logo Larassanti"
+                      className="h-14 w-auto max-w-[130px] object-contain"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                  <div>
+                    <h1 className="text-xl font-black tracking-tight text-slate-900 uppercase">
+                      PT. LARASSANTI MAKMUR SEJAHTERA
+                    </h1>
+                    <p className="text-xs text-slate-700 font-medium">
+                      Industri Kosmetika & Personal Care • Sertifikasi CPKB Golongan A
+                    </p>
+                    <p className="text-[11px] text-slate-600 max-w-lg leading-tight mt-0.5">
+                      Jl. Pembangunan 3 No.38 A, RT.005/RW.004, Batusari, Kec. Batuceper, Kota Tangerang, Banten 15121
+                    </p>
+                  </div>
                 </div>
                 <div className="text-right text-[11px] text-slate-600 border border-slate-300 rounded-lg p-2.5 bg-slate-50 shrink-0">
                   <div className="font-mono font-bold text-slate-900">FORM-QC-LPP-01</div>
@@ -194,12 +204,20 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
                   {report.samplingInfo.samplingStandard}
                 </span>
               </div>
-              <div className="grid grid-cols-2 gap-4 text-slate-700 pt-1">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-slate-700 pt-1">
                 <div>
-                  <span className="text-slate-500 block">Jumlah Contoh yang Diuji (n):</span>
+                  <span className="text-slate-500 block">Rencana Sampling (n):</span>
                   <span className="font-bold text-slate-900">
                     {report.samplingInfo.sampleSizeQuantity} {report.samplingInfo.sampleUnit}
-                    {report.samplingInfo.sampleSizeCodeLetter && ` (Code Letter: ${report.samplingInfo.sampleSizeCodeLetter})`}
+                    {report.samplingInfo.sampleSizeCodeLetter && ` (Code: ${report.samplingInfo.sampleSizeCodeLetter})`}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block">Jumlah Sampel Diuji:</span>
+                  <span className="font-bold text-teal-900">
+                    {report.actualSampleSize !== undefined && report.actualSampleSize !== null
+                      ? `${report.actualSampleSize} ${report.actualSampleUnit || (report.materialType === 'raw' ? 'gram' : 'pcs')}`
+                      : `${report.samplingInfo.sampleSizeQuantity} ${report.samplingInfo.sampleUnit}`}
                   </span>
                 </div>
                 <div>

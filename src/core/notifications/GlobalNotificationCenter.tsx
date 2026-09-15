@@ -13,6 +13,8 @@ import {
   ArrowRight,
   Check,
   Layers,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 import {
   departmentNotificationService,
@@ -21,6 +23,7 @@ import {
 import { Department, UserProfile } from '../../types';
 import { NotificationBadge } from '../ui-components/NotificationBadge';
 import { useAuth } from '../auth/AuthContext';
+import { soundService } from '../utils/soundService';
 
 interface GlobalNotificationCenterProps {
   onNavigate: (department: Department, subTab?: string) => void;
@@ -33,15 +36,38 @@ export const GlobalNotificationCenter: React.FC<GlobalNotificationCenterProps> =
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState<DepartmentNotificationItem[]>([]);
   const [selectedFilter, setSelectedFilter] = useState<string>('all');
+  const [isSoundOn, setIsSoundOn] = useState<boolean>(() => soundService.isEnabled());
   const popoverRef = useRef<HTMLDivElement>(null);
+  const prevUnreadCountRef = useRef<number | null>(null);
 
   const refreshData = async () => {
     try {
       const list = await departmentNotificationService.getNotifications();
       setNotifications(list);
+
+      // Check if new unread notifications arrived
+      const unreadCount = list.filter((n) => !n.isRead).length;
+      if (prevUnreadCountRef.current !== null && unreadCount > prevUnreadCountRef.current) {
+        // Find most urgent new item
+        const unreadItems = list.filter((n) => !n.isRead);
+        const hasCritical = unreadItems.some((n) => n.urgency === 'critical');
+        const hasWarning = unreadItems.some((n) => n.urgency === 'warning');
+        if (hasCritical || hasWarning) {
+          soundService.play('warning');
+        } else {
+          soundService.play('info');
+        }
+      }
+      prevUnreadCountRef.current = unreadCount;
     } catch (e) {
       console.error('Error refreshing notifications:', e);
     }
+  };
+
+  const handleToggleSound = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const next = soundService.toggle();
+    setIsSoundOn(next);
   };
 
   useEffect(() => {
@@ -169,16 +195,37 @@ export const GlobalNotificationCenter: React.FC<GlobalNotificationCenterProps> =
               </div>
             </div>
 
-            {dynamicCounts.all > 0 && (
+            <div className="flex items-center gap-1.5">
+              {/* Sound Notification Mute/Unmute Toggle */}
               <button
                 type="button"
-                onClick={handleMarkAllRead}
-                className="text-[10px] font-bold text-purple-700 hover:text-purple-900 flex items-center gap-1 cursor-pointer bg-purple-50 px-2 py-1 rounded-lg border border-purple-200/80"
+                onClick={handleToggleSound}
+                className={`p-1.5 rounded-lg border transition-all flex items-center gap-1 cursor-pointer text-[10px] font-bold ${
+                  isSoundOn
+                    ? 'bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100'
+                    : 'bg-slate-100 border-slate-200 text-slate-400 hover:text-slate-600'
+                }`}
+                title={isSoundOn ? 'Suara Notifikasi: AKTIF (Klik untuk Mute)' : 'Suara Notifikasi: MATI (Klik untuk Aktifkan)'}
               >
-                <Check className="w-3 h-3" />
-                <span>Tandai Semua Dibaca</span>
+                {isSoundOn ? (
+                  <Volume2 className="w-3.5 h-3.5 text-purple-700" />
+                ) : (
+                  <VolumeX className="w-3.5 h-3.5 text-slate-400" />
+                )}
+                <span className="hidden sm:inline">{isSoundOn ? 'Audio Aktif' : 'Mute'}</span>
               </button>
-            )}
+
+              {dynamicCounts.all > 0 && (
+                <button
+                  type="button"
+                  onClick={handleMarkAllRead}
+                  className="text-[10px] font-bold text-purple-700 hover:text-purple-900 flex items-center gap-1 cursor-pointer bg-purple-50 px-2 py-1 rounded-lg border border-purple-200/80"
+                >
+                  <Check className="w-3 h-3" />
+                  <span className="hidden sm:inline">Tandai Semua</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Department Filter Pills (Only showing filters user has access to) */}
@@ -194,6 +241,25 @@ export const GlobalNotificationCenter: React.FC<GlobalNotificationCenterProps> =
             >
               Semua ({dynamicCounts.all})
             </button>
+
+            {canSeeNotification(user, 'rnd') && (
+              <button
+                type="button"
+                onClick={() => setSelectedFilter('rnd')}
+                className={`px-2 py-1 rounded-lg font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1 ${
+                  selectedFilter === 'rnd'
+                    ? 'bg-blue-700 text-white shadow-2xs'
+                    : 'text-slate-600 hover:bg-blue-100'
+                }`}
+              >
+                <span>RnD</span>
+                {dynamicCounts.rnd > 0 && (
+                  <span className="w-4 h-4 rounded-full bg-blue-500 text-white flex items-center justify-center text-[9px] font-bold">
+                    {dynamicCounts.rnd}
+                  </span>
+                )}
+              </button>
+            )}
 
             {canSeeNotification(user, 'quality') && (
               <button
@@ -228,6 +294,25 @@ export const GlobalNotificationCenter: React.FC<GlobalNotificationCenterProps> =
                 {dynamicCounts.warehouse > 0 && (
                   <span className="w-4 h-4 rounded-full bg-orange-500 text-white flex items-center justify-center text-[9px] font-bold">
                     {dynamicCounts.warehouse}
+                  </span>
+                )}
+              </button>
+            )}
+
+            {canSeeNotification(user, 'ppic') && (
+              <button
+                type="button"
+                onClick={() => setSelectedFilter('ppic')}
+                className={`px-2 py-1 rounded-lg font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1 ${
+                  selectedFilter === 'ppic'
+                    ? 'bg-indigo-700 text-white shadow-2xs'
+                    : 'text-slate-600 hover:bg-indigo-100'
+                }`}
+              >
+                <span>PPIC</span>
+                {dynamicCounts.ppic > 0 && (
+                  <span className="w-4 h-4 rounded-full bg-indigo-500 text-white flex items-center justify-center text-[9px] font-bold">
+                    {dynamicCounts.ppic}
                   </span>
                 )}
               </button>

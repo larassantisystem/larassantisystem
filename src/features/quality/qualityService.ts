@@ -13,6 +13,7 @@ import { generateLotInternalNumber, generateDigitalSignatureHash } from './utils
 import { analyzeLabResults, analyzeQueuePriorities } from './utils/qcAiAssistant';
 import { authService } from '../../core/auth/authService';
 import { UserProfile } from '../../types';
+import { soundService } from '../../core/utils/soundService';
 
 const QC_REPORTS_STORAGE_KEY = 'lsm_qc_reports_v2';
 const QC_NOTIFICATIONS_STORAGE_KEY = 'lsm_qc_notifications_v2';
@@ -153,9 +154,23 @@ export const qualityService = {
         // Sync basic warehouse edits if reverted or updated
         let needsUpdate = false;
         
-        if (existingReport.quantityReceived !== grn.quantityReceived || existingReport.containerCount !== grn.containerCount) {
+        // If warehouse updated the status back to QUARANTINE from REVERTED_TO_WAREHOUSE:
+        if (grn.qcStatus === 'QUARANTINE' && existingReport.status === 'REVERTED_TO_WAREHOUSE') {
+          existingReport.status = 'QUARANTINE';
+          existingReport.updatedAt = new Date().toISOString();
+          needsUpdate = true;
+        }
+
+        if (
+          existingReport.quantityReceived !== grn.quantityReceived ||
+          existingReport.containerCount !== grn.containerCount ||
+          existingReport.unit !== grn.unit ||
+          existingReport.containerType !== grn.containerType
+        ) {
           existingReport.quantityReceived = grn.quantityReceived;
           existingReport.containerCount = grn.containerCount;
+          existingReport.unit = grn.unit;
+          existingReport.containerType = grn.containerType;
           existingReport.samplingInfo = calculateSamplingPlan(
             grn.materialType,
             grn.quantityReceived,
@@ -163,6 +178,39 @@ export const qualityService = {
             grn.unit,
             grn.containerType
           );
+          needsUpdate = true;
+        }
+
+        if (grn.batchNumber && grn.batchNumber !== existingReport.batchNumberVendor) {
+          existingReport.batchNumberVendor = grn.batchNumber;
+          needsUpdate = true;
+        }
+        if (grn.manufacturer && grn.manufacturer !== existingReport.manufacturer) {
+          existingReport.manufacturer = grn.manufacturer;
+          needsUpdate = true;
+        }
+        if (grn.distributor && grn.distributor !== existingReport.distributor) {
+          existingReport.distributor = grn.distributor;
+          needsUpdate = true;
+        }
+        if (grn.deliveryNoteNumber && grn.deliveryNoteNumber !== existingReport.deliveryNoteNumber) {
+          existingReport.deliveryNoteNumber = grn.deliveryNoteNumber;
+          needsUpdate = true;
+        }
+        if (grn.poNumber && grn.poNumber !== existingReport.poNumber) {
+          existingReport.poNumber = grn.poNumber;
+          needsUpdate = true;
+        }
+        if (grn.expiryDate && grn.expiryDate !== existingReport.expiryDate) {
+          existingReport.expiryDate = grn.expiryDate;
+          needsUpdate = true;
+        }
+        if (grn.actualSampleSize !== undefined && grn.actualSampleSize !== existingReport.actualSampleSize) {
+          existingReport.actualSampleSize = grn.actualSampleSize;
+          needsUpdate = true;
+        }
+        if (grn.actualSampleUnit && grn.actualSampleUnit !== existingReport.actualSampleUnit) {
+          existingReport.actualSampleUnit = grn.actualSampleUnit;
           needsUpdate = true;
         }
 
@@ -230,13 +278,22 @@ export const qualityService = {
   },
 
   /**
-   * Revert report back to warehouse with mandatory reason
+   * Revert report back to warehouse with mandatory reason & password verification
    */
   revertToWarehouse: async (
     reportId: string,
     reason: string,
-    user: UserProfile
+    user: UserProfile,
+    passwordInput: string
   ): Promise<QcInspectionReport> => {
+    if (!passwordInput) {
+      throw new Error('Kata sandi otorisasi revert wajib diisi.');
+    }
+    const verifyRes = await authService.verifyPassword(user.nik, passwordInput);
+    if (!verifyRes.valid) {
+      throw new Error(verifyRes.error || 'Kata sandi tidak valid. Otorisasi revert ke gudang ditolak.');
+    }
+
     if (!reason || reason.trim().length < 5) {
       throw new Error('Alasan revert wajib diisi dengan jelas (minimal 5 karakter).');
     }
@@ -254,7 +311,12 @@ export const qualityService = {
     localStorage.setItem(QC_REPORTS_STORAGE_KEY, JSON.stringify(reports));
 
     // Sync to warehouse
-    await qualityService.syncGrnStatus(report.grnId, 'REVERTED_TO_WAREHOUSE', reason);
+    await qualityService.syncGrnStatus(report.grnId, 'REVERTED_TO_WAREHOUSE', {
+      notes: reason.trim(),
+      revertReason: reason.trim(),
+      revertedBy: `${user.name} (${user.role.toUpperCase()})`,
+      revertedAt: report.revertedAt,
+    });
 
     // Broadcast warning notification to Warehouse & Quality
     await qualityService.createNotification({
@@ -266,6 +328,67 @@ export const qualityService = {
       reportId: report.id,
       grnNumber: report.grnNumber,
     });
+
+    soundService.play('revert');
+
+    return report;
+  },
+
+  /**
+   * Revert report from Awaiting QM Authorization back to Lab Testing Process (Proses Uji Lab)
+   * with mandatory revision instructions and Quality Manager password verification.
+   */
+  revertToLabProcess: async (
+    reportId: string,
+    revisionInstruction: string,
+    qmUser: UserProfile,
+    passwordInput: string
+  ): Promise<QcInspectionReport> => {
+    if (!passwordInput) {
+      throw new Error('Kata sandi otorisasi Quality Manager wajib diisi.');
+    }
+    const verifyRes = await authService.verifyPassword(qmUser.nik, passwordInput);
+    if (!verifyRes.valid) {
+      throw new Error(verifyRes.error || 'Kata sandi tidak valid. Otorisasi pengembalian ke uji lab ditolak.');
+    }
+
+    if (!revisionInstruction || revisionInstruction.trim().length < 5) {
+      throw new Error('Instruksi/alasan revisi uji lab wajib diisi dengan jelas (minimal 5 karakter).');
+    }
+
+    const reports = await qualityService.getReports();
+    const report = reports.find((r) => r.id === reportId);
+    if (!report) throw new Error('Laporan QC tidak ditemukan');
+
+    const now = new Date().toISOString();
+
+    report.status = 'QUALITY_CONTROL_PROCESS';
+    report.qmRevertToLabReason = revisionInstruction.trim();
+    report.qmRevertToLabBy = `${qmUser.name} (Quality Manager)`;
+    report.qmRevertToLabAt = now;
+    report.updatedAt = now;
+
+    // Save to local storage
+    localStorage.setItem(QC_REPORTS_STORAGE_KEY, JSON.stringify(reports));
+
+    // Sync to warehouse
+    await qualityService.syncGrnStatus(report.grnId, 'QUALITY_CONTROL_PROCESS', {
+      notes: `Revisi Uji Lab dari QM (${qmUser.name}): "${revisionInstruction.trim()}"`,
+    });
+
+    // Broadcast notification to Quality Department
+    await qualityService.createNotification({
+      title: 'Laporan Dikembalikan ke Uji Lab oleh QM',
+      message: `Laporan Lot ${report.lotInternalNumber || report.grnNumber} (${report.materialName}) dikembalikan ke Uji Lab oleh QM (${qmUser.name}). Catatan revisi: "${revisionInstruction.trim()}".`,
+      type: 'WARNING',
+      targetDepartments: ['quality'],
+      targetRoles: ['staff', 'supervisor', 'admin'],
+      reportId: report.id,
+      lotInternalNumber: report.lotInternalNumber,
+      grnNumber: report.grnNumber,
+    });
+
+    soundService.play('warning');
 
     return report;
   },
@@ -279,7 +402,9 @@ export const qualityService = {
     staffDecision: 'RELEASE' | 'REJECT',
     staffNotes: string,
     staffUser: UserProfile,
-    passwordInput: string
+    passwordInput: string,
+    actualSampleSize?: number,
+    actualSampleUnit?: string
   ): Promise<QcInspectionReport> => {
     // 1. Verify staff password
     const verifyRes = await authService.verifyPassword(staffUser.nik, passwordInput);
@@ -311,6 +436,10 @@ export const qualityService = {
     report.parameters = parameters;
     report.staffDecision = staffDecision;
     report.staffNotes = staffNotes || '';
+    if (actualSampleSize !== undefined && actualSampleSize !== null && !isNaN(Number(actualSampleSize))) {
+      report.actualSampleSize = Number(actualSampleSize);
+      report.actualSampleUnit = actualSampleUnit || (report.materialType === 'raw' ? 'gram' : 'pcs');
+    }
     report.staffSignature = {
       signerName: staffUser.name,
       signerNik: staffUser.nik,
@@ -336,7 +465,10 @@ export const qualityService = {
     localStorage.setItem(QC_REPORTS_STORAGE_KEY, JSON.stringify(reports));
 
     // Sync to warehouse
-    await qualityService.syncGrnStatus(report.grnId, 'AWAITING_QM_AUTHORIZATION');
+    await qualityService.syncGrnStatus(report.grnId, 'AWAITING_QM_AUTHORIZATION', {
+      actualSampleSize: report.actualSampleSize,
+      actualSampleUnit: report.actualSampleUnit,
+    });
 
     // Broadcast notification to Quality Manager & Supervisor
     await qualityService.createNotification({
@@ -349,6 +481,8 @@ export const qualityService = {
       lotInternalNumber: report.lotInternalNumber,
       grnNumber: report.grnNumber,
     });
+
+    soundService.play('info');
 
     return report;
   },
@@ -443,27 +577,54 @@ export const qualityService = {
       grnNumber: report.grnNumber,
     });
 
+    if (decision === 'REJECT') {
+      soundService.play('warning');
+    } else {
+      soundService.play('success');
+    }
+
     return report;
   },
 
   /**
    * Helper to sync status with warehouse GRN records in storage and database
    */
-  syncGrnStatus: async (grnId: string, newStatus: string, notes?: string) => {
+  syncGrnStatus: async (
+    grnId: string,
+    newStatus: string,
+    options?: string | {
+      notes?: string;
+      revertReason?: string;
+      revertedBy?: string;
+      revertedAt?: string;
+      actualSampleSize?: number;
+      actualSampleUnit?: string;
+    }
+  ) => {
     try {
       const records = await warehouseService.getGrnRecords();
       const target = records.find((r) => r.id === grnId || r.grnNumber === grnId);
       if (target) {
+        const opts = typeof options === 'string' ? { notes: options } : (options || {});
         target.qcStatus = newStatus as any;
-        if (notes) {
-          target.notes = notes;
-        }
+        if (opts.notes) target.notes = opts.notes;
+        if (opts.revertReason !== undefined) target.revertReason = opts.revertReason;
+        if (opts.revertedBy !== undefined) target.revertedBy = opts.revertedBy;
+        if (opts.revertedAt !== undefined) target.revertedAt = opts.revertedAt;
+        if (opts.actualSampleSize !== undefined) target.actualSampleSize = opts.actualSampleSize;
+        if (opts.actualSampleUnit !== undefined) target.actualSampleUnit = opts.actualSampleUnit;
+
         localStorage.setItem('lsm_warehouse_grn_v1', JSON.stringify(records));
 
         // Synchronize directly with Supabase via warehouseService
         await warehouseService.updateGrnRecord(target.id, {
           qcStatus: newStatus as any,
-          notes: notes || target.notes,
+          notes: opts.notes || target.notes,
+          revertReason: opts.revertReason !== undefined ? opts.revertReason : target.revertReason,
+          revertedBy: opts.revertedBy !== undefined ? opts.revertedBy : target.revertedBy,
+          revertedAt: opts.revertedAt !== undefined ? opts.revertedAt : target.revertedAt,
+          actualSampleSize: opts.actualSampleSize !== undefined ? opts.actualSampleSize : target.actualSampleSize,
+          actualSampleUnit: opts.actualSampleUnit !== undefined ? opts.actualSampleUnit : target.actualSampleUnit,
         });
       }
     } catch (e) {

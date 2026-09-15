@@ -124,6 +124,8 @@ export interface BulkFormulation {
   purposeDescription?: string; // Keterangan / Tujuan Formula
   ingredients: FormulationIngredient[];
   mixingInstructions?: string; // Catatan Teknis Formulasi / Petunjuk Pengolahan
+  dynamicProcessSteps?: any; // JSON representation of DynamicProcessStep[]
+  technicalNotes?: string; // Mesin dan catatan teknis
   createdAt?: string;
   updatedAt?: string;
   createdBy?: string;

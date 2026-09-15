@@ -16,12 +16,23 @@ import {
   Camera,
   FileText,
   FileCheck,
+  Cloud,
+  Loader2,
+  ExternalLink,
 } from 'lucide-react';
 import { RawMaterial, PackagingMaterial } from '../../../types';
 import { GrnMaterialType, GrnRecord } from '../types/grnTypes';
 import { MaterialSearchDropdown } from './MaterialSearchDropdown';
 import { useAuth } from '../../../core/auth/AuthContext';
 import { authService } from '../../../core/auth/authService';
+import {
+  googleDriveSignIn,
+  googleDriveSignOut,
+  uploadCoaFileToDrive,
+  getDriveAccessToken,
+  getDriveUser,
+  initDriveAuth,
+} from '../../../core/googleDrive/googleDriveService';
 
 interface GrnFormModalProps {
   isOpen: boolean;
@@ -72,6 +83,97 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
   const msdsCameraRef = useRef<HTMLInputElement>(null);
   const halalInputRef = useRef<HTMLInputElement>(null);
   const halalCameraRef = useRef<HTMLInputElement>(null);
+
+  // Google Drive CoA State
+  const [coaDriveFileId, setCoaDriveFileId] = useState<string | null>(null);
+  const [coaDriveViewLink, setCoaDriveViewLink] = useState<string | null>(null);
+  const [isDriveConnected, setIsDriveConnected] = useState<boolean>(false);
+  const [driveUserEmail, setDriveUserEmail] = useState<string | null>(null);
+  const [isUploadingCoa, setIsUploadingCoa] = useState<boolean>(false);
+  const [driveUploadError, setDriveUploadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsub = initDriveAuth(
+      (u) => {
+        setIsDriveConnected(true);
+        setDriveUserEmail(u?.email || null);
+      },
+      () => {
+        setIsDriveConnected(false);
+        setDriveUserEmail(null);
+      }
+    );
+    const currentUser = getDriveUser();
+    if (currentUser) {
+      setIsDriveConnected(true);
+      setDriveUserEmail(currentUser.email || null);
+    }
+    return () => {
+      if (typeof unsub === 'function') unsub();
+    };
+  }, []);
+
+  const handleCoaFileSelected = async (file: File) => {
+    setCoaFileName(file.name);
+    setDriveUploadError(null);
+
+    const token = await getDriveAccessToken();
+    if (token) {
+      setIsUploadingCoa(true);
+      try {
+        const result = await uploadCoaFileToDrive(file, {
+          grnNumber: deliveryNoteNumber || poNumber || 'Incoming',
+          materialName: selectedMaterial?.name,
+          batchNumber,
+        });
+        setCoaDriveFileId(result.fileId);
+        setCoaDriveViewLink(result.webViewLink);
+      } catch (err: any) {
+        if (err.isCancelled || err.code === 'auth/popup-closed-by-user') {
+          console.log('Drive upload auth cancelled');
+          setDriveUploadError('Login Google dibatalkan. File tetap tersimpan sebagai lampiran lokal.');
+        } else {
+          console.warn('Drive upload failed, saved as local attachment:', err);
+          setDriveUploadError('Gagal sinkron ke Google Drive: ' + (err.message || 'Error'));
+        }
+      } finally {
+        setIsUploadingCoa(false);
+      }
+    }
+  };
+
+  const handleConnectDrive = async () => {
+    try {
+      setDriveUploadError(null);
+      const res = await googleDriveSignIn();
+      setIsDriveConnected(true);
+      setDriveUserEmail(res.user?.email || null);
+      if (coaInputRef.current?.files?.[0]) {
+        await handleCoaFileSelected(coaInputRef.current.files[0]);
+      } else if (coaCameraRef.current?.files?.[0]) {
+        await handleCoaFileSelected(coaCameraRef.current.files[0]);
+      }
+    } catch (err: any) {
+      if (err.isCancelled || err.code === 'auth/popup-closed-by-user') {
+        // User closed popup without signing in
+        setDriveUploadError('Autentikasi Google Drive dibatalkan.');
+        setTimeout(() => setDriveUploadError(null), 3000);
+      } else {
+        setDriveUploadError(err.message || 'Gagal login Google Drive');
+      }
+    }
+  };
+
+  const handleSwitchDriveAccount = async () => {
+    try {
+      await googleDriveSignOut();
+      setIsDriveConnected(false);
+      setDriveUserEmail(null);
+      await handleConnectDrive();
+    } catch (err: any) {
+      console.warn('Switch account error:', err);
+    }
+  };
 
   // Physical inspection & staff
   const [sealCondition, setSealCondition] = useState('✓ UTUH & TERSEGEL RESMI');
@@ -207,6 +309,8 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
         sealCondition,
         packagingCondition,
         coaAttachment: coaFileName || undefined,
+        coaDriveFileId: coaDriveFileId || undefined,
+        coaDriveViewLink: coaDriveViewLink || undefined,
         msdsAttachment: msdsFileName || undefined,
         halalAttachment: halalFileName || undefined,
         receivedBy: receivedByStaff || userName,
@@ -235,7 +339,7 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
           accept=".pdf,.png,.jpg,.jpeg"
           onChange={(e) => {
             if (e.target.files && e.target.files[0]) {
-              setCoaFileName(e.target.files[0].name);
+              handleCoaFileSelected(e.target.files[0]);
             }
           }}
         />
@@ -247,7 +351,7 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
           capture="environment"
           onChange={(e) => {
             if (e.target.files && e.target.files[0]) {
-              setCoaFileName(e.target.files[0].name);
+              handleCoaFileSelected(e.target.files[0]);
             }
           }}
         />
@@ -708,8 +812,50 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
                         * (Wajib)
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">
-                      {coaFileName ? (
+
+                    {/* Google Drive Status Banner */}
+                    <div className="mt-2 mb-1 flex items-center justify-between gap-1 text-[11px] flex-wrap">
+                      {isDriveConnected ? (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="inline-flex items-center gap-1 font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+                            <Cloud className="w-3 h-3 text-blue-600" />
+                            <span>GDrive Aktif</span>
+                            {driveUserEmail && (
+                              <span className="font-normal text-[10px] text-blue-600 max-w-[130px] truncate">
+                                ({driveUserEmail})
+                              </span>
+                            )}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={handleSwitchDriveAccount}
+                            className="text-[10px] font-semibold text-slate-500 hover:text-blue-700 underline cursor-pointer"
+                            title="Ganti atau hubungkan dengan akun Google lain"
+                          >
+                            Ganti Akun
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={handleConnectDrive}
+                          className="inline-flex items-center gap-1 font-bold text-slate-700 bg-white hover:bg-slate-100 px-2 py-0.5 rounded-md border border-slate-300 cursor-pointer shadow-2xs"
+                        >
+                          <Cloud className="w-3 h-3 text-blue-500" /> Hubungkan GDrive
+                        </button>
+                      )}
+                    </div>
+
+                    <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                      {isUploadingCoa ? (
+                        <span className="font-semibold text-blue-700 flex items-center gap-1.5 animate-pulse">
+                          <Loader2 className="w-3 h-3 animate-spin" /> Mengunggah ke Google Drive...
+                        </span>
+                      ) : coaDriveViewLink ? (
+                        <span className="font-semibold text-emerald-700 block break-all">
+                          ✓ Tersimpan di Google Drive: {coaFileName}
+                        </span>
+                      ) : coaFileName ? (
                         <span className="font-semibold text-emerald-700 break-all">
                           ✓ File: {coaFileName}
                         </span>
@@ -717,20 +863,26 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
                         'Lampirkan Sertifikat Analisis (CoA) asli dari produsen untuk pengujian QC.'
                       )}
                     </p>
+
+                    {driveUploadError && (
+                      <p className="text-[10px] text-rose-600 mt-1">{driveUploadError}</p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 pt-1">
                     <button
                       type="button"
+                      disabled={isUploadingCoa}
                       onClick={() => coaInputRef.current?.click()}
-                      className="flex-1 py-1.5 px-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs"
+                      className="flex-1 py-1.5 px-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50"
                     >
                       <Upload className="w-3.5 h-3.5 text-slate-500" />
                       <span>Pilih File</span>
                     </button>
                     <button
                       type="button"
+                      disabled={isUploadingCoa}
                       onClick={() => coaCameraRef.current?.click()}
-                      className="flex-1 py-1.5 px-2.5 rounded-xl border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs"
+                      className="flex-1 py-1.5 px-2.5 rounded-xl border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50"
                     >
                       <Camera className="w-3.5 h-3.5 text-emerald-600" />
                       <span>Foto HP</span>

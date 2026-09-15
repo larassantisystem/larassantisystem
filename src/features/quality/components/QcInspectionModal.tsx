@@ -11,10 +11,16 @@ import {
   FileCheck2,
   HelpCircle,
   AlertCircle,
+  FileCheck,
+  Eye,
+  Cloud,
+  RotateCcw,
 } from 'lucide-react';
 import { QcInspectionReport, QcParameterResult } from '../types/qcTypes';
 import { analyzeLabResults } from '../utils/qcAiAssistant';
 import { useAuth } from '../../../core/auth/AuthContext';
+import { warehouseService } from '../../warehouse/warehouseService';
+import { CoaViewerModal } from '../../warehouse/components/CoaViewerModal';
 
 interface QcInspectionModalProps {
   isOpen: boolean;
@@ -25,7 +31,9 @@ interface QcInspectionModalProps {
     parameters: QcParameterResult[],
     staffDecision: 'RELEASE' | 'REJECT',
     staffNotes: string,
-    passwordInput: string
+    passwordInput: string,
+    actualSampleSize?: number,
+    actualSampleUnit?: string
   ) => Promise<void>;
 }
 
@@ -40,6 +48,8 @@ export const QcInspectionModal: React.FC<QcInspectionModalProps> = ({
   const [parameters, setParameters] = useState<QcParameterResult[]>([]);
   const [staffDecision, setStaffDecision] = useState<'RELEASE' | 'REJECT'>('RELEASE');
   const [staffNotes, setStaffNotes] = useState('');
+  const [actualSampleSize, setActualSampleSize] = useState<string>('');
+  const [actualSampleUnit, setActualSampleUnit] = useState<string>('gram');
 
   // Digital Signature Password Modal inside
   const [showSignatureModal, setShowSignatureModal] = useState(false);
@@ -47,6 +57,13 @@ export const QcInspectionModal: React.FC<QcInspectionModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [focusedEmptyParamId, setFocusedEmptyParamId] = useState<string | null>(null);
+  const [showCoaViewer, setShowCoaViewer] = useState(false);
+
+  const matchingGrn = report
+    ? warehouseService
+        .getLocalRecords()
+        .find((r) => r.id === report.grnId || r.grnNumber === report.grnNumber)
+    : null;
 
   // References to input elements for auto-focusing on incomplete fields
   const inputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
@@ -60,6 +77,14 @@ export const QcInspectionModal: React.FC<QcInspectionModalProps> = ({
       );
       setStaffDecision(report.staffDecision || 'RELEASE');
       setStaffNotes(report.staffNotes || '');
+
+      const defaultUnit = report.actualSampleUnit || (report.materialType === 'raw' ? 'gram' : 'pcs');
+      const defaultSize = report.actualSampleSize !== undefined && report.actualSampleSize !== null
+        ? String(report.actualSampleSize)
+        : (report.materialType === 'packaging' ? String(report.samplingInfo.sampleSizeQuantity || '') : '');
+      setActualSampleSize(defaultSize);
+      setActualSampleUnit(defaultUnit);
+
       setShowSignatureModal(false);
       setStaffPassword('');
       setErrorMessage('');
@@ -109,6 +134,17 @@ export const QcInspectionModal: React.FC<QcInspectionModalProps> = ({
       return;
     }
 
+    // Validate: Check actual sample size
+    const parsedSampleSize = parseFloat(actualSampleSize);
+    if (isNaN(parsedSampleSize) || parsedSampleSize <= 0) {
+      setErrorMessage(
+        report.materialType === 'raw'
+          ? 'Jumlah sampel aktual dalam gram wajib diisi dengan angka valid (> 0).'
+          : 'Jumlah sampel aktual dalam pcs wajib diisi dengan angka valid (> 0).'
+      );
+      return;
+    }
+
     setErrorMessage('');
     setFocusedEmptyParamId(null);
     setShowSignatureModal(true);
@@ -124,12 +160,15 @@ export const QcInspectionModal: React.FC<QcInspectionModalProps> = ({
     try {
       setIsSubmitting(true);
       setErrorMessage('');
+      const parsedSampleSize = parseFloat(actualSampleSize);
       await onSubmitStaffAnalysis(
         report.id,
         parameters,
         staffDecision,
         staffNotes,
-        staffPassword
+        staffPassword,
+        isNaN(parsedSampleSize) ? undefined : parsedSampleSize,
+        actualSampleUnit
       );
       setShowSignatureModal(false);
       onClose();
@@ -173,6 +212,32 @@ export const QcInspectionModal: React.FC<QcInspectionModalProps> = ({
 
         {/* Scrollable Content */}
         <div className="p-6 space-y-6 overflow-y-auto grow">
+          {/* QM Revert to Lab Revision Notice Banner */}
+          {report.qmRevertToLabReason && (
+            <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-4 text-amber-950 space-y-1.5 shadow-xs">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2 font-bold text-xs text-amber-900">
+                  <RotateCcw className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>INSTRUKSI REVISI PENGUJIAN DARI QUALITY MANAGER</span>
+                </div>
+                {report.qmRevertToLabAt && (
+                  <span className="text-[10px] text-amber-700 font-mono">
+                    {new Date(report.qmRevertToLabAt).toLocaleString('id-ID')}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs font-semibold bg-white/90 p-2.5 rounded-lg border border-amber-200 text-amber-950 leading-relaxed">
+                "{report.qmRevertToLabReason}"
+              </p>
+              {report.qmRevertToLabBy && (
+                <div className="text-[11px] text-amber-800 flex items-center gap-1 font-medium">
+                  <span>Oleh:</span>
+                  <span className="font-bold">{report.qmRevertToLabBy}</span>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Material & Sampling Plan Card */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Material Identitas */}
@@ -202,6 +267,32 @@ export const QcInspectionModal: React.FC<QcInspectionModalProps> = ({
                     {report.quantityReceived.toLocaleString('id-ID', { minimumFractionDigits: 3 })} {report.unit} ({report.containerCount} {report.containerType})
                   </span>
                 </div>
+
+                {/* Dokumen CoA Vendor Reference */}
+                {(matchingGrn?.coaAttachment || matchingGrn?.coaDriveFileId) && (
+                  <div className="col-span-2 pt-2 border-t border-slate-200 flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-1.5">
+                      <FileCheck className="w-3.5 h-3.5 text-blue-600" />
+                      <span className="text-slate-500">CoA Vendor:</span>
+                      <span className="font-semibold text-emerald-700 font-mono text-[11px] bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                        {matchingGrn.coaAttachment || 'Dokumen CoA'}
+                      </span>
+                      {matchingGrn.coaDriveFileId && (
+                        <span className="inline-flex items-center gap-1 font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                          <Cloud className="w-2.5 h-2.5 text-blue-600" /> GDrive
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowCoaViewer(true)}
+                      className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[11px] flex items-center gap-1 border border-blue-200 cursor-pointer shadow-2xs transition-colors"
+                    >
+                      <Eye className="w-3 h-3" />
+                      <span>Lihat CoA (Google Drive)</span>
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -222,15 +313,42 @@ export const QcInspectionModal: React.FC<QcInspectionModalProps> = ({
                 <p className="text-[11px] font-medium text-teal-800 mb-2">
                   {report.samplingInfo.samplingStandard}
                 </p>
-                <div className="bg-white/80 border border-teal-200 rounded-lg p-2 text-slate-700 space-y-1">
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Jumlah Sampel (n):</span>
+                <div className="bg-white/80 border border-teal-200 rounded-lg p-2.5 text-slate-700 space-y-2">
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-slate-500">Rencana Sampling:</span>
                     <span className="font-bold text-teal-900 text-sm">
                       {report.samplingInfo.sampleSizeQuantity} {report.samplingInfo.sampleUnit}
                     </span>
                   </div>
                   <div className="text-[11px] text-slate-600 leading-snug pt-1 border-t border-teal-100">
                     {report.samplingInfo.samplingDescription}
+                  </div>
+
+                  {/* Input Jumlah Sampel Fisik Laboratorium */}
+                  <div className="pt-2 border-t border-teal-200">
+                    <label className="block text-[11px] font-bold text-teal-950 uppercase tracking-wide mb-1">
+                      Jumlah Sampel Diuji ({report.materialType === 'raw' ? 'gram' : 'pcs'}) <span className="text-red-500">*</span>
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        step={report.materialType === 'raw' ? '0.01' : '1'}
+                        min="0.01"
+                        required
+                        value={actualSampleSize}
+                        onChange={(e) => setActualSampleSize(e.target.value)}
+                        placeholder={report.materialType === 'raw' ? 'Contoh: 100' : 'Contoh: 32'}
+                        className="w-full bg-white text-xs border border-teal-300 rounded-lg px-2.5 py-1.5 focus:outline-hidden focus:ring-2 focus:ring-teal-500 font-bold text-slate-800"
+                      />
+                      <span className="px-2.5 py-1.5 rounded-lg bg-teal-100 text-teal-900 font-bold text-xs border border-teal-200 shrink-0">
+                        {actualSampleUnit}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-teal-700 mt-1 block">
+                      {report.materialType === 'raw'
+                        ? 'Catat berat sampel yang ditimbang analis dalam satuan gram untuk uji lab.'
+                        : 'Catat kuantitas unit kemasan fisik yang diambil untuk uji QC.'}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -571,6 +689,27 @@ export const QcInspectionModal: React.FC<QcInspectionModalProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* Coa Viewer Modal */}
+      {showCoaViewer && (
+        <CoaViewerModal
+          isOpen={showCoaViewer}
+          onClose={() => setShowCoaViewer(false)}
+          fileName={matchingGrn?.coaAttachment || 'CoA_Dokumen.pdf'}
+          driveFileId={matchingGrn?.coaDriveFileId}
+          driveViewLink={matchingGrn?.coaDriveViewLink}
+          materialName={report.materialName}
+          materialCode={report.materialCode}
+          batchNumber={report.batchNumberVendor}
+          grnNumber={report.grnNumber}
+          onDriveUploaded={(res) => {
+            if (matchingGrn) {
+              matchingGrn.coaDriveFileId = res.fileId;
+              matchingGrn.coaDriveViewLink = res.viewLink;
+            }
+          }}
+        />
       )}
     </div>
   );

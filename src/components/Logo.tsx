@@ -14,8 +14,8 @@ export const Logo: React.FC<LogoProps> = ({
   variant = 'light',
 }) => {
   const imageSizes = {
-    sm: 'h-7 w-auto',
-    md: 'h-10 w-auto',
+    sm: 'h-8 w-auto',
+    md: 'h-11 w-auto',
     lg: 'h-14 w-auto',
   };
 
@@ -26,7 +26,7 @@ export const Logo: React.FC<LogoProps> = ({
       <div className="relative shrink-0 flex items-center justify-center">
         <img
           src="/logo.png"
-          alt="Larassanti Logo"
+          alt="PT. Larassanti Makmur Sejahtera"
           className={`${imageSizes[size]} object-contain`}
           referrerPolicy="no-referrer"
         />

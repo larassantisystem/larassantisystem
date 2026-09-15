@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
-import { AlertTriangle, X, ArrowLeftCircle, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { AlertTriangle, X, ArrowLeftCircle, CheckCircle2, Lock } from 'lucide-react';
 import { QcInspectionReport } from '../types/qcTypes';
 
 interface QcRevertModalProps {
   isOpen: boolean;
   onClose: () => void;
   report: QcInspectionReport | null;
-  onConfirmRevert: (reportId: string, reason: string) => Promise<void>;
+  onConfirmRevert: (reportId: string, reason: string, passwordInput: string) => Promise<void>;
 }
 
 export const QcRevertModal: React.FC<QcRevertModalProps> = ({
@@ -16,8 +16,17 @@ export const QcRevertModal: React.FC<QcRevertModalProps> = ({
   onConfirmRevert,
 }) => {
   const [reason, setReason] = useState('');
+  const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      setReason('');
+      setPassword('');
+      setErrorMsg('');
+    }
+  }, [isOpen]);
 
   if (!isOpen || !report) return null;
 
@@ -28,11 +37,17 @@ export const QcRevertModal: React.FC<QcRevertModalProps> = ({
       return;
     }
 
+    if (!password.trim()) {
+      setErrorMsg('Kata sandi otorisasi wajib diisi untuk verifikasi pengembalian.');
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       setErrorMsg('');
-      await onConfirmRevert(report.id, reason.trim());
+      await onConfirmRevert(report.id, reason.trim(), password.trim());
       setReason('');
+      setPassword('');
       onClose();
     } catch (err: any) {
       setErrorMsg(err.message || 'Gagal melakukan revert ke gudang');
@@ -102,13 +117,31 @@ export const QcRevertModal: React.FC<QcRevertModalProps> = ({
               Alasan Pengembalian / Catatan Perbaikan <span className="text-red-500">*</span>
             </label>
             <textarea
-              rows={4}
+              rows={3}
               required
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Contoh: Jumlah koli fisik di drum karantina berjumlah 20 drum, sedangkan di GRN terinput 25 drum. Mohon diperbaiki sebelum sampling QC."
               className="w-full text-sm border border-slate-300 rounded-xl p-3 focus:outline-hidden focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-slate-800 placeholder-slate-400"
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+              <Lock className="w-3.5 h-3.5 text-slate-500" />
+              Konfirmasi Kata Sandi Akun Anda <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Masukkan kata sandi Anda untuk verifikasi"
+              className="w-full text-sm border border-slate-300 rounded-xl px-3 py-2.5 focus:outline-hidden focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-slate-800 placeholder-slate-400"
+            />
+            <p className="text-[10.5px] text-slate-500 mt-1">
+              Verifikasi kata sandi diperlukan sebagai tanda tangan otorisasi pengembalian dokumen ke gudang. (Kata sandi demo: <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-slate-700 font-semibold">laras123</code> atau <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-slate-700 font-semibold">admin</code>)
+            </p>
           </div>
 
           {errorMsg && (

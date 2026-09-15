@@ -79,10 +79,19 @@ export interface QcInspectionReport {
   qmNotes?: string;
   qmSignature?: DigitalSignatureStamp;
   
-  // Revert info
+  // Revert to warehouse info
   revertReason?: string;
   revertedBy?: string;
   revertedAt?: string;
+
+  // QM Revert back to Lab Testing info
+  qmRevertToLabReason?: string;
+  qmRevertToLabBy?: string;
+  qmRevertToLabAt?: string;
+
+  // Actual sample tested by QC Lab
+  actualSampleSize?: number;
+  actualSampleUnit?: string;
 
   // AI Assistant Assessment
   aiAssessment?: {

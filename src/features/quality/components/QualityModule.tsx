@@ -15,8 +15,6 @@ import {
   Boxes,
   Tag,
   ArrowUpDown,
-  Minimize2,
-  Maximize2,
   ClipboardList,
   Info,
   CalendarDays,
@@ -39,8 +37,10 @@ import { QcManagerAuthModal } from './QcManagerAuthModal';
 import { QcRevertModal } from './QcRevertModal';
 import { QcInspectionReportPdfModal } from './QcInspectionReportPdfModal';
 import { QcStatusLabelModal } from './QcStatusLabelModal';
-import { QcNotificationsCenter } from './QcNotificationsCenter';
 import { QcDiagnosticAuditModal } from './QcDiagnosticAuditModal';
+import { warehouseService } from '../../warehouse/warehouseService';
+import { GrnDetailModal } from '../../warehouse/components/GrnDetailModal';
+import { GrnRecord } from '../../warehouse/types/grnTypes';
 import { useAuth } from '../../../core/auth/AuthContext';
 import {
   IpcBulkTest,
@@ -78,7 +78,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
   // Specific material type separation tab for active view (BB vs BK)
   const [activeMaterialType, setActiveMaterialType] = useState<'all' | 'raw' | 'packaging'>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [isCompactMode, setIsCompactMode] = useState<boolean>(false);
+  const isCompactMode = true;
 
   // Extended Quality states
   const [ipcBulkTests, setIpcBulkTests] = useState<IpcBulkTest[]>(initialIpcBulkTests);
@@ -132,6 +132,43 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
   const [pdfReport, setPdfReport] = useState<QcInspectionReport | null>(null);
   const [labelReport, setLabelReport] = useState<QcInspectionReport | null>(null);
   const [showDiagnosticAudit, setShowDiagnosticAudit] = useState<boolean>(false);
+  const [selectedGrnDetail, setSelectedGrnDetail] = useState<GrnRecord | null>(null);
+
+  const handleOpenGrnDetail = (report: QcInspectionReport) => {
+    const localGrns = warehouseService.getLocalRecords();
+    const matched = localGrns.find(
+      (g) => g.id === report.grnId || g.grnNumber === report.grnNumber
+    );
+    if (matched) {
+      setSelectedGrnDetail(matched);
+    } else {
+      setSelectedGrnDetail({
+        id: report.grnId || report.id,
+        grnNumber: report.grnNumber,
+        materialType: report.materialType,
+        materialId: '',
+        materialCode: report.materialCode,
+        materialName: report.materialName,
+        manufacturer: report.manufacturer,
+        distributor: report.distributor || '-',
+        poNumber: report.poNumber || '-',
+        deliveryNoteNumber: report.deliveryNoteNumber || '-',
+        batchNumber: report.batchNumberVendor,
+        receivedDate: report.receivedDate,
+        expiryDate: report.expiryDate,
+        quantityReceived: report.quantityReceived,
+        unit: report.unit,
+        containerCount: report.containerCount,
+        containerType: report.containerType,
+        storageLocation: report.storageLocation,
+        storageConditions: report.storageConditions,
+        qcStatus: report.status as any,
+        qcParametersCount: report.parameters?.length || 0,
+        receivedBy: 'Staff Gudang',
+        createdAt: report.createdAt || new Date().toISOString(),
+      });
+    }
+  };
 
   const loadData = async () => {
     setIsLoading(true);
@@ -206,12 +243,15 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
     (r) =>
       r.status === 'PASSED' ||
       r.status === 'PASSED_WITH_DEVIATION' ||
-      r.status === 'REJECTED' ||
-      r.status === 'REVERTED_TO_WAREHOUSE'
+      r.status === 'REJECTED'
   );
   const archiveList = filterBySearchAndType(archiveReports, activeMaterialType);
   const archiveRawList = filterBySearchAndType(archiveReports, 'raw');
   const archivePackagingList = filterBySearchAndType(archiveReports, 'packaging');
+
+  // 5. Item Direvert ke Gudang (Menunggu Perbaikan Gudang)
+  const revertedReports = reports.filter((r) => r.status === 'REVERTED_TO_WAREHOUSE');
+  const revertedList = filterBySearchAndType(revertedReports, activeMaterialType);
 
   // Actions
   const handleStartInspection = async (report: QcInspectionReport) => {
@@ -226,7 +266,9 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
     parameters: any[],
     staffDecision: 'RELEASE' | 'REJECT',
     staffNotes: string,
-    passwordInput: string
+    passwordInput: string,
+    actualSampleSize?: number,
+    actualSampleUnit?: string
   ) => {
     if (!user) return;
     const updated = await qualityService.submitStaffAnalysis(
@@ -235,7 +277,9 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
       staffDecision,
       staffNotes,
       user,
-      passwordInput
+      passwordInput,
+      actualSampleSize,
+      actualSampleUnit
     );
     setReports((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
     setCurrentTab('approval');
@@ -261,10 +305,17 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
     setPdfReport(updated);
   };
 
-  const handleConfirmRevert = async (reportId: string, reason: string) => {
+  const handleConfirmRevert = async (reportId: string, reason: string, passwordInput: string) => {
     if (!user) return;
-    const updated = await qualityService.revertToWarehouse(reportId, reason, user);
+    const updated = await qualityService.revertToWarehouse(reportId, reason, user, passwordInput);
     setReports((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+  };
+
+  const handleRevertToLab = async (reportId: string, revisionInstruction: string, passwordInput: string) => {
+    if (!user) return;
+    const updated = await qualityService.revertToLabProcess(reportId, revisionInstruction, user, passwordInput);
+    setReports((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+    setCurrentTab('testing');
   };
 
   const stats = {
@@ -359,8 +410,20 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
             <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
               <td className={`${isCompactMode ? 'p-1.5' : 'p-3'} text-center font-mono text-slate-400`}>{idx + 1}</td>
               <td className={isCompactMode ? 'p-1.5' : 'p-3'}>
-                <div className="font-mono font-bold text-slate-900">{item.grnNumber}</div>
-                <div className={`${isCompactMode ? 'text-[9.5px]' : 'text-[11px]'} text-slate-400`}>{item.receivedDate}</div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleOpenGrnDetail(item);
+                  }}
+                  className="font-mono font-bold text-blue-700 hover:text-blue-900 group/grn flex items-center gap-1.5 text-left cursor-pointer transition-colors"
+                  title="Klik untuk membuka detail bukti penerimaan barang (GRN)"
+                >
+                  <span className="bg-blue-50/90 group-hover/grn:bg-blue-100/90 group-hover/grn:underline text-blue-800 px-1.5 py-0.5 rounded border border-blue-200/80 shadow-2xs">
+                    {item.grnNumber}
+                  </span>
+                </button>
+                <div className={`${isCompactMode ? 'text-[9.5px]' : 'text-[11px]'} text-slate-400 mt-0.5`}>{item.receivedDate}</div>
               </td>
               <td className={isCompactMode ? 'p-1.5' : 'p-3'}>
                 <div className="flex items-center gap-1.5">
@@ -458,11 +521,23 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
             <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
               <td className={`${isCompactMode ? 'p-1.5' : 'p-3'} text-center font-mono text-slate-400`}>{idx + 1}</td>
               <td className={isCompactMode ? 'p-1.5' : 'p-3'}>
-                <div className="font-mono font-bold text-slate-900">{item.grnNumber}</div>
-                <div className={`${isCompactMode ? 'text-[9.5px]' : 'text-[11px]'} text-slate-400`}>Tgl: {item.receivedDate}</div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleOpenGrnDetail(item);
+                  }}
+                  className="font-mono font-bold text-blue-700 hover:text-blue-900 group/grn flex items-center gap-1.5 text-left cursor-pointer transition-colors"
+                  title="Klik untuk membuka detail bukti penerimaan barang (GRN)"
+                >
+                  <span className="bg-blue-50/90 group-hover/grn:bg-blue-100/90 group-hover/grn:underline text-blue-800 px-1.5 py-0.5 rounded border border-blue-200/80 shadow-2xs">
+                    {item.grnNumber}
+                  </span>
+                </button>
+                <div className={`${isCompactMode ? 'text-[9.5px]' : 'text-[11px]'} text-slate-400 mt-0.5`}>Tgl: {item.receivedDate}</div>
               </td>
               <td className={isCompactMode ? 'p-1.5' : 'p-3'}>
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
                   <span
                     className={`font-mono font-bold rounded-md ${
                       isCompactMode ? 'px-1.5 py-0.2 text-[9.5px]' : 'px-2 py-0.5 text-[11px]'
@@ -473,6 +548,11 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
                     {item.materialCode}
                   </span>
                   <span className="font-bold text-slate-900">{item.materialName}</span>
+                  {item.qmRevertToLabReason && (
+                    <span className="bg-amber-100 text-amber-800 border border-amber-300 font-extrabold text-[9px] px-1.5 py-0.2 rounded-md animate-pulse">
+                      REVISI QM
+                    </span>
+                  )}
                 </div>
                 <div className={`${isCompactMode ? 'text-[9.5px]' : 'text-[11px]'} text-slate-500`}>
                   Batch: {item.batchNumberVendor} • {item.quantityReceived.toLocaleString('id-ID', { minimumFractionDigits: 3 })} {item.unit}
@@ -480,10 +560,14 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
               </td>
               <td className={isCompactMode ? 'p-1.5' : 'p-3'}>
                 <div className="font-bold text-teal-800">
-                  {item.samplingInfo.sampleSizeQuantity} {item.samplingInfo.sampleUnit}
+                  {item.actualSampleSize !== undefined && item.actualSampleSize !== null
+                    ? `${item.actualSampleSize} ${item.actualSampleUnit || (item.materialType === 'raw' ? 'gram' : 'pcs')}`
+                    : `${item.samplingInfo.sampleSizeQuantity} ${item.samplingInfo.sampleUnit}`}
                 </div>
                 <div className={`${isCompactMode ? 'text-[9.5px]' : 'text-[11px]'} text-slate-400`}>
-                  {item.samplingInfo.sampleSizeCodeLetter ? `MIL-STD Code: ${item.samplingInfo.sampleSizeCodeLetter}` : 'Formula CPKB √N+1'}
+                  {item.actualSampleSize !== undefined && item.actualSampleSize !== null
+                    ? `Rencana: ${item.samplingInfo.sampleSizeQuantity} ${item.samplingInfo.sampleUnit}`
+                    : (item.samplingInfo.sampleSizeCodeLetter ? `MIL-STD Code: ${item.samplingInfo.sampleSizeCodeLetter}` : 'Formula CPKB √N+1')}
                 </div>
               </td>
               <td className={isCompactMode ? 'p-1.5' : 'p-3'}>
@@ -572,6 +656,11 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
                 </div>
                 <div className={`${isCompactMode ? 'text-[9.5px]' : 'text-[11px]'} text-slate-500`}>
                   GRN: {item.grnNumber} • Batch: {item.batchNumberVendor}
+                  {item.actualSampleSize !== undefined && item.actualSampleSize !== null && (
+                    <span className="ml-1 text-teal-700 font-semibold">
+                      • Sampel: {item.actualSampleSize} {item.actualSampleUnit || (item.materialType === 'raw' ? 'gram' : 'pcs')}
+                    </span>
+                  )}
                 </div>
               </td>
               <td className={isCompactMode ? 'p-1.5' : 'p-3'}>
@@ -759,23 +848,6 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
             <span className="hidden sm:inline">Audit Diagnostik Master vs Lab</span>
             <span className="sm:hidden">Audit DB</span>
           </button>
-          <QcNotificationsCenter
-            onSelectReport={(reportId) => {
-              const rep = reports.find((r) => r.id === reportId);
-              if (rep) {
-                if (rep.status === 'AWAITING_QM_AUTHORIZATION') {
-                  setCurrentTab('approval');
-                  setAuthorizingReport(rep);
-                } else if (rep.status === 'QUALITY_CONTROL_PROCESS') {
-                  setCurrentTab('testing');
-                  setInspectingReport(rep);
-                } else if (rep.status === 'PASSED' || rep.status === 'REJECTED') {
-                  setCurrentTab('archive');
-                  setPdfReport(rep);
-                }
-              }
-            }}
-          />
         </div>
       </div>
 
@@ -992,29 +1064,53 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
                 />
               </div>
             )}
-
-            {/* Compact Mode Toggle */}
-            {['queue', 'testing', 'approval', 'archive', 'ipc-bulk', 'ipc-rework', 'retained'].includes(currentTab) && (
-              <button
-                type="button"
-                onClick={() => setIsCompactMode(!isCompactMode)}
-                className={`px-3 py-1 rounded-xl text-[11px] font-bold border transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs shrink-0 ${
-                  isCompactMode
-                    ? 'bg-slate-900 text-white border-slate-900'
-                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                }`}
-                title="Kurangi padding dan ukuran font"
-              >
-                {isCompactMode ? <Minimize2 className="w-3.5 h-3.5 text-teal-400" /> : <Maximize2 className="w-3.5 h-3.5 text-slate-500" />}
-                <span>Ringkas</span>
-              </button>
-            )}
           </div>
         </div>
 
         {/* TAB 1: Antrean Karantina */}
         {currentTab === 'queue' && (
           <div className="p-4 space-y-4">
+            {/* Banner Item Direvert ke Gudang */}
+            {revertedReports.length > 0 && (
+              <div className="p-4 rounded-xl bg-amber-50/90 border border-amber-300 text-amber-950 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 font-bold text-xs text-amber-900">
+                    <ArrowLeftCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>{revertedReports.length} Penerimaan Sedang Direvert ke Gudang Logistik</span>
+                  </div>
+                  <span className="text-[10px] font-bold bg-amber-200/80 text-amber-900 px-2.5 py-0.5 rounded-full">
+                    Menunggu Koreksi Gudang
+                  </span>
+                </div>
+                <div className="space-y-1.5 text-xs">
+                  {revertedReports.map((rev) => (
+                    <div
+                      key={rev.id}
+                      className="bg-white/90 border border-amber-200 p-2.5 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xs"
+                    >
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-900">{rev.materialCode} - {rev.materialName}</span>
+                          <span className="font-mono text-[10.5px] text-slate-500">({rev.grnNumber})</span>
+                        </div>
+                        <p className="text-[11px] text-amber-900">
+                          <strong>Alasan Revert:</strong> "{rev.revertReason || '-'}"
+                        </p>
+                        {rev.revertedBy && (
+                          <p className="text-[10px] text-slate-500">
+                            Direvert oleh: {rev.revertedBy} • {rev.revertedAt ? new Date(rev.revertedAt).toLocaleString('id-ID') : '-'}
+                          </p>
+                        )}
+                      </div>
+                      <span className="text-[10.5px] font-semibold text-amber-800 bg-amber-100 px-2 py-1 rounded-md shrink-0 self-start sm:self-center">
+                        Hak Edit Gudang Aktif
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {renderMaterialFilterTabs(stats.quarantineRaw, stats.quarantinePkg, stats.totalQuarantine)}
 
             {activeMaterialType === 'all' ? (
@@ -2524,6 +2620,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
         onClose={() => setAuthorizingReport(null)}
         report={authorizingReport}
         onAuthorize={handleAuthorizeManager}
+        onRevertToLab={handleRevertToLab}
       />
 
       <QcRevertModal
@@ -2549,6 +2646,12 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
         isOpen={showDiagnosticAudit}
         onClose={() => setShowDiagnosticAudit(false)}
         onSynced={loadData}
+      />
+
+      <GrnDetailModal
+        isOpen={!!selectedGrnDetail}
+        record={selectedGrnDetail}
+        onClose={() => setSelectedGrnDetail(null)}
       />
     </div>
   );

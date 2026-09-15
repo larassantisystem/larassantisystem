@@ -35,11 +35,22 @@ export interface GrnRecord {
   sealCondition?: string;
   packagingCondition?: string;
   coaAttachment?: string;
+  coaDriveFileId?: string;
+  coaDriveViewLink?: string;
   msdsAttachment?: string;
   halalAttachment?: string;
   receivedBy: string;
   createdAt: string;
   notes?: string;
+
+  // Revert info from QC
+  revertReason?: string;
+  revertedBy?: string;
+  revertedAt?: string;
+
+  // Actual sample tested by QC Lab
+  actualSampleSize?: number;
+  actualSampleUnit?: string;
 }
 
 export interface GrnStats {

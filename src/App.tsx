@@ -262,7 +262,7 @@ const MainAppContent: React.FC = () => {
       )}
 
       {activeTab === 'rnd' && (
-        <div className="max-w-6xl mx-auto">
+        <div className="max-w-7xl mx-auto space-y-3">
           <RndModule
             activeSubTab={activeRndSubTab}
             onSelectSubTab={setActiveRndSubTab}

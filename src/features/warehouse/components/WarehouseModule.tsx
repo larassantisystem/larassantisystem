@@ -111,9 +111,25 @@ export const WarehouseModule: React.FC<WarehouseModuleProps> = ({
   };
 
   const handleUpdateGrn = async (id: string, updatedData: Partial<GrnRecord>) => {
+    const prevRecord = grnRecords.find((r) => r.id === id);
+    const wasReverted = prevRecord?.qcStatus === 'REVERTED_TO_WAREHOUSE';
+
     const updated = await warehouseService.updateGrnRecord(id, updatedData);
     setGrnRecords((prev) => prev.map((r) => (r.id === id ? updated : r)));
     await stockService.getStockLots();
+
+    // If this was a correction of a reverted GRN, notify QC team
+    if (wasReverted && updated.qcStatus === 'QUARANTINE') {
+      await qualityService.createNotification({
+        title: 'GRN Selesai Diperbaiki Gudang',
+        message: `Data penerimaan untuk bahan ${updated.materialName} (${updated.grnNumber}) telah diperbaiki oleh Gudang dan dikembalikan ke status Karantina untuk diproses QC.`,
+        type: 'SUCCESS',
+        targetDepartments: ['quality', 'warehouse'],
+        targetRoles: ['staff', 'supervisor', 'manager'],
+        reportId: updated.id,
+        grnNumber: updated.grnNumber,
+      });
+    }
   };
 
   const handleDeleteGrn = async (id: string) => {

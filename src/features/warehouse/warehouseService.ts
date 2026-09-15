@@ -1,5 +1,6 @@
 import { GrnRecord, GrnStats } from './types/grnTypes';
 import { supabase, isSupabaseConfigured } from '../../core/auth/supabaseClient';
+import { calculateSamplingPlan } from '../quality/utils/milStd105e';
 
 const WAREHOUSE_GRN_STORAGE_KEY = 'lsm_warehouse_grn_v1';
 
@@ -43,9 +44,7 @@ function buildPrimarySupabasePayload(record: GrnRecord): Record<string, any> {
     manufacturer: record.manufacturer || '-',
     storage_location: record.storageLocation || 'Gudang Karantina',
     storage_conditions: record.storageConditions || null,
-    qc_status: ['QUARANTINE', 'PASSED', 'REJECTED'].includes(record.qcStatus as string)
-      ? record.qcStatus
-      : 'QUARANTINE',
+    qc_status: record.qcStatus || 'QUARANTINE',
     qc_parameters_count: Number(record.qcParametersCount) || 0,
     seal_condition: ['intact', 'broken', 'tampered'].includes(record.sealCondition as string)
       ? record.sealCondition
@@ -54,9 +53,16 @@ function buildPrimarySupabasePayload(record: GrnRecord): Record<string, any> {
       ? record.packagingCondition
       : 'clean',
     coa_attachment: record.coaAttachment || null,
+    coa_drive_file_id: record.coaDriveFileId || null,
+    coa_drive_view_link: record.coaDriveViewLink || null,
     received_by: record.receivedBy || 'Staf Gudang',
     received_by_nik: (record as any).receivedByNik || 'NIK-WH-001',
     notes: record.notes || null,
+    revert_reason: record.revertReason || null,
+    reverted_by: record.revertedBy || null,
+    reverted_at: record.revertedAt || null,
+    actual_sample_size: record.actualSampleSize !== undefined && record.actualSampleSize !== null ? Number(record.actualSampleSize) : null,
+    actual_sample_unit: record.actualSampleUnit || null,
   };
 
   return payload;
@@ -298,9 +304,16 @@ export const warehouseService = {
             receivedBy: d.received_by || d.receivedBy || 'Staf Gudang',
             createdAt: d.created_at || d.createdAt || new Date().toISOString(),
             notes: d.notes,
+            revertReason: d.revert_reason || d.revertReason,
+            revertedBy: d.reverted_by || d.revertedBy,
+            revertedAt: d.reverted_at || d.revertedAt,
+            actualSampleSize: d.actual_sample_size !== undefined && d.actual_sample_size !== null ? Number(d.actual_sample_size) : d.actualSampleSize,
+            actualSampleUnit: d.actual_sample_unit || d.actualSampleUnit,
             sealCondition: d.seal_condition,
             packagingCondition: d.packaging_condition,
-            coaAttachment: d.coa_attachment,
+            coaAttachment: d.coa_attachment || d.coaAttachment,
+            coaDriveFileId: d.coa_drive_file_id || d.coaDriveFileId,
+            coaDriveViewLink: d.coa_drive_view_link || d.coaDriveViewLink,
           }));
 
           // Merge with any local-only records that haven't synced yet
@@ -316,18 +329,31 @@ export const warehouseService = {
             if (qcReportsRaw) {
               const qcReports = JSON.parse(qcReportsRaw);
               if (Array.isArray(qcReports) && qcReports.length > 0) {
-                const qcMap = new Map<string, string>();
+                const qcMap = new Map<string, any>();
                 qcReports.forEach((rep: any) => {
-                  if (rep.grnId) qcMap.set(rep.grnId, rep.status);
-                  if (rep.grnNumber) qcMap.set(rep.grnNumber, rep.status);
+                  if (rep.grnId) qcMap.set(rep.grnId, rep);
+                  if (rep.grnNumber) qcMap.set(rep.grnNumber, rep);
                 });
 
                 merged = merged.map((rec) => {
-                  const liveQcStatus = qcMap.get(rec.id) || qcMap.get(rec.grnNumber);
-                  if (liveQcStatus && liveQcStatus !== rec.qcStatus) {
-                    return { ...rec, qcStatus: liveQcStatus as any };
+                  const qcRep = qcMap.get(rec.id) || qcMap.get(rec.grnNumber);
+                  if (!qcRep) return rec;
+
+                  const liveQcStatus = qcRep.status;
+                  let resolvedStatus = rec.qcStatus;
+                  if (liveQcStatus) {
+                    resolvedStatus = liveQcStatus as any;
                   }
-                  return rec;
+
+                  return {
+                    ...rec,
+                    qcStatus: resolvedStatus,
+                    revertReason: rec.revertReason || qcRep.revertReason,
+                    revertedBy: rec.revertedBy || qcRep.revertedBy,
+                    revertedAt: rec.revertedAt || qcRep.revertedAt,
+                    actualSampleSize: rec.actualSampleSize !== undefined ? rec.actualSampleSize : qcRep.actualSampleSize,
+                    actualSampleUnit: rec.actualSampleUnit || qcRep.actualSampleUnit,
+                  };
                 });
               }
             }
@@ -352,18 +378,31 @@ export const warehouseService = {
       if (qcReportsRaw) {
         const qcReports = JSON.parse(qcReportsRaw);
         if (Array.isArray(qcReports) && qcReports.length > 0) {
-          const qcMap = new Map<string, string>();
+          const qcMap = new Map<string, any>();
           qcReports.forEach((rep: any) => {
-            if (rep.grnId) qcMap.set(rep.grnId, rep.status);
-            if (rep.grnNumber) qcMap.set(rep.grnNumber, rep.status);
+            if (rep.grnId) qcMap.set(rep.grnId, rep);
+            if (rep.grnNumber) qcMap.set(rep.grnNumber, rep);
           });
 
           local = local.map((rec) => {
-            const liveQcStatus = qcMap.get(rec.id) || qcMap.get(rec.grnNumber);
-            if (liveQcStatus && liveQcStatus !== rec.qcStatus) {
-              return { ...rec, qcStatus: liveQcStatus as any };
+            const qcRep = qcMap.get(rec.id) || qcMap.get(rec.grnNumber);
+            if (!qcRep) return rec;
+
+            const liveQcStatus = qcRep.status;
+            let resolvedStatus = rec.qcStatus;
+            if (liveQcStatus) {
+              resolvedStatus = liveQcStatus as any;
             }
-            return rec;
+
+            return {
+              ...rec,
+              qcStatus: resolvedStatus,
+              revertReason: rec.revertReason || qcRep.revertReason,
+              revertedBy: rec.revertedBy || qcRep.revertedBy,
+              revertedAt: rec.revertedAt || qcRep.revertedAt,
+              actualSampleSize: rec.actualSampleSize !== undefined ? rec.actualSampleSize : qcRep.actualSampleSize,
+              actualSampleUnit: rec.actualSampleUnit || qcRep.actualSampleUnit,
+            };
           });
         }
       }
@@ -457,52 +496,85 @@ export const warehouseService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const payload: Record<string, any> = {};
-        if (updatedData.batchNumber !== undefined) {
-          payload.supplier_batch_number = updatedData.batchNumber;
-        }
-        if (updatedData.distributor !== undefined) payload.distributor = updatedData.distributor;
-        if (updatedData.manufacturer !== undefined) payload.manufacturer = updatedData.manufacturer;
-        if (updatedData.quantityReceived !== undefined) payload.quantity_received = updatedData.quantityReceived;
-        if (updatedData.unit !== undefined) payload.unit = updatedData.unit;
-        if (updatedData.containerCount !== undefined) payload.container_count = updatedData.containerCount;
-        if (updatedData.containerType !== undefined) payload.container_type = updatedData.containerType;
-        if (updatedData.expiryDate !== undefined) {
-          payload.expiration_date = updatedData.expiryDate;
-        }
-        if (updatedData.storageLocation !== undefined) payload.storage_location = updatedData.storageLocation;
-        if (updatedData.storageConditions !== undefined) payload.storage_conditions = updatedData.storageConditions;
-        if (updatedData.deliveryNoteNumber !== undefined) payload.delivery_note_number = updatedData.deliveryNoteNumber;
-        if (updatedData.poNumber !== undefined) {
-          payload.purchase_order_number = updatedData.poNumber;
-        }
-        if (updatedData.qcStatus !== undefined) payload.qc_status = updatedData.qcStatus;
-        if (updatedData.notes !== undefined) payload.notes = updatedData.notes;
-
-        let attempts = 0;
-        let updateRes = await supabase.from('warehouse_grn').update(payload).eq('id', id);
-
-        while (updateRes.error && attempts < 5) {
-          attempts++;
-          const errMsg = updateRes.error.message || '';
-          const match =
-            errMsg.match(/Could not find the ['"]([^'"]+)['"] column/i) ||
-            errMsg.match(/column ['"]([^'"]+)['"]/i);
-
-          if (match && match[1]) {
-            const badCol = match[1];
-            delete payload[badCol];
-            if (badCol === 'supplier_batch_number') payload.batch_number = updatedData.batchNumber;
-            if (badCol === 'purchase_order_number') payload.po_number = updatedData.poNumber;
-            if (badCol === 'expiration_date') payload.expiry_date = updatedData.expiryDate;
-            updateRes = await supabase.from('warehouse_grn').update(payload).eq('id', id);
-          } else {
-            break;
-          }
+        const payload = buildPrimarySupabasePayload(updatedRecord);
+        const { error } = await executeWithSchemaAdaptiveRetry(
+          'warehouse_grn',
+          payload,
+          updatedRecord,
+          'upsert'
+        );
+        if (error) {
+          console.warn('[warehouseService] Adaptive update to Supabase failed:', error);
+        } else {
+          console.log('[warehouseService] GRN successfully synced to Supabase:', updatedRecord.grnNumber);
         }
       } catch (e) {
         console.warn('[warehouseService] Failed to update Supabase record:', e);
       }
+    }
+
+    // Synchronize directly with QC Inspection Report & recalculate sampling plan
+    try {
+      const qcRaw = localStorage.getItem('lsm_qc_reports_v2');
+      if (qcRaw) {
+        const qcList = JSON.parse(qcRaw);
+        if (Array.isArray(qcList)) {
+          let qcChanged = false;
+          const targetQc = qcList.find((r: any) => r.grnId === id || r.grnNumber === updatedRecord.grnNumber);
+          if (targetQc) {
+            if (updatedData.batchNumber !== undefined) targetQc.batchNumberVendor = updatedData.batchNumber;
+            if (updatedData.manufacturer !== undefined) targetQc.manufacturer = updatedData.manufacturer;
+            if (updatedData.distributor !== undefined) targetQc.distributor = updatedData.distributor;
+            if (updatedData.deliveryNoteNumber !== undefined) targetQc.deliveryNoteNumber = updatedData.deliveryNoteNumber;
+            if (updatedData.poNumber !== undefined) targetQc.poNumber = updatedData.poNumber;
+            if (updatedData.expiryDate !== undefined) targetQc.expiryDate = updatedData.expiryDate;
+            if (updatedData.storageLocation !== undefined) targetQc.storageLocation = updatedData.storageLocation;
+            if (updatedData.storageConditions !== undefined) targetQc.storageConditions = updatedData.storageConditions;
+
+            const qtyChanged = updatedData.quantityReceived !== undefined && updatedData.quantityReceived !== targetQc.quantityReceived;
+            const containersChanged = updatedData.containerCount !== undefined && updatedData.containerCount !== targetQc.containerCount;
+            const unitChanged = updatedData.unit !== undefined && updatedData.unit !== targetQc.unit;
+            const containerTypeChanged = updatedData.containerType !== undefined && updatedData.containerType !== targetQc.containerType;
+
+            if (updatedData.quantityReceived !== undefined) targetQc.quantityReceived = updatedData.quantityReceived;
+            if (updatedData.unit !== undefined) targetQc.unit = updatedData.unit;
+            if (updatedData.containerCount !== undefined) targetQc.containerCount = updatedData.containerCount;
+            if (updatedData.containerType !== undefined) targetQc.containerType = updatedData.containerType;
+
+            if (qtyChanged || containersChanged || unitChanged || containerTypeChanged || targetQc.status === 'REVERTED_TO_WAREHOUSE') {
+              targetQc.samplingInfo = calculateSamplingPlan(
+                targetQc.materialType,
+                targetQc.quantityReceived,
+                targetQc.containerCount,
+                targetQc.unit,
+                targetQc.containerType
+              );
+              qcChanged = true;
+            }
+
+            if (updatedData.qcStatus === 'QUARANTINE' && targetQc.status === 'REVERTED_TO_WAREHOUSE') {
+              targetQc.status = 'QUARANTINE';
+              targetQc.updatedAt = new Date().toISOString();
+              qcChanged = true;
+            }
+
+            if (updatedData.actualSampleSize !== undefined) {
+              targetQc.actualSampleSize = updatedData.actualSampleSize;
+              qcChanged = true;
+            }
+            if (updatedData.actualSampleUnit !== undefined) {
+              targetQc.actualSampleUnit = updatedData.actualSampleUnit;
+              qcChanged = true;
+            }
+
+            if (qcChanged) {
+              localStorage.setItem('lsm_qc_reports_v2', JSON.stringify(qcList));
+            }
+          }
+        }
+      }
+    } catch (qcSyncErr) {
+      console.warn('[warehouseService] Error synchronizing QC report on update:', qcSyncErr);
     }
 
     return updatedRecord;
