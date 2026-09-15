@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './core/auth/AuthContext';
 import { LoginPage } from './core/auth/LoginPage';
 import { DashboardLayout } from './core/ui-components/DashboardLayout';
@@ -11,6 +11,7 @@ import { RndModule } from './components/RndModule';
 import { EmployeeManagementModule } from './features/admin/EmployeeManagementModule';
 import { WarehouseModule } from './features/warehouse/components/WarehouseModule';
 import { QualityModule } from './features/quality/components/QualityModule';
+import { QcInspectionReportPdfModal } from './features/quality/components/QcInspectionReportPdfModal';
 import { DepartmentWorkspaceDashboard } from './features/dashboard/DepartmentWorkspaceDashboard';
 import { Department } from './types';
 import {
@@ -37,6 +38,21 @@ const MainAppContent: React.FC = () => {
   const [activeAdminSubTab, setActiveAdminSubTab] = useState<'users' | 'audit'>('users');
   const [activeWarehouseSubTab, setActiveWarehouseSubTab] = useState<'inbound' | 'stock-raw' | 'stock-packaging' | 'weighing' | 'finished-goods'>('inbound');
   const [activeQualitySubTab, setActiveQualitySubTab] = useState<'queue' | 'testing' | 'approval' | 'archive'>('queue');
+  const [globalPdfReport, setGlobalPdfReport] = useState<any | null>(null);
+
+  useEffect(() => {
+    const handleOpenQcReport = (e: any) => {
+      if (e.detail) {
+        setActiveTab('quality');
+        setActiveQualitySubTab('archive');
+        setGlobalPdfReport(e.detail);
+      }
+    };
+    window.addEventListener('open-qc-report', handleOpenQcReport);
+    return () => {
+      window.removeEventListener('open-qc-report', handleOpenQcReport);
+    };
+  }, []);
 
   if (isLoading) {
     return (
@@ -80,22 +96,23 @@ const MainAppContent: React.FC = () => {
   };
 
   return (
-    <DashboardLayout
-      activeTab={activeTab}
-      onSelectTab={setActiveTab}
-      activeSubTab={
-        activeTab === 'rnd'
-          ? activeRndSubTab
-          : activeTab === 'admin'
-          ? activeAdminSubTab
-          : activeTab === 'warehouse'
-          ? activeWarehouseSubTab
-          : activeTab === 'quality'
-          ? activeQualitySubTab
-          : undefined
-      }
-      onSelectSubTab={handleSelectSubTab}
-    >
+    <>
+      <DashboardLayout
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
+        activeSubTab={
+          activeTab === 'rnd'
+            ? activeRndSubTab
+            : activeTab === 'admin'
+            ? activeAdminSubTab
+            : activeTab === 'warehouse'
+            ? activeWarehouseSubTab
+            : activeTab === 'quality'
+            ? activeQualitySubTab
+            : undefined
+        }
+        onSelectSubTab={handleSelectSubTab}
+      >
       {activeTab === 'dashboard' && (
         <DepartmentWorkspaceDashboard onNavigate={handleNavigateFromDashboard} />
       )}
@@ -173,6 +190,13 @@ const MainAppContent: React.FC = () => {
         </div>
       )}
     </DashboardLayout>
+
+      <QcInspectionReportPdfModal
+        isOpen={!!globalPdfReport}
+        onClose={() => setGlobalPdfReport(null)}
+        report={globalPdfReport}
+      />
+    </>
   );
 };
 
