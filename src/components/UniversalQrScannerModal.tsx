@@ -258,19 +258,35 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
 
     setScannedResult(parsed);
 
-    // Cross-match with internal records
+    // Cross-match with internal records strictly by exact lot, GRN, or ID
     try {
       const qcReports = qualityService.getLocalReports();
-      const targetLot = parsed.lot || parsed.grn;
+      const targetLot = parsed.rpt || parsed.lot || parsed.grn;
       if (targetLot) {
         const found = qcReports.find(
           (r) =>
+            r.id === targetLot ||
             r.lotInternalNumber === targetLot ||
             r.grnNumber === targetLot ||
-            (parsed.matCode && r.materialCode === parsed.matCode)
+            r.lotInternalNumber?.toLowerCase() === targetLot?.toLowerCase() ||
+            r.grnNumber?.toLowerCase() === targetLot?.toLowerCase()
         );
         if (found) {
           setMatchedReport(found);
+        } else {
+          qualityService.getReports().then((allReports) => {
+            const foundFresh = allReports.find(
+              (r) =>
+                r.id === targetLot ||
+                r.lotInternalNumber === targetLot ||
+                r.grnNumber === targetLot ||
+                r.lotInternalNumber?.toLowerCase() === targetLot?.toLowerCase() ||
+                r.grnNumber?.toLowerCase() === targetLot?.toLowerCase()
+            );
+            if (foundFresh) {
+              setMatchedReport(foundFresh);
+            }
+          }).catch(() => {});
         }
       }
     } catch (e) {
@@ -631,24 +647,32 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
                 <div className="pt-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      const reportToOpen = matchedReport || {
-                        id: scannedResult.lot || 'QC-SCAN-' + Date.now(),
-                        lotInternalNumber: scannedResult.lot || 'LOT-UNKNOWN',
-                        grnNumber: scannedResult.grn || 'GRN-UNKNOWN',
-                        materialCode: scannedResult.matCode || 'MAT-000',
-                        materialName: scannedResult.matName || 'Bahan Hasil Scan QR',
-                        materialType: 'raw',
-                        status: scannedResult.status || 'PASSED',
-                        expiryDate: scannedResult.expDate || '-',
-                        retestDate: scannedResult.retestDate || '-',
-                        manufacturer: scannedResult.mfg || 'PT. Larassanti Makmur Sejahtera',
-                        sampledContainers: [scannedResult.containerIndex || 1],
-                        actualSampleSize: scannedResult.sampleSize ? parseFloat(scannedResult.sampleSize) : 100,
-                        actualSampleUnit: 'g',
-                        samplingDateTime: scannedResult.samplingDate || new Date().toISOString(),
-                        qmSignature: scannedResult.qmSigner ? { signerName: scannedResult.qmSigner, signedAt: new Date().toISOString() } : undefined,
-                      };
+                    onClick={async () => {
+                      let reportToOpen = matchedReport;
+                      if (!reportToOpen) {
+                        const targetLot = scannedResult.rpt || scannedResult.lot || scannedResult.grn;
+                        if (targetLot) {
+                          try {
+                            const allReports = await qualityService.getReports();
+                            reportToOpen = allReports.find(
+                              (r) =>
+                                r.id === targetLot ||
+                                r.lotInternalNumber === targetLot ||
+                                r.grnNumber === targetLot ||
+                                r.lotInternalNumber?.toLowerCase() === targetLot?.toLowerCase() ||
+                                r.grnNumber?.toLowerCase() === targetLot?.toLowerCase()
+                            ) || null;
+                          } catch (err) {
+                            console.error('Failed to fetch reports:', err);
+                          }
+                        }
+                      }
+
+                      if (!reportToOpen) {
+                        alert('Laporan Analisa Mutu (CoA) resmi untuk lot ini belum ditemukan di arsip sistem QC.');
+                        return;
+                      }
+
                       window.dispatchEvent(new CustomEvent('open-qc-report', { detail: reportToOpen }));
                       onClose();
                     }}
