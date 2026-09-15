@@ -214,6 +214,10 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
         const trimmed = p.trim();
         if (trimmed.startsWith('LOT:')) {
           map.lot = trimmed.substring(4);
+        } else if (trimmed.startsWith('RPT:') || trimmed.startsWith('REPORT:')) {
+          const rptVal = trimmed.substring(trimmed.indexOf(':') + 1);
+          map.lot = rptVal;
+          map.rpt = rptVal;
         } else if (trimmed.startsWith('W:')) {
           const wStr = trimmed.substring(2);
           map.containerLabel = `Wadah ${wStr}`;
@@ -621,6 +625,38 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
                       </div>
                     )}
                   </div>
+                </div>
+
+                {/* Direct Action to Open Quality Analysis Report (CoA) */}
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const reportToOpen = matchedReport || {
+                        id: scannedResult.lot || 'QC-SCAN-' + Date.now(),
+                        lotInternalNumber: scannedResult.lot || 'LOT-UNKNOWN',
+                        grnNumber: scannedResult.grn || 'GRN-UNKNOWN',
+                        materialCode: scannedResult.matCode || 'MAT-000',
+                        materialName: scannedResult.matName || 'Bahan Hasil Scan QR',
+                        materialType: 'raw',
+                        status: scannedResult.status || 'PASSED',
+                        expiryDate: scannedResult.expDate || '-',
+                        retestDate: scannedResult.retestDate || '-',
+                        manufacturer: scannedResult.mfg || 'PT. Larassanti Makmur Sejahtera',
+                        sampledContainers: [scannedResult.containerIndex || 1],
+                        actualSampleSize: scannedResult.sampleSize ? parseFloat(scannedResult.sampleSize) : 100,
+                        actualSampleUnit: 'g',
+                        samplingDateTime: scannedResult.samplingDate || new Date().toISOString(),
+                        qmSignature: scannedResult.qmSigner ? { signerName: scannedResult.qmSigner, signedAt: new Date().toISOString() } : undefined,
+                      };
+                      window.dispatchEvent(new CustomEvent('open-qc-report', { detail: reportToOpen }));
+                      onClose();
+                    }}
+                    className="w-full py-3.5 px-5 bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-700 hover:from-teal-700 hover:to-emerald-800 text-white rounded-2xl font-black text-sm shadow-xl shadow-teal-500/25 flex items-center justify-center gap-2.5 transition-all cursor-pointer transform hover:scale-[1.01]"
+                  >
+                    <FileText className="w-5 h-5 text-teal-200" />
+                    <span>Buka Laporan Analisa Mutu (CoA) Lengkap</span>
+                  </button>
                 </div>
               </div>
             </div>
