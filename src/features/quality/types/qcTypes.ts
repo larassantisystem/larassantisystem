@@ -56,6 +56,10 @@ export interface QcInspectionReport {
   batchNumberVendor: string;
   receivedDate: string;
   expiryDate?: string;
+  retestDate?: string; // Tanggal Uji Ulang (Retest Date CPKB)
+  sampledContainers?: string; // e.g., "Wadah #1, #3 (Total 5 Wadah)"
+  samplingDateTime?: string; // e.g., "2026-09-15T09:30:00"
+  sampledBy?: string; // Staf Analis QC who sampled
   quantityReceived: number;
   unit: string;
   containerCount: number;

@@ -166,10 +166,7 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
                     </div>
                   </div>
                   <div className="text-right">
-                    <span className="font-mono text-[10px] text-slate-400 block">FORM/WHS/CPKB-LBL-01</span>
-                    <span className="inline-block px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[10px] font-mono font-bold mt-0.5">
-                      REV. 02
-                    </span>
+                    <span className="font-mono text-xs font-bold text-slate-700 block">L-DQC-002-01</span>
                   </div>
                 </div>
 
@@ -222,7 +219,7 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
                   </div>
 
                   <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase block">No. Batch / Lot</span>
+                    <span className="text-[10px] font-extrabold text-slate-400 uppercase block">No. Batch / Lot Produsen</span>
                     <span className="font-mono font-bold text-slate-900 block mt-0.5 truncate">
                       {record.batchNumber || '-'}
                     </span>

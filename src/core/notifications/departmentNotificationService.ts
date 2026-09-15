@@ -1,4 +1,4 @@
-import { Department } from '../../types';
+import { Department, UserProfile } from '../../types';
 import { qualityService } from '../../features/quality/qualityService';
 import { warehouseService } from '../../features/warehouse/warehouseService';
 import { stockService } from '../../features/warehouse/stockService';
@@ -321,11 +321,32 @@ export const departmentNotificationService = {
   },
 
   /**
-   * Compute badge count for each department
+   * Compute badge count for each department based on user permissions
    */
-  getCounts: async (): Promise<DepartmentNotificationCounts> => {
+  getCounts: async (user?: UserProfile | null): Promise<DepartmentNotificationCounts> => {
     const notifications = await departmentNotificationService.getNotifications();
-    const unread = notifications.filter((n) => !n.isRead);
+    
+    // Filter notifications based on user permissions if provided
+    let visibleNotifs = notifications;
+    if (user) {
+      visibleNotifs = notifications.filter((n) => {
+        // Super Admin or Management level sees all
+        if (user.role === 'admin' || user.department === 'management' || user.department === 'admin') {
+          return true;
+        }
+        // Matching department
+        if (user.department === n.department) {
+          return true;
+        }
+        // Specific access grant
+        if (user.specificAccess?.some((p) => p.moduleId === n.department)) {
+          return true;
+        }
+        return false;
+      });
+    }
+
+    const unread = visibleNotifs.filter((n) => !n.isRead);
 
     const counts: DepartmentNotificationCounts = {
       all: unread.length,

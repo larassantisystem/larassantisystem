@@ -1,6 +1,6 @@
 {
   "name": "PT. LARASSANTI MAKMUR SEJAHTERA - DDMP",
   "description": "Sistem Perencanaan & Eksekusi Manufaktur Terintegrasi PT. LARASSANTI MAKMUR SEJAHTERA (RnD, PPIC, Warehouse, Quality, Sales, Procurement)",
-  "requestFramePermissions": [],
+  "requestFramePermissions": ["camera"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

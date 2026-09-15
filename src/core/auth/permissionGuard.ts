@@ -140,3 +140,14 @@ export function canPerformAction(
 
   return false;
 }
+
+/**
+ * Pengecekan Khusus Hak Otorisasi Quality Manager (Quality Manager Authority Guard)
+ * Hanya Admin atau Manager Departemen Quality / Management yang berhak melakukan otorisasi QM
+ */
+export function isQualityManager(user: UserProfile | null): boolean {
+  if (!user) return false;
+  if (user.role === 'admin') return true;
+  return user.role === 'manager' && (user.department === 'quality' || user.department === 'management');
+}
+

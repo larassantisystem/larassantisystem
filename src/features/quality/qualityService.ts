@@ -12,6 +12,7 @@ import { calculateSamplingPlan } from './utils/milStd105e';
 import { generateLotInternalNumber, generateDigitalSignatureHash } from './utils/qcNumbering';
 import { analyzeLabResults, analyzeQueuePriorities } from './utils/qcAiAssistant';
 import { authService } from '../../core/auth/authService';
+import { isQualityManager } from '../../core/auth/permissionGuard';
 import { UserProfile } from '../../types';
 import { soundService } from '../../core/utils/soundService';
 
@@ -344,6 +345,9 @@ export const qualityService = {
     qmUser: UserProfile,
     passwordInput: string
   ): Promise<QcInspectionReport> => {
+    if (!isQualityManager(qmUser)) {
+      throw new Error('Akses Ditolak: Hanya Quality Manager atau Super Admin yang memiliki hak mengembalikan laporan ke uji lab.');
+    }
     if (!passwordInput) {
       throw new Error('Kata sandi otorisasi Quality Manager wajib diisi.');
     }
@@ -404,7 +408,10 @@ export const qualityService = {
     staffUser: UserProfile,
     passwordInput: string,
     actualSampleSize?: number,
-    actualSampleUnit?: string
+    actualSampleUnit?: string,
+    retestDate?: string,
+    sampledContainers?: string,
+    samplingDateTime?: string
   ): Promise<QcInspectionReport> => {
     // 1. Verify staff password
     const verifyRes = await authService.verifyPassword(staffUser.nik, passwordInput);
@@ -440,6 +447,15 @@ export const qualityService = {
       report.actualSampleSize = Number(actualSampleSize);
       report.actualSampleUnit = actualSampleUnit || (report.materialType === 'raw' ? 'gram' : 'pcs');
     }
+    if (retestDate) {
+      report.retestDate = retestDate;
+    }
+    if (sampledContainers) {
+      report.sampledContainers = sampledContainers;
+    }
+    report.samplingDateTime = samplingDateTime || new Date().toISOString();
+    report.sampledBy = staffUser.name;
+
     report.staffSignature = {
       signerName: staffUser.name,
       signerNik: staffUser.nik,
@@ -498,6 +514,11 @@ export const qualityService = {
     qmUser: UserProfile,
     passwordInput: string
   ): Promise<QcInspectionReport> => {
+    // 0. Verify Quality Manager role authority
+    if (!isQualityManager(qmUser)) {
+      throw new Error('Akses Ditolak: Otorisasi pelepasan/penolakan mutu (QM Authorization) hanya dapat dilakukan oleh Quality Manager atau Super Admin.');
+    }
+
     // 1. Verify Quality Manager password
     const verifyRes = await authService.verifyPassword(qmUser.nik, passwordInput);
     if (!verifyRes.valid) {

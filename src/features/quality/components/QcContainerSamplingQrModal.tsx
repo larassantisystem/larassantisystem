@@ -1,0 +1,345 @@
+import React, { useState } from 'react';
+import {
+  X,
+  QrCode,
+  CheckCircle2,
+  AlertTriangle,
+  Clock,
+  FlaskConical,
+  ShieldCheck,
+  Calendar,
+  Layers,
+  Printer,
+  Sparkles,
+  Info,
+  Check,
+  RotateCcw
+} from 'lucide-react';
+import { QcInspectionReport } from '../types/qcTypes';
+
+interface QcContainerSamplingQrModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  report: QcInspectionReport | null;
+  onUpdateSampling?: (reportId: string, sampledContainers: string) => Promise<void>;
+}
+
+export const QcContainerSamplingQrModal: React.FC<QcContainerSamplingQrModalProps> = ({
+  isOpen,
+  onClose,
+  report,
+  onUpdateSampling,
+}) => {
+  const [selectedDrumIndex, setSelectedDrumIndex] = useState<number>(1);
+  const [copied, setCopied] = useState<boolean>(false);
+
+  if (!isOpen || !report) return null;
+
+  const totalContainers = report.containerCount || 1;
+  const isRaw = report.materialType === 'raw';
+  const docNumber = isRaw ? 'L-DQC-006-01' : 'L-DQC-007-01';
+  const docEffective = '01-OKTOBER-2026';
+
+  // Parse sampled containers
+  // Example string: "Wadah #1, #2 (Total 5 Drum)" or default to first N
+  const getIsSampled = (drumNum: number) => {
+    if (report.sampledContainers) {
+      return report.sampledContainers.includes(`#${drumNum}`);
+    }
+    // Fallback: If not explicitly recorded, first 'sampleSizeQuantity' are sampled
+    const defaultSampleCount = report.samplingInfo?.sampleSizeQuantity || 1;
+    return drumNum <= defaultSampleCount;
+  };
+
+  const getStatusBadge = () => {
+    switch (report.status) {
+      case 'PASSED':
+      case 'PASSED_WITH_DEVIATION':
+        return {
+          label: 'LULUS / RELEASED',
+          bg: 'bg-emerald-100 text-emerald-900 border-emerald-300',
+          dot: 'bg-emerald-500',
+        };
+      case 'REJECTED':
+        return {
+          label: 'DITOLAK / REJECTED',
+          bg: 'bg-red-100 text-red-900 border-red-300',
+          dot: 'bg-red-500',
+        };
+      case 'QUALITY_CONTROL_PROCESS':
+      case 'AWAITING_QM_AUTHORIZATION':
+        return {
+          label: 'DALAM UJI QC / IN-TESTING',
+          bg: 'bg-blue-100 text-blue-900 border-blue-300',
+          dot: 'bg-blue-500',
+        };
+      default:
+        return {
+          label: 'KARANTINA / QUARANTINE',
+          bg: 'bg-amber-100 text-amber-900 border-amber-300',
+          dot: 'bg-amber-500',
+        };
+    }
+  };
+
+  const statusBadge = getStatusBadge();
+  const currentDrumSampled = getIsSampled(selectedDrumIndex);
+
+  // QR Code Payload Data
+  const qrPayload = JSON.stringify({
+    system: 'PT. Larassanti Makmur Sejahtera - CPKB',
+    docNo: docNumber,
+    lot: report.lotInternalNumber || report.grnNumber,
+    material: report.materialName,
+    code: report.materialCode,
+    drum: `${selectedDrumIndex}/${totalContainers}`,
+    status: report.status,
+    sampled: currentDrumSampled ? 'YES' : 'NO',
+    sampledBy: report.sampledBy || report.staffSignature?.signerName || 'Analis QC',
+    samplingDate: report.samplingDateTime || report.receivedDate,
+    expiryDate: report.expiryDate || 'N/A',
+    retestDate: report.retestDate || 'N/A',
+  });
+
+  const handleCopyTagInfo = () => {
+    navigator.clipboard.writeText(
+      `[SMART CONTAINER TAG CPKB]\nMaterial: ${report.materialName} (${report.materialCode})\nLot QC: ${report.lotInternalNumber || report.grnNumber}\nWadah: #${selectedDrumIndex} dari ${totalContainers} ${report.containerType}\nStatus Mutu: ${statusBadge.label}\nStatus Sampling: ${currentDrumSampled ? 'TELAH DISAMPLING' : 'BELUM DIBUKA / UTUH'}\nRetest Date: ${report.retestDate || 'N/A'}\nDokumen: ${docNumber} (Berlaku: ${docEffective})`
+    );
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  // Generate QR image url via public reliable SVG generator
+  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
+    qrPayload
+  )}&bgcolor=ffffff&color=0f172a&margin=1`;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto animate-in fade-in duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full overflow-hidden border border-slate-200 flex flex-col max-h-[90vh]">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-slate-900 via-teal-900 to-emerald-950 px-6 py-4 text-white flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-white/10 rounded-xl backdrop-blur-xs border border-white/10">
+              <QrCode className="w-6 h-6 text-teal-300" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-lg leading-tight">
+                  Smart Digital Container Tag (Paperless Sampling CPKB)
+                </h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/30 text-teal-200 border border-teal-400/30">
+                  {docNumber}
+                </span>
+              </div>
+              <p className="text-xs text-teal-200/80 font-normal">
+                Pelacakan Status Wadah & Log Pengambilan Contoh Digital Terintegrasi
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-white/80 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 space-y-5 overflow-y-auto grow">
+          {/* Material & Lot Summary Bar */}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-xs font-bold text-teal-800 bg-teal-100/70 px-2 py-0.5 rounded border border-teal-200">
+                  {report.materialCode}
+                </span>
+                <span className="font-bold text-slate-800 text-sm">
+                  {report.materialName}
+                </span>
+              </div>
+              <div className="text-xs text-slate-500 mt-1 flex items-center gap-3 flex-wrap">
+                <span>Lot Internal: <b className="font-mono text-slate-700">{report.lotInternalNumber || report.grnNumber}</b></span>
+                <span>•</span>
+                <span>Batch Vendor: <b className="font-mono text-slate-700">{report.batchNumberVendor}</b></span>
+                <span>•</span>
+                <span>GRN: <b className="font-mono text-slate-700">{report.grnNumber}</b></span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${statusBadge.bg}`}>
+                <span className={`w-2 h-2 rounded-full ${statusBadge.dot} animate-pulse`} />
+                {statusBadge.label}
+              </span>
+            </div>
+          </div>
+
+          {/* Container Selector Carousel / Pills */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
+                <Layers className="w-4 h-4 text-teal-700" />
+                Pilih Nomor Wadah / Kemasan ({totalContainers} {report.containerType}):
+              </label>
+              <span className="text-[11px] text-slate-500 font-medium">
+                Standar Sampling: <b className="text-teal-900">{report.samplingInfo?.samplingStandard || 'MIL-STD-105E'}</b>
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 pt-1 scrollbar-thin">
+              {Array.from({ length: totalContainers }, (_, i) => i + 1).map((drumNum) => {
+                const isSampled = getIsSampled(drumNum);
+                const isSelected = selectedDrumIndex === drumNum;
+                return (
+                  <button
+                    key={drumNum}
+                    type="button"
+                    onClick={() => setSelectedDrumIndex(drumNum)}
+                    className={`shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex flex-col items-center gap-1 cursor-pointer border ${
+                      isSelected
+                        ? 'bg-teal-800 text-white border-teal-900 shadow-md scale-105 ring-2 ring-teal-500/40'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span>Wadah #{drumNum}</span>
+                    <span
+                      className={`text-[9px] px-1.5 py-0.2 rounded-full font-semibold ${
+                        isSampled
+                          ? isSelected
+                            ? 'bg-teal-900 text-teal-200 border border-teal-600'
+                            : 'bg-emerald-100 text-emerald-800'
+                          : isSelected
+                          ? 'bg-teal-900 text-teal-300'
+                          : 'bg-slate-100 text-slate-500'
+                      }`}
+                    >
+                      {isSampled ? '✓ Disampling' : 'Utuh / Segel'}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Smart Digital Tag Detail View */}
+          <div className="bg-gradient-to-br from-slate-900 to-slate-950 text-white rounded-2xl p-5 shadow-xl border border-slate-800 grid grid-cols-1 md:grid-cols-3 gap-5">
+            {/* Left QR Display */}
+            <div className="flex flex-col items-center justify-center p-3 bg-white rounded-xl border border-slate-200 text-slate-900 shrink-0">
+              <img
+                src={qrImageUrl}
+                alt="QR Code Container Tag"
+                className="w-36 h-36 object-contain rounded-lg"
+              />
+              <span className="text-[10px] font-mono text-slate-500 font-bold mt-2">
+                SCAN DENGAN HP / SCANNER
+              </span>
+              <span className="text-[9px] text-slate-400 text-center">
+                Wadah #{selectedDrumIndex} / {totalContainers}
+              </span>
+            </div>
+
+            {/* Right Tag Metadata */}
+            <div className="md:col-span-2 space-y-3 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold text-xs">
+                      Wadah #{selectedDrumIndex} dari {totalContainers} {report.containerType}
+                    </span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${currentDrumSampled ? 'bg-teal-500/30 text-teal-200' : 'bg-slate-700 text-slate-300'}`}>
+                      {currentDrumSampled ? 'STATUS: TELAH DISAMPLING' : 'STATUS: SEGEL / BELUM DIBUKA'}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    CPKB {docNumber}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs pt-3">
+                  <div>
+                    <span className="text-slate-400 text-[11px] block">Material:</span>
+                    <span className="font-bold text-slate-100 text-sm">{report.materialName}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 text-[11px] block">No. Lot Internal QC:</span>
+                    <span className="font-mono font-bold text-teal-300 text-sm">{report.lotInternalNumber || report.grnNumber}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 text-[11px] block">Tanggal Kedaluwarsa:</span>
+                    <span className="font-semibold text-slate-200">{report.expiryDate || 'N/A'}</span>
+                  </div>
+                  {isRaw && (
+                    <div className="bg-emerald-950/80 p-1.5 rounded-lg border border-emerald-800/60">
+                      <span className="text-emerald-400 text-[10px] font-bold block flex items-center gap-1">
+                        <Calendar className="w-3 h-3" /> Tanggal Uji Ulang (Retest Date):
+                      </span>
+                      <span className="font-mono font-bold text-emerald-200 text-xs">
+                        {report.retestDate || 'N/A (Sesuai ED)'}
+                      </span>
+                    </div>
+                  )}
+                  <div>
+                    <span className="text-slate-400 text-[11px] block">Petugas Sampling QC:</span>
+                    <span className="text-slate-200 font-medium">
+                      {report.sampledBy || report.staffSignature?.signerName || 'Staf Analis QC'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 text-[11px] block">Waktu Sampling:</span>
+                    <span className="font-mono text-slate-300 text-[11px]">
+                      {report.samplingDateTime ? new Date(report.samplingDateTime).toLocaleString('id-ID') : (report.receivedDate || '-')}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-3 border-t border-slate-800 flex items-center justify-between gap-2 flex-wrap">
+                <div className="text-[11px] text-slate-400 flex items-center gap-1">
+                  <ShieldCheck className="w-4 h-4 text-teal-400" />
+                  <span>100% Paperless • Sesuai Pedoman CPKB BPOM</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCopyTagInfo}
+                  className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  {copied ? <Check className="w-3.5 h-3.5 text-white" /> : <Sparkles className="w-3.5 h-3.5" />}
+                  <span>{copied ? 'Tersalin ke Clipboard!' : 'Salin Tag Digital'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* CPKB Compliance Note */}
+          <div className="bg-teal-50 border border-teal-200 rounded-xl p-3.5 text-teal-950 text-xs flex items-start gap-3">
+            <Info className="w-4 h-4 text-teal-700 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <span className="font-bold block">
+                Keunggulan Sistem Paperless Sampling & Digital Tag:
+              </span>
+              <p className="text-[11px] text-teal-900 leading-relaxed">
+                Setiap wadah tercatat secara digital pada server database pengawasan mutu tanpa perlu mencetak label kertas fisik berulang. Petugas gudang dan auditor BPOM dapat memverifikasi keaslian dan status wadah langsung melalui sistem audit trail atau pemindaian QR code di atas.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="bg-slate-50 px-6 py-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 shrink-0">
+          <div className="flex items-center gap-2">
+            <span>PT. Larassanti Makmur Sejahtera • Sistem Terpadu Pengawasan Mutu CPKB</span>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold transition-colors cursor-pointer"
+          >
+            Tutup
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};

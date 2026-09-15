@@ -33,9 +33,12 @@ import {
   Factory,
   Scale,
   Clock,
+  Camera,
+  QrCode,
 } from 'lucide-react';
 import { Logo } from '../../components/Logo';
 import { GlobalNotificationCenter } from '../notifications/GlobalNotificationCenter';
+import { UniversalQrScannerModal } from '../../components/UniversalQrScannerModal';
 import {
   departmentNotificationService,
   DepartmentNotificationCounts,
@@ -76,6 +79,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 }) => {
   const { user, logout } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showQrScanner, setShowQrScanner] = useState(false);
   const [counts, setCounts] = useState<DepartmentNotificationCounts>({
     all: 0,
     warehouse: 0,
@@ -90,7 +94,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
   const refreshNotificationCounts = async () => {
     try {
-      const c = await departmentNotificationService.getCounts();
+      const c = await departmentNotificationService.getCounts(user);
       setCounts(c);
     } catch (e) {
       console.error('Error fetching notification counts:', e);
@@ -101,7 +105,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     refreshNotificationCounts();
     const timer = setInterval(refreshNotificationCounts, 10000);
     return () => clearInterval(timer);
-  }, []);
+  }, [user]);
   
   // Track which accordion departments are expanded
   const [expandedDepts, setExpandedDepts] = useState<Record<string, boolean>>({
@@ -310,6 +314,17 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
         {/* User Info & Actions */}
         <div className="flex items-center gap-2.5">
+          {/* Universal QR Camera Scanner Button */}
+          <button
+            type="button"
+            onClick={() => setShowQrScanner(true)}
+            title="Pindai QR Label / Wadah CPKB (Kamera)"
+            className="px-2.5 py-1.5 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 transition-all text-xs flex items-center gap-1.5 cursor-pointer font-bold shadow-2xs active:scale-95"
+          >
+            <Camera className="w-4 h-4 text-teal-700" />
+            <span className="hidden sm:inline">Pindai QR</span>
+          </button>
+
           {/* Universal Department Notification Center Dropdown */}
           <GlobalNotificationCenter onNavigate={handleNotificationNavigate} />
 
@@ -424,13 +439,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
         {/* Department Sidebar Navigation (Accordion Format) - Fixed in place, scrollable internally */}
         <aside className="w-full md:w-64 border-b md:border-b-0 md:border-r border-slate-200 bg-white p-3 flex md:flex-col gap-1 overflow-x-auto md:overflow-y-auto shrink-0 shadow-xs scrollbar-none items-center md:items-stretch h-auto md:h-full">
-          <div className="hidden md:flex items-center justify-between px-3 py-1.5 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">
-            <span>Menu Otoritas</span>
-            {counts.all > 0 && (
-              <NotificationBadge count={`${counts.all} Tugas`} variant="danger" size="sm" pulse={true} />
-            )}
-          </div>
-
           {/* Home button */}
           <button
             onClick={() => onSelectTab('dashboard')}
@@ -662,6 +670,12 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           {children}
         </main>
       </div>
+
+      {/* Universal QR Scanner Modal */}
+      <UniversalQrScannerModal
+        isOpen={showQrScanner}
+        onClose={() => setShowQrScanner(false)}
+      />
     </div>
   );
 };

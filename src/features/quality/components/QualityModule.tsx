@@ -28,6 +28,7 @@ import {
   Check,
   Sliders,
   Database,
+  QrCode,
 } from 'lucide-react';
 import { QcInspectionReport } from '../types/qcTypes';
 import { qualityService } from '../qualityService';
@@ -38,10 +39,12 @@ import { QcRevertModal } from './QcRevertModal';
 import { QcInspectionReportPdfModal } from './QcInspectionReportPdfModal';
 import { QcStatusLabelModal } from './QcStatusLabelModal';
 import { QcDiagnosticAuditModal } from './QcDiagnosticAuditModal';
+import { QcContainerSamplingQrModal } from './QcContainerSamplingQrModal';
 import { warehouseService } from '../../warehouse/warehouseService';
 import { GrnDetailModal } from '../../warehouse/components/GrnDetailModal';
 import { GrnRecord } from '../../warehouse/types/grnTypes';
 import { useAuth } from '../../../core/auth/AuthContext';
+import { isQualityManager } from '../../../core/auth/permissionGuard';
 import {
   IpcBulkTest,
   IpcReworkTest,
@@ -131,6 +134,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
   const [revertingReport, setRevertingReport] = useState<QcInspectionReport | null>(null);
   const [pdfReport, setPdfReport] = useState<QcInspectionReport | null>(null);
   const [labelReport, setLabelReport] = useState<QcInspectionReport | null>(null);
+  const [smartTagReport, setSmartTagReport] = useState<QcInspectionReport | null>(null);
   const [showDiagnosticAudit, setShowDiagnosticAudit] = useState<boolean>(false);
   const [selectedGrnDetail, setSelectedGrnDetail] = useState<GrnRecord | null>(null);
 
@@ -268,7 +272,10 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
     staffNotes: string,
     passwordInput: string,
     actualSampleSize?: number,
-    actualSampleUnit?: string
+    actualSampleUnit?: string,
+    retestDate?: string,
+    sampledContainers?: string,
+    samplingDateTime?: string
   ) => {
     if (!user) return;
     const updated = await qualityService.submitStaffAnalysis(
@@ -279,7 +286,10 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
       user,
       passwordInput,
       actualSampleSize,
-      actualSampleUnit
+      actualSampleUnit,
+      retestDate,
+      sampledContainers,
+      samplingDateTime
     );
     setReports((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
     setCurrentTab('approval');
@@ -473,6 +483,14 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
               <td className={`${isCompactMode ? 'p-1.5' : 'p-3'} text-right`}>
                 <div className="flex items-center justify-end gap-1.5">
                   <button
+                    onClick={() => setSmartTagReport(item)}
+                    title="Buka Smart Tag QR Wadah (Paperless Sampling CPKB)"
+                    className={`${isCompactMode ? 'p-1' : 'p-1.5'} text-teal-700 hover:text-teal-900 bg-teal-50 hover:bg-teal-100 rounded-lg border border-teal-200 transition-colors cursor-pointer flex items-center gap-1`}
+                  >
+                    <QrCode className="w-4 h-4" />
+                    {!isCompactMode && <span className="text-[11px] font-bold">Tag QR</span>}
+                  </button>
+                  <button
                     onClick={() => setRevertingReport(item)}
                     title="Revert ke Gudang (Koreksi Data)"
                     className={`${isCompactMode ? 'p-1' : 'p-1.5'} text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer`}
@@ -586,6 +604,14 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
               <td className={`${isCompactMode ? 'p-1.5' : 'p-3'} text-right`}>
                 <div className="flex items-center justify-end gap-1.5">
                   <button
+                    onClick={() => setSmartTagReport(item)}
+                    title="Buka Smart Tag QR Wadah (Paperless Sampling CPKB)"
+                    className={`${isCompactMode ? 'p-1' : 'p-1.5'} text-teal-700 hover:text-teal-900 bg-teal-50 hover:bg-teal-100 rounded-lg border border-teal-200 transition-colors cursor-pointer flex items-center gap-1`}
+                  >
+                    <QrCode className="w-4 h-4" />
+                    {!isCompactMode && <span className="text-[11px] font-bold">Tag QR</span>}
+                  </button>
+                  <button
                     onClick={() => setRevertingReport(item)}
                     title="Revert ke Gudang"
                     className={`${isCompactMode ? 'p-1' : 'p-1.5'} text-slate-400 hover:text-amber-600 rounded-lg cursor-pointer`}
@@ -693,13 +719,34 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
                 </span>
               </td>
               <td className={`${isCompactMode ? 'p-1.5' : 'p-3'} text-right`}>
-                <button
-                  onClick={() => setAuthorizingReport(item)}
-                  className={`inline-flex items-center gap-1.5 ${isCompactMode ? 'px-2.5 py-1 text-xs' : 'px-3.5 py-1.5'} bg-indigo-700 hover:bg-indigo-800 active:scale-98 text-white rounded-lg font-bold shadow-md transition-all cursor-pointer`}
-                >
-                  <KeyRound className="w-3.5 h-3.5" />
-                  Otorisasi Manager
-                </button>
+                <div className="flex items-center justify-end gap-1.5">
+                  <button
+                    onClick={() => setSmartTagReport(item)}
+                    title="Buka Smart Tag QR Wadah (Paperless Sampling CPKB)"
+                    className={`${isCompactMode ? 'p-1' : 'p-1.5'} text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-200 transition-colors cursor-pointer flex items-center gap-1`}
+                  >
+                    <QrCode className="w-4 h-4" />
+                    {!isCompactMode && <span className="text-[11px] font-bold">Tag QR</span>}
+                  </button>
+                  {isQualityManager(user) ? (
+                    <button
+                      onClick={() => setAuthorizingReport(item)}
+                      className={`inline-flex items-center gap-1.5 ${isCompactMode ? 'px-2.5 py-1 text-xs' : 'px-3.5 py-1.5'} bg-indigo-700 hover:bg-indigo-800 active:scale-98 text-white rounded-lg font-bold shadow-md transition-all cursor-pointer`}
+                    >
+                      <KeyRound className="w-3.5 h-3.5" />
+                      Otorisasi Manager
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setAuthorizingReport(item)}
+                      className={`inline-flex items-center gap-1.5 ${isCompactMode ? 'px-2 py-1 text-xs' : 'px-3 py-1.5'} bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg font-medium border border-slate-300 transition-all cursor-pointer`}
+                      title="Hanya Quality Manager / Admin yang dapat menandatangani"
+                    >
+                      <KeyRound className="w-3.5 h-3.5 text-slate-400" />
+                      Lihat Antrean (Khusus QM)
+                    </button>
+                  )}
+                </div>
               </td>
             </tr>
           ))
@@ -795,6 +842,14 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
               </td>
               <td className={`${isCompactMode ? 'p-1.5' : 'p-3'} text-right`}>
                 <div className="flex items-center justify-end gap-1.5">
+                  <button
+                    onClick={() => setSmartTagReport(item)}
+                    title="Buka Smart Tag QR Wadah (Paperless Sampling CPKB)"
+                    className={`inline-flex items-center gap-1 ${isCompactMode ? 'px-2 py-1 text-[11px]' : 'px-2.5 py-1.5 text-xs'} bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold rounded-lg transition-colors cursor-pointer`}
+                  >
+                    <QrCode className="w-3.5 h-3.5 text-emerald-700" />
+                    Smart Tag
+                  </button>
                   <button
                     onClick={() => setLabelReport(item)}
                     title="Cetak Label Status QC"
@@ -2640,6 +2695,12 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
         isOpen={!!labelReport}
         onClose={() => setLabelReport(null)}
         report={labelReport}
+      />
+
+      <QcContainerSamplingQrModal
+        isOpen={!!smartTagReport}
+        onClose={() => setSmartTagReport(null)}
+        report={smartTagReport}
       />
 
       <QcDiagnosticAuditModal

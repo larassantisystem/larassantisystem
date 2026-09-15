@@ -92,13 +92,12 @@ export const GlobalNotificationCenter: React.FC<GlobalNotificationCenterProps> =
     };
   }, [isOpen]);
 
-  // Permission helper
+  // Permission helper: Manager only sees their own department unless Admin/Management
   const canSeeNotification = (userProfile: UserProfile | null, notificationDept: Department) => {
     if (!userProfile) return false;
-    // Elevate access: Admin/Manager roles or Admin/Management department users can see everything
+    // Super Admin or Management/Direksi level users can see everything
     if (
       userProfile.role === 'admin' ||
-      userProfile.role === 'manager' ||
       userProfile.department === 'admin' ||
       userProfile.department === 'management'
     ) {

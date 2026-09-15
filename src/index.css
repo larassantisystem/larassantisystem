@@ -1,13 +1,33 @@
 @import "tailwindcss";
 
 @media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm 12mm 10mm 12mm;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
   body * {
     visibility: hidden;
   }
+
+  .no-print {
+    display: none !important;
+  }
+
   #quarantine-label-printable,
-  #quarantine-label-printable * {
+  #quarantine-label-printable *,
+  #printable-qc-report,
+  #printable-qc-report * {
     visibility: visible;
   }
+
   #quarantine-label-printable {
     position: absolute;
     left: 0;
@@ -19,4 +39,48 @@
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
+
+  #printable-qc-report {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: white !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print-page {
+    page-break-after: always;
+    break-after: page;
+    min-height: 265mm;
+    box-sizing: border-box;
+    padding: 0;
+    margin-bottom: 0;
+  }
+
+  .print-page:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+
+  .page-break-inside-avoid {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
 }
+

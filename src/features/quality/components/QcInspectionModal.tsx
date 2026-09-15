@@ -33,7 +33,10 @@ interface QcInspectionModalProps {
     staffNotes: string,
     passwordInput: string,
     actualSampleSize?: number,
-    actualSampleUnit?: string
+    actualSampleUnit?: string,
+    retestDate?: string,
+    sampledContainers?: string,
+    samplingDateTime?: string
   ) => Promise<void>;
 }
 
@@ -50,6 +53,11 @@ export const QcInspectionModal: React.FC<QcInspectionModalProps> = ({
   const [staffNotes, setStaffNotes] = useState('');
   const [actualSampleSize, setActualSampleSize] = useState<string>('');
   const [actualSampleUnit, setActualSampleUnit] = useState<string>('gram');
+
+  // CPKB Paperless Sampling & Retest Date States
+  const [retestDate, setRetestDate] = useState<string>('');
+  const [selectedContainers, setSelectedContainers] = useState<number[]>([]);
+  const [samplingDateTime, setSamplingDateTime] = useState<string>('');
 
   // Digital Signature Password Modal inside
   const [showSignatureModal, setShowSignatureModal] = useState(false);
@@ -85,12 +93,50 @@ export const QcInspectionModal: React.FC<QcInspectionModalProps> = ({
       setActualSampleSize(defaultSize);
       setActualSampleUnit(defaultUnit);
 
+      // Initialize Retest Date: Default 1 year from received date or current date
+      if (report.retestDate) {
+        setRetestDate(report.retestDate);
+      } else if (report.materialType === 'raw') {
+        const baseDate = report.receivedDate ? new Date(report.receivedDate) : new Date();
+        const oneYearLater = new Date(baseDate);
+        oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
+        setRetestDate(oneYearLater.toISOString().split('T')[0]);
+      } else {
+        setRetestDate('');
+      }
+
+      // Initialize Sampled Containers
+      const sampleCount = report.samplingInfo?.sampleSizeQuantity || 1;
+      const initialContainers: number[] = [];
+      for (let i = 1; i <= Math.min(sampleCount, report.containerCount || 1); i++) {
+        initialContainers.push(i);
+      }
+      setSelectedContainers(initialContainers);
+
+      // Initialize Sampling DateTime
+      setSamplingDateTime(
+        report.samplingDateTime || new Date().toISOString().slice(0, 16)
+      );
+
       setShowSignatureModal(false);
       setStaffPassword('');
       setErrorMessage('');
       setFocusedEmptyParamId(null);
     }
   }, [report]);
+
+  const handleToggleContainer = (num: number) => {
+    setSelectedContainers((prev) =>
+      prev.includes(num) ? prev.filter((n) => n !== num) : [...prev, num].sort((a, b) => a - b)
+    );
+  };
+
+  const handleSetRetestMonths = (months: number) => {
+    const baseDate = report?.receivedDate ? new Date(report.receivedDate) : new Date();
+    const targetDate = new Date(baseDate);
+    targetDate.setMonth(targetDate.getMonth() + months);
+    setRetestDate(targetDate.toISOString().split('T')[0]);
+  };
 
   if (!isOpen || !report) return null;
 
@@ -161,6 +207,11 @@ export const QcInspectionModal: React.FC<QcInspectionModalProps> = ({
       setIsSubmitting(true);
       setErrorMessage('');
       const parsedSampleSize = parseFloat(actualSampleSize);
+
+      const sampledContainersStr = selectedContainers.length > 0
+        ? `Wadah #${selectedContainers.join(', #')} (Total ${report.containerCount} ${report.containerType})`
+        : `Wadah #1 (Total ${report.containerCount} ${report.containerType})`;
+
       await onSubmitStaffAnalysis(
         report.id,
         parameters,
@@ -168,7 +219,10 @@ export const QcInspectionModal: React.FC<QcInspectionModalProps> = ({
         staffNotes,
         staffPassword,
         isNaN(parsedSampleSize) ? undefined : parsedSampleSize,
-        actualSampleUnit
+        actualSampleUnit,
+        retestDate || undefined,
+        sampledContainersStr,
+        samplingDateTime || undefined
       );
       setShowSignatureModal(false);
       onClose();
@@ -350,6 +404,124 @@ export const QcInspectionModal: React.FC<QcInspectionModalProps> = ({
                         : 'Catat kuantitas unit kemasan fisik yang diambil untuk uji QC.'}
                     </span>
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* CPKB Paperless Sampling & Retest Date Control Panel */}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+              <span className="font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                <FileCheck2 className="w-4 h-4 text-emerald-700" />
+                Pencatatan Sampling Wadah (Paperless) & Uji Ulang (Retest Date)
+              </span>
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                Standar CPKB BPOM
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+              {/* Wadah yang Disampling (Interactive Container Selector) */}
+              <div className="space-y-1.5 bg-white p-3 rounded-lg border border-slate-200">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-slate-700 block">
+                    Pilih Wadah/Drum yang Disampling:
+                  </label>
+                  <span className="text-[10px] text-slate-500 font-mono">
+                    Terpilih: {selectedContainers.length} dari {report.containerCount} {report.containerType}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto p-1 bg-slate-50 rounded border border-slate-100">
+                  {Array.from({ length: report.containerCount || 1 }, (_, i) => i + 1).map((drumNum) => {
+                    const isSelected = selectedContainers.includes(drumNum);
+                    return (
+                      <button
+                        key={drumNum}
+                        type="button"
+                        onClick={() => handleToggleContainer(drumNum)}
+                        className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-emerald-700 text-white shadow-xs scale-102 ring-1 ring-emerald-600'
+                            : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-100'
+                        }`}
+                      >
+                        #{drumNum} {isSelected ? '✓ Disampling' : ''}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1">
+                  <span>Klik nomor wadah untuk menandai sampling digital.</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const all: number[] = [];
+                      for (let i = 1; i <= (report.containerCount || 1); i++) all.push(i);
+                      setSelectedContainers(all);
+                    }}
+                    className="text-emerald-700 hover:underline font-semibold"
+                  >
+                    Pilih Semua
+                  </button>
+                </div>
+              </div>
+
+              {/* Tanggal Retest (Uji Ulang) & Waktu Sampling */}
+              <div className="space-y-2 bg-white p-3 rounded-lg border border-slate-200 flex flex-col justify-between">
+                {report.materialType === 'raw' ? (
+                  <div>
+                    <label className="font-bold text-slate-800 block text-[11px] mb-1">
+                      Tanggal Uji Ulang (*Retest Date* Bahan Baku):
+                    </label>
+                    <input
+                      type="date"
+                      value={retestDate}
+                      onChange={(e) => setRetestDate(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+                    />
+                    <div className="flex items-center gap-1.5 mt-1.5">
+                      <span className="text-[10px] text-slate-400 font-medium">Preset:</span>
+                      <button
+                        type="button"
+                        onClick={() => handleSetRetestMonths(6)}
+                        className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-semibold border border-slate-200"
+                      >
+                        +6 Bulan
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSetRetestMonths(12)}
+                        className="px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded text-[10px] font-bold border border-emerald-200"
+                      >
+                        +12 Bulan (Standar CPKB)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSetRetestMonths(24)}
+                        className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-semibold border border-slate-200"
+                      >
+                        +24 Bulan
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <span className="text-slate-500 block text-[11px]">Kategori Bahan:</span>
+                    <span className="font-bold text-slate-800 text-xs">
+                      Bahan Kemas (Tidak memerlukan uji ulang kimia/Retest Date)
+                    </span>
+                  </div>
+                )}
+
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                  <span className="text-[10px] text-slate-500 font-medium">Waktu Sampling:</span>
+                  <input
+                    type="datetime-local"
+                    value={samplingDateTime}
+                    onChange={(e) => setSamplingDateTime(e.target.value)}
+                    className="bg-slate-50 border border-slate-200 rounded px-2 py-1 text-[11px] font-mono text-slate-700"
+                  />
                 </div>
               </div>
             </div>

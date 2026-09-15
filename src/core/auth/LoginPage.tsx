@@ -23,9 +23,12 @@ import {
   ChevronDown,
   ChevronUp,
   ShieldAlert,
-  Sparkles
+  Sparkles,
+  Camera,
+  QrCode,
 } from 'lucide-react';
 import { Logo } from '../../components/Logo';
+import { UniversalQrScannerModal } from '../../components/UniversalQrScannerModal';
 
 interface SupabaseAccountItem {
   nik: string;
@@ -218,6 +221,7 @@ export const LoginPage: React.FC = () => {
   const [demoDeptFilter, setDemoDeptFilter] = useState<string>('all');
   const [showDemoAccounts, setShowDemoAccounts] = useState(true);
   const [selectedAccountNik, setSelectedAccountNik] = useState<string>('admin');
+  const [showScanner, setShowScanner] = useState<boolean>(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -305,8 +309,17 @@ export const LoginPage: React.FC = () => {
         {/* LEFT COLUMN: Brand Identity, Badge, Hero Headline & CPKB Overview */}
         <div className="lg:col-span-6 space-y-6">
           {/* Brand Header */}
-          <div>
+          <div className="flex items-center justify-between gap-4">
             <Logo showText={true} size="md" variant="dark" />
+            
+            <button
+              type="button"
+              onClick={() => setShowScanner(true)}
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 border border-teal-500/40 text-xs font-bold transition-all shadow-md shadow-teal-950/40 cursor-pointer active:scale-95"
+            >
+              <Camera className="w-4 h-4 text-teal-400" />
+              <span>Pindai QR CPKB</span>
+            </button>
           </div>
 
           {/* Badge: Sistem Gudang & Quality Control CPKB */}
@@ -362,6 +375,34 @@ export const LoginPage: React.FC = () => {
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Quick Scanner Card (Akses Bebas Semua Orang / Tamu / Auditor) */}
+          <div className="bg-gradient-to-r from-teal-950/60 to-purple-950/60 border border-teal-500/30 backdrop-blur-md rounded-2xl p-4 shadow-lg shadow-teal-950/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 max-w-xl">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-teal-600/30 border border-teal-500/50 flex items-center justify-center text-teal-300 shrink-0">
+                <Camera className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <h3 className="text-xs font-bold text-white">Pindai QR Label & Wadah Drum</h3>
+                  <span className="px-1.5 py-0.2 bg-teal-500/20 text-teal-300 border border-teal-500/30 text-[9px] rounded font-bold font-mono">
+                    Akses Bebas
+                  </span>
+                </div>
+                <p className="text-[11px] text-purple-200/70 mt-0.5 leading-relaxed">
+                  Verifikasi status uji mutu CPKB & data sampling wadah secara instan tanpa perlu login.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowScanner(true)}
+              className="w-full sm:w-auto px-3.5 py-2 bg-teal-600 hover:bg-teal-500 active:scale-95 text-white rounded-xl text-xs font-bold transition-all shrink-0 flex items-center justify-center gap-1.5 shadow-md shadow-teal-950/50 cursor-pointer"
+            >
+              <QrCode className="w-3.5 h-3.5" />
+              <span>Buka Kamera</span>
+            </button>
           </div>
 
           {/* Notice: Penambahan Karyawan Terpusat */}
@@ -643,6 +684,12 @@ export const LoginPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Universal QR Camera Scanner Modal */}
+      <UniversalQrScannerModal
+        isOpen={showScanner}
+        onClose={() => setShowScanner(false)}
+      />
     </div>
   );
 };

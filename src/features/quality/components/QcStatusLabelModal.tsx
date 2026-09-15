@@ -57,7 +57,7 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
         icon: <CheckCircle2 className="w-5 h-5 shrink-0" />,
         title: 'STATUS: DILULUSKAN (RELEASE)',
         subtitle: '* TELAH DIUJI & MEMENUHI SPESIFIKASI MUTU CPKB - SIAP DIGUNAKAN *',
-        formCode: 'FORM/QC/CPKB-LBL-02 (RELEASE)',
+        formCode: 'L-DQC-001-01',
       }
     : isDeviation
     ? {
@@ -71,7 +71,7 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
         icon: <AlertTriangle className="w-5 h-5 shrink-0" />,
         title: 'STATUS: DILULUSKAN BERSYARAT (RELEASE BY DEVIATION)',
         subtitle: '* DILULUSKAN DENGAN CATATAN DEVIASI RESMI QUALITY MANAGER *',
-        formCode: 'FORM/QC/CPKB-LBL-02-DEV',
+        formCode: 'L-DQC-001-01',
       }
     : {
         borderOuter: 'border-rose-600',
@@ -84,7 +84,7 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
         icon: <AlertOctagon className="w-5 h-5 shrink-0" />,
         title: 'STATUS: DITOLAK (REJECTED)',
         subtitle: '* TIDAK MEMENUHI SPESIFIKASI MUTU - DILARANG DIGUNAKAN / RETUR *',
-        formCode: 'FORM/QC/CPKB-LBL-03 (REJECT)',
+        formCode: 'L-DQC-003-01',
       };
 
   const handlePrint = () => {
@@ -227,10 +227,7 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
                     </div>
                   </div>
                   <div className="text-right">
-                    <span className="font-mono text-[10px] text-slate-400 block">{theme.formCode}</span>
-                    <span className="inline-block px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[10px] font-mono font-bold mt-0.5">
-                      REV. 02
-                    </span>
+                    <span className="font-mono text-xs font-bold text-slate-700 block">{theme.formCode}</span>
                   </div>
                 </div>
 
@@ -261,11 +258,29 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
                     </span>
                   </div>
 
-                  <div className={`p-2.5 rounded-xl border ${theme.containerBg}`}>
-                    <span className="text-[10px] font-extrabold opacity-80 uppercase block">Nomor Koli / Wadah</span>
-                    <span className="font-black text-xs block mt-0.5">
-                      Wadah ke <span className="underline decoration-2">{containerIndex}</span> dari {totalContainers}
-                    </span>
+                  <div className={`p-2.5 rounded-xl border ${theme.containerBg} flex flex-col justify-between`}>
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-extrabold opacity-80 uppercase block">Nomor Koli / Wadah</span>
+                        {report.sampledContainers && report.sampledContainers.includes(containerIndex) ? (
+                          <span className="px-1.5 py-0.2 rounded bg-teal-600 text-white font-bold text-[9px] uppercase tracking-wider">
+                            ✓ DISAMPLING
+                          </span>
+                        ) : (
+                          <span className="px-1.5 py-0.2 rounded bg-slate-200 text-slate-700 font-semibold text-[9px] uppercase tracking-wider">
+                            SEGEL UTUH
+                          </span>
+                        )}
+                      </div>
+                      <span className="font-black text-xs block mt-0.5">
+                        Wadah ke <span className="underline decoration-2">{containerIndex}</span> dari {totalContainers}
+                      </span>
+                    </div>
+                    {report.sampledContainers && report.sampledContainers.includes(containerIndex) && report.actualSampleSize && (
+                      <span className="text-[9.5px] font-bold text-teal-800 mt-1 block">
+                        Contoh Uji: {report.actualSampleSize} {report.actualSampleUnit || (report.materialType === 'raw' ? 'gram' : 'pcs')}
+                      </span>
+                    )}
                   </div>
 
                   <div className="col-span-2 sm:col-span-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200">
@@ -283,7 +298,7 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
                   </div>
 
                   <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase block">Batch Produsen</span>
+                    <span className="text-[10px] font-extrabold text-slate-400 uppercase block">No. Batch / Lot Produsen</span>
                     <span className="font-mono font-bold text-indigo-950 block mt-0.5 truncate">
                       {report.batchNumberVendor || '-'}
                     </span>
@@ -294,6 +309,12 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
                     <span className={`font-bold block mt-0.5 ${report.expiryDate ? 'text-rose-700' : 'text-slate-500'}`}>
                       {report.expiryDate || 'Non-Exp (Bahan Kemas)'}
                     </span>
+                    {report.retestDate && (
+                      <div className="mt-1 pt-1 border-t border-slate-200 text-[10px] text-teal-800 font-semibold flex items-center justify-between">
+                        <span>Retest:</span>
+                        <span className="font-mono font-bold">{report.retestDate}</span>
+                      </div>
+                    )}
                   </div>
 
                   <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
@@ -349,8 +370,29 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
 
                   <div className="flex flex-col items-center justify-center">
                     <QrCodeBadge
-                      value={`QC|LOT:${report.lotInternalNumber || report.grnNumber}|W:${containerIndex}/${totalContainers}|CODE:${report.materialCode}|STATUS:${report.status}`}
-                      size={54}
+                      value={JSON.stringify({
+                        type: 'CPKB_CONTAINER_LABEL',
+                        docCode: theme.formCode,
+                        company: 'PT. LARASSANTI MAKMUR SEJAHTERA',
+                        lot: report.lotInternalNumber || report.grnNumber,
+                        grn: report.grnNumber,
+                        matCode: report.materialCode,
+                        matName: report.materialName,
+                        containerIndex,
+                        totalContainers,
+                        containerLabel: `Wadah ke ${containerIndex} dari ${totalContainers}`,
+                        sampled: (report.sampledContainers || []).includes(containerIndex),
+                        sampleSize: (report.sampledContainers || []).includes(containerIndex) && report.actualSampleSize
+                          ? `${report.actualSampleSize} ${report.actualSampleUnit || (report.materialType === 'raw' ? 'gram' : 'pcs')}`
+                          : null,
+                        samplingDate: report.samplingDateTime || null,
+                        status: report.status,
+                        expDate: report.expiryDate || '-',
+                        retestDate: report.retestDate || '-',
+                        qmSigner: report.qmSignature?.signerName || null,
+                        mfg: report.manufacturer,
+                      })}
+                      size={58}
                     />
                     <span className="font-mono text-[9px] text-slate-600 mt-1 font-bold">
                       {report.lotInternalNumber || report.grnNumber}-W{containerIndex}

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { QcInspectionReport } from '../types/qcTypes';
 import { useAuth } from '../../../core/auth/AuthContext';
+import { isQualityManager } from '../../../core/auth/permissionGuard';
 
 interface QcManagerAuthModalProps {
   isOpen: boolean;
@@ -72,6 +73,11 @@ export const QcManagerAuthModal: React.FC<QcManagerAuthModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!isQualityManager(user)) {
+      setErrorMessage('Akses Ditolak: Anda tidak memiliki wewenang Quality Manager untuk melakukan otorisasi ini. Hanya Quality Manager atau Super Admin yang diizinkan.');
+      return;
+    }
 
     if (!passwordInput) {
       setErrorMessage('Kata sandi Quality Manager wajib diisi untuk otorisasi digital.');
@@ -509,29 +515,41 @@ export const QcManagerAuthModal: React.FC<QcManagerAuthModalProps> = ({
           )}
 
           {/* Electronic Signature: Password Verification */}
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4 space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-blue-950 uppercase tracking-wider flex items-center gap-1.5">
-                <KeyRound className="w-4 h-4 text-blue-700" />
-                Verifikasi Kata Sandi Digital Signature Manager <span className="text-red-500">*</span>
-              </label>
-              <span className="text-[11px] font-semibold text-blue-800">
-                {user?.name} ({user?.role.toUpperCase()})
-              </span>
+          {!isQualityManager(user) ? (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
+              <ShieldAlert className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+              <div className="text-xs text-red-800 space-y-1">
+                <p className="font-bold">Akses Terbatas: Otorisasi Mutu Khusus Quality Manager</p>
+                <p className="text-red-700">
+                  Akun Anda tercatat sebagai <strong>{user?.name} ({user?.role.toUpperCase()} - {user?.department.toUpperCase()})</strong>. Berdasarkan regulasi CPKB dan kebijakan sistem, otorisasi rilis/reject dan pengembalian ke uji lab hanya dapat dilakukan oleh <strong>Quality Manager</strong> atau <strong>Super Admin</strong>.
+                </p>
+              </div>
             </div>
-            <input
-              type="password"
-              required
-              placeholder="Masukkan kata sandi akun Quality Manager Anda..."
-              value={passwordInput}
-              onChange={(e) => setPasswordInput(e.target.value)}
-              className="w-full text-sm border border-blue-300 rounded-xl p-2.5 focus:outline-hidden focus:ring-2 focus:ring-blue-600 bg-white text-slate-900"
-            />
-            <p className="text-[11px] text-slate-500 flex items-center gap-1">
-              <HelpCircle className="w-3.5 h-3.5 text-slate-400" />
-              Tanda tangan elektronik ini terikat secara legal dengan identitas Apoteker / Quality Manager.
-            </p>
-          </div>
+          ) : (
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-blue-950 uppercase tracking-wider flex items-center gap-1.5">
+                  <KeyRound className="w-4 h-4 text-blue-700" />
+                  Verifikasi Kata Sandi Digital Signature Manager <span className="text-red-500">*</span>
+                </label>
+                <span className="text-[11px] font-semibold text-blue-800">
+                  {user?.name} ({user?.role.toUpperCase()})
+                </span>
+              </div>
+              <input
+                type="password"
+                required
+                placeholder="Masukkan kata sandi akun Quality Manager Anda..."
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                className="w-full text-sm border border-blue-300 rounded-xl p-2.5 focus:outline-hidden focus:ring-2 focus:ring-blue-600 bg-white text-slate-900"
+              />
+              <p className="text-[11px] text-slate-500 flex items-center gap-1">
+                <HelpCircle className="w-3.5 h-3.5 text-slate-400" />
+                Tanda tangan elektronik ini terikat secara legal dengan identitas Apoteker / Quality Manager.
+              </p>
+            </div>
+          )}
 
           {errorMessage && (
             <div className="p-3 bg-red-100 border border-red-300 rounded-xl text-xs text-red-700 font-bold">
@@ -550,9 +568,11 @@ export const QcManagerAuthModal: React.FC<QcManagerAuthModalProps> = ({
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || !isQualityManager(user)}
               className={`px-6 py-2.5 text-xs font-bold text-white rounded-xl shadow-md transition-all active:scale-98 flex items-center gap-2 cursor-pointer ${
-                activeMode === 'REVERT_TO_LAB'
+                !isQualityManager(user)
+                  ? 'bg-slate-400 cursor-not-allowed opacity-60'
+                  : activeMode === 'REVERT_TO_LAB'
                   ? 'bg-amber-600 hover:bg-amber-700'
                   : decision === 'REJECT'
                   ? 'bg-red-600 hover:bg-red-700'
