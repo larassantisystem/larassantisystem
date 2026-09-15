@@ -146,13 +146,22 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
       if (ctx) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        // Scale canvas to optimal 480-640px for ultra-fast 60fps jsQR recognition
+        const maxDim = 640;
+        let scanWidth = video.videoWidth;
+        let scanHeight = video.videoHeight;
+        if (scanWidth > maxDim) {
+          scanHeight = Math.round((scanHeight * maxDim) / scanWidth);
+          scanWidth = maxDim;
+        }
 
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        canvas.width = scanWidth;
+        canvas.height = scanHeight;
+        ctx.drawImage(video, 0, 0, scanWidth, scanHeight);
+
+        const imageData = ctx.getImageData(0, 0, scanWidth, scanHeight);
         const code = jsQR(imageData.data, imageData.width, imageData.height, {
-          inversionAttempts: 'dontInvert',
+          inversionAttempts: 'attemptBoth',
         });
 
         if (code && code.data) {
@@ -189,28 +198,58 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
     }
 
     // Parse payload
-    let parsed: ParsedQrData = { raw: rawData };
+    let parsed: ParsedQrData = { raw: rawData, company: 'PT. LARASSANTI MAKMUR SEJAHTERA' };
     try {
       const json = JSON.parse(rawData);
       if (typeof json === 'object' && json !== null) {
         parsed = { ...json, raw: rawData };
       }
     } catch (e) {
-      // Raw string format: QC|LOT:xxx|W:1/5|CODE:xxx|STATUS:PASSED
-      if (rawData.startsWith('QC|') || rawData.includes('|')) {
-        const parts = rawData.split('|');
-        const map: any = { raw: rawData };
-        parts.forEach((p) => {
-          const [k, v] = p.split(':');
-          if (k && v) {
-            if (k === 'LOT') map.lot = v;
-            if (k === 'W') map.containerLabel = `Wadah ${v}`;
-            if (k === 'CODE') map.matCode = v;
-            if (k === 'STATUS') map.status = v;
+      // Standard compact pipe-delimited format:
+      // LMS|QC|LOT:LOT-BB-2609-001|W:1/5|S:100g|ST:PASSED
+      const map: any = { raw: rawData, company: 'PT. LARASSANTI MAKMUR SEJAHTERA' };
+      const parts = rawData.split('|');
+
+      parts.forEach((p) => {
+        const trimmed = p.trim();
+        if (trimmed.startsWith('LOT:')) {
+          map.lot = trimmed.substring(4);
+        } else if (trimmed.startsWith('W:')) {
+          const wStr = trimmed.substring(2);
+          map.containerLabel = `Wadah ${wStr}`;
+          const [cIdx, tIdx] = wStr.split('/');
+          if (cIdx) map.containerIndex = parseInt(cIdx, 10);
+          if (tIdx) map.totalContainers = parseInt(tIdx, 10);
+        } else if (trimmed.startsWith('S:')) {
+          const sVal = trimmed.substring(2);
+          if (sVal === 'NO' || sVal === '0' || sVal === 'false') {
+            map.sampled = false;
+          } else {
+            map.sampled = true;
+            if (sVal !== 'YES' && sVal !== '1') {
+              map.sampleSize = sVal;
+            }
           }
-        });
-        parsed = map;
-      }
+        } else if (trimmed.startsWith('ST:')) {
+          const stVal = trimmed.substring(3);
+          map.status = stVal === 'PASS' ? 'PASSED' : stVal === 'REJ' ? 'REJECTED' : stVal === 'DEV' ? 'PASSED_WITH_DEVIATION' : stVal;
+        } else if (trimmed.startsWith('STATUS:')) {
+          map.status = trimmed.substring(7);
+        } else if (trimmed.startsWith('CODE:')) {
+          map.matCode = trimmed.substring(5);
+        } else if (trimmed.startsWith('GRN:')) {
+          map.grn = trimmed.substring(4);
+        } else if (trimmed.startsWith('LOT-') || trimmed.startsWith('GRN-')) {
+          map.lot = trimmed;
+        } else if (trimmed === 'PASSED' || trimmed === 'PASS') {
+          map.status = 'PASSED';
+        } else if (trimmed === 'REJECTED' || trimmed === 'REJ') {
+          map.status = 'REJECTED';
+        } else if (trimmed === 'PASSED_WITH_DEVIATION' || trimmed === 'DEV') {
+          map.status = 'PASSED_WITH_DEVIATION';
+        }
+      });
+      parsed = map;
     }
 
     setScannedResult(parsed);

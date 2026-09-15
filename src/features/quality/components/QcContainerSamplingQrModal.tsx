@@ -16,6 +16,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { QcInspectionReport } from '../types/qcTypes';
+import { QrCodeBadge } from '../../../components/QrCodeBadge';
 
 interface QcContainerSamplingQrModalProps {
   isOpen: boolean;
@@ -85,21 +86,10 @@ export const QcContainerSamplingQrModal: React.FC<QcContainerSamplingQrModalProp
   const statusBadge = getStatusBadge();
   const currentDrumSampled = getIsSampled(selectedDrumIndex);
 
-  // QR Code Payload Data
-  const qrPayload = JSON.stringify({
-    system: 'PT. Larassanti Makmur Sejahtera - CPKB',
-    docNo: docNumber,
-    lot: report.lotInternalNumber || report.grnNumber,
-    material: report.materialName,
-    code: report.materialCode,
-    drum: `${selectedDrumIndex}/${totalContainers}`,
-    status: report.status,
-    sampled: currentDrumSampled ? 'YES' : 'NO',
-    sampledBy: report.sampledBy || report.staffSignature?.signerName || 'Analis QC',
-    samplingDate: report.samplingDateTime || report.receivedDate,
-    expiryDate: report.expiryDate || 'N/A',
-    retestDate: report.retestDate || 'N/A',
-  });
+  // Ultra-compact QR Code Payload Data (Fast, responsive camera detection)
+  const qrCompactValue = `LMS|QC|LOT:${report.lotInternalNumber || report.grnNumber}|W:${selectedDrumIndex}/${totalContainers}|S:${
+    currentDrumSampled ? 'YES' : 'NO'
+  }|ST:${report.status}`;
 
   const handleCopyTagInfo = () => {
     navigator.clipboard.writeText(
@@ -108,11 +98,6 @@ export const QcContainerSamplingQrModal: React.FC<QcContainerSamplingQrModalProp
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
-
-  // Generate QR image url via public reliable SVG generator
-  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
-    qrPayload
-  )}&bgcolor=ffffff&color=0f172a&margin=1`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto animate-in fade-in duration-200">
@@ -226,10 +211,10 @@ export const QcContainerSamplingQrModal: React.FC<QcContainerSamplingQrModalProp
           <div className="bg-gradient-to-br from-slate-900 to-slate-950 text-white rounded-2xl p-5 shadow-xl border border-slate-800 grid grid-cols-1 md:grid-cols-3 gap-5">
             {/* Left QR Display */}
             <div className="flex flex-col items-center justify-center p-3 bg-white rounded-xl border border-slate-200 text-slate-900 shrink-0">
-              <img
-                src={qrImageUrl}
-                alt="QR Code Container Tag"
-                className="w-36 h-36 object-contain rounded-lg"
+              <QrCodeBadge
+                value={qrCompactValue}
+                size={135}
+                className="w-34 h-34"
               />
               <span className="text-[10px] font-mono text-slate-500 font-bold mt-2">
                 SCAN DENGAN HP / SCANNER

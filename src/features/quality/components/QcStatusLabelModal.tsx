@@ -370,29 +370,14 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
 
                   <div className="flex flex-col items-center justify-center">
                     <QrCodeBadge
-                      value={JSON.stringify({
-                        type: 'CPKB_CONTAINER_LABEL',
-                        docCode: theme.formCode,
-                        company: 'PT. LARASSANTI MAKMUR SEJAHTERA',
-                        lot: report.lotInternalNumber || report.grnNumber,
-                        grn: report.grnNumber,
-                        matCode: report.materialCode,
-                        matName: report.materialName,
-                        containerIndex,
-                        totalContainers,
-                        containerLabel: `Wadah ke ${containerIndex} dari ${totalContainers}`,
-                        sampled: (report.sampledContainers || []).includes(containerIndex),
-                        sampleSize: (report.sampledContainers || []).includes(containerIndex) && report.actualSampleSize
-                          ? `${report.actualSampleSize} ${report.actualSampleUnit || (report.materialType === 'raw' ? 'gram' : 'pcs')}`
-                          : null,
-                        samplingDate: report.samplingDateTime || null,
-                        status: report.status,
-                        expDate: report.expiryDate || '-',
-                        retestDate: report.retestDate || '-',
-                        qmSigner: report.qmSignature?.signerName || null,
-                        mfg: report.manufacturer,
-                      })}
-                      size={58}
+                      value={`LMS|QC|LOT:${report.lotInternalNumber || report.grnNumber}|W:${containerIndex}/${totalContainers}|S:${
+                        (report.sampledContainers || []).includes(containerIndex)
+                          ? report.actualSampleSize
+                            ? `${report.actualSampleSize}${report.actualSampleUnit || (report.materialType === 'raw' ? 'g' : 'pcs')}`
+                            : 'YES'
+                          : 'NO'
+                      }|ST:${report.status}`}
+                      size={62}
                     />
                     <span className="font-mono text-[9px] text-slate-600 mt-1 font-bold">
                       {report.lotInternalNumber || report.grnNumber}-W{containerIndex}
