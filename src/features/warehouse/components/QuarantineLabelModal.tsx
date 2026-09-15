@@ -3,7 +3,6 @@ import {
   Printer,
   X,
   AlertTriangle,
-  QrCode,
   ShieldCheck,
   CheckCircle2,
   Package,
@@ -13,7 +12,6 @@ import {
   FileText,
 } from 'lucide-react';
 import { GrnRecord } from '../types/grnTypes';
-import { QrCodeBadge } from '../../../components/QrCodeBadge';
 
 interface QuarantineLabelModalProps {
   isOpen: boolean;
@@ -261,35 +259,25 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
                   </div>
                 </div>
 
-                {/* Footer Signatures & QR Code */}
-                <div className="mt-4 pt-3 border-t-2 border-dashed border-amber-300 grid grid-cols-3 gap-3 items-end">
-                  <div className="border border-slate-200 rounded-xl p-2 text-center bg-slate-50">
-                    <span className="text-[9px] font-extrabold text-slate-400 uppercase block">Petugas Penerima Gudang</span>
-                    <div className="h-9 flex items-center justify-center font-serif text-slate-700 font-bold italic text-xs">
+                {/* Footer Signatures without QR Code (Quarantine Status) */}
+                <div className="mt-4 pt-3 border-t-2 border-dashed border-amber-300 grid grid-cols-2 gap-4 items-end">
+                  <div className="border border-slate-200 rounded-xl p-2.5 text-center bg-slate-50">
+                    <span className="text-[10px] font-extrabold text-slate-500 uppercase block">Petugas Penerima Gudang</span>
+                    <div className="h-10 flex items-center justify-center font-serif text-slate-800 font-bold italic text-xs">
                       {record.receivedBy || 'Staf Gudang'}
                     </div>
-                    <span className="text-[9px] text-slate-400 block border-t border-slate-200 pt-0.5">
+                    <span className="text-[9px] text-slate-400 block border-t border-slate-200 pt-1">
                       Paraf & Tanggal Terima
                     </span>
                   </div>
 
-                  <div className="border border-slate-200 rounded-xl p-2 text-center bg-slate-50">
-                    <span className="text-[9px] font-extrabold text-slate-400 uppercase block">Pengambilan Contoh (QC)</span>
-                    <div className="h-9 flex items-center justify-center font-sans text-amber-700 font-bold text-[10px]">
-                      [ Menunggu Sampling ]
+                  <div className="border border-amber-200 rounded-xl p-2.5 text-center bg-amber-50/50">
+                    <span className="text-[10px] font-extrabold text-amber-800 uppercase block">Pengambilan Contoh (QC)</span>
+                    <div className="h-10 flex items-center justify-center font-sans text-amber-700 font-bold text-xs">
+                      [ Menunggu Sampling & Uji Lab ]
                     </div>
-                    <span className="text-[9px] text-slate-400 block border-t border-slate-200 pt-0.5">
+                    <span className="text-[9px] text-amber-600 block border-t border-amber-200 pt-1">
                       Paraf & Tanggal Sampling
-                    </span>
-                  </div>
-
-                  <div className="flex flex-col items-center justify-center">
-                    <QrCodeBadge
-                      value={`GRN|NO:${record.grnNumber}|W:${containerIndex}/${totalContainers}|CODE:${record.materialCode}|BATCH:${record.batchNumber || '-'}`}
-                      size={54}
-                    />
-                    <span className="font-mono text-[9px] text-slate-600 mt-1 font-bold">
-                      {record.grnNumber}-W{containerIndex}
                     </span>
                   </div>
                 </div>

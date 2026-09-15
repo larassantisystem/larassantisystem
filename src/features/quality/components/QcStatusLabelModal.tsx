@@ -370,13 +370,7 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
 
                   <div className="flex flex-col items-center justify-center">
                     <QrCodeBadge
-                      value={`LMS|QC|LOT:${report.lotInternalNumber || report.grnNumber}|W:${containerIndex}/${totalContainers}|S:${
-                        (report.sampledContainers || []).includes(containerIndex)
-                          ? report.actualSampleSize
-                            ? `${report.actualSampleSize}${report.actualSampleUnit || (report.materialType === 'raw' ? 'g' : 'pcs')}`
-                            : 'YES'
-                          : 'NO'
-                      }|ST:${report.status}`}
+                      value={`LMS|QC|RPT:${report.lotInternalNumber || report.grnNumber}|W:${containerIndex}/${totalContainers}|ST:${report.status}`}
                       size={62}
                     />
                     <span className="font-mono text-[9px] text-slate-600 mt-1 font-bold">
