@@ -13,10 +13,14 @@ import {
   Sparkles,
   Info,
   Check,
-  RotateCcw
+  RotateCcw,
+  Loader2,
 } from 'lucide-react';
 import { QcInspectionReport } from '../types/qcTypes';
 import { QrCodeBadge } from '../../../components/QrCodeBadge';
+import { qualityService } from '../qualityService';
+import { authService } from '../../../core/auth/authService';
+import { isContainerSampled } from '../utils/samplingUtils';
 
 interface QcContainerSamplingQrModalProps {
   isOpen: boolean;
@@ -33,6 +37,8 @@ export const QcContainerSamplingQrModal: React.FC<QcContainerSamplingQrModalProp
 }) => {
   const [selectedDrumIndex, setSelectedDrumIndex] = useState<number>(1);
   const [copied, setCopied] = useState<boolean>(false);
+  const [isUpdatingSampling, setIsUpdatingSampling] = useState<boolean>(false);
+  const [updateSuccessMsg, setUpdateSuccessMsg] = useState<string | null>(null);
 
   if (!isOpen || !report) return null;
 
@@ -41,15 +47,9 @@ export const QcContainerSamplingQrModal: React.FC<QcContainerSamplingQrModalProp
   const docNumber = isRaw ? 'L-DQC-006-01' : 'L-DQC-007-01';
   const docEffective = '01-OKTOBER-2026';
 
-  // Parse sampled containers
-  // Example string: "Wadah #1, #2 (Total 5 Drum)" or default to first N
+  // Parse sampled containers using standardized CPKB utility
   const getIsSampled = (drumNum: number) => {
-    if (report.sampledContainers) {
-      return report.sampledContainers.includes(`#${drumNum}`);
-    }
-    // Fallback: If not explicitly recorded, first 'sampleSizeQuantity' are sampled
-    const defaultSampleCount = report.samplingInfo?.sampleSizeQuantity || 1;
-    return drumNum <= defaultSampleCount;
+    return isContainerSampled(report.sampledContainers, drumNum, report.samplingInfo?.sampleSizeQuantity || 1);
   };
 
   const getStatusBadge = () => {
@@ -97,6 +97,37 @@ export const QcContainerSamplingQrModal: React.FC<QcContainerSamplingQrModalProp
     );
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleToggleSampling = async () => {
+    setIsUpdatingSampling(true);
+    setUpdateSuccessMsg(null);
+    try {
+      const currentUser = authService.getCurrentUser();
+      const res = await qualityService.updateContainerSampling(
+        report.id,
+        selectedDrumIndex,
+        !currentDrumSampled,
+        currentUser
+      );
+
+      if (onUpdateSampling) {
+        await onUpdateSampling(report.id, res.report.sampledContainers || '');
+      }
+
+      setUpdateSuccessMsg(
+        !currentDrumSampled
+          ? `✓ Wadah #${selectedDrumIndex} berhasil ditandai TELAH DISAMPLING ke Database!`
+          : `✓ Status sampling Wadah #${selectedDrumIndex} berhasil dibatalkan.`
+      );
+
+      setTimeout(() => setUpdateSuccessMsg(null), 4000);
+    } catch (e: any) {
+      console.error('Failed to update sampling:', e);
+      alert(`Gagal memperbarui status sampling: ${e.message}`);
+    } finally {
+      setIsUpdatingSampling(false);
+    }
   };
 
   return (
@@ -281,19 +312,53 @@ export const QcContainerSamplingQrModal: React.FC<QcContainerSamplingQrModalProp
 
               {/* Action Buttons */}
               <div className="pt-3 border-t border-slate-800 flex items-center justify-between gap-2 flex-wrap">
-                <div className="text-[11px] text-slate-400 flex items-center gap-1">
-                  <ShieldCheck className="w-4 h-4 text-teal-400" />
-                  <span>100% Paperless • Sesuai Pedoman CPKB BPOM</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={isUpdatingSampling}
+                    onClick={handleToggleSampling}
+                    className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm cursor-pointer disabled:opacity-50 ${
+                      currentDrumSampled
+                        ? 'bg-rose-900/40 text-rose-300 border border-rose-700/60 hover:bg-rose-900/60'
+                        : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                    }`}
+                  >
+                    {isUpdatingSampling ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : currentDrumSampled ? (
+                      <RotateCcw className="w-3.5 h-3.5" />
+                    ) : (
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                    )}
+                    <span>
+                      {currentDrumSampled
+                        ? `Batalkan Sampling Wadah #${selectedDrumIndex}`
+                        : `Tandai Wadah #${selectedDrumIndex} Disampling`}
+                    </span>
+                  </button>
+
+                  <div className="text-[11px] text-slate-400 hidden sm:flex items-center gap-1">
+                    <ShieldCheck className="w-4 h-4 text-teal-400" />
+                    <span>Sinkronisasi Otomatis ke Supabase</span>
+                  </div>
                 </div>
+
                 <button
                   type="button"
                   onClick={handleCopyTagInfo}
-                  className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer border border-slate-700"
                 >
-                  {copied ? <Check className="w-3.5 h-3.5 text-white" /> : <Sparkles className="w-3.5 h-3.5" />}
+                  {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Sparkles className="w-3.5 h-3.5" />}
                   <span>{copied ? 'Tersalin ke Clipboard!' : 'Salin Tag Digital'}</span>
                 </button>
               </div>
+
+              {updateSuccessMsg && (
+                <div className="mt-2 p-2 bg-emerald-900/60 border border-emerald-600 text-emerald-200 text-xs rounded-lg flex items-center justify-between animate-in fade-in">
+                  <span className="font-bold">{updateSuccessMsg}</span>
+                  <span className="text-[10px] font-mono bg-emerald-800 px-1.5 py-0.5 rounded text-white">DATABASE SYNCED</span>
+                </div>
+              )}
             </div>
           </div>
 

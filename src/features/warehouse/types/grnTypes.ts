@@ -51,6 +51,11 @@ export interface GrnRecord {
   // Actual sample tested by QC Lab
   actualSampleSize?: number;
   actualSampleUnit?: string;
+
+  // CPKB Container Sampling Log
+  sampledContainers?: string;
+  sampledBy?: string;
+  samplingDateTime?: string;
 }
 
 export interface GrnStats {

@@ -63,6 +63,9 @@ function buildPrimarySupabasePayload(record: GrnRecord): Record<string, any> {
     reverted_at: record.revertedAt || null,
     actual_sample_size: record.actualSampleSize !== undefined && record.actualSampleSize !== null ? Number(record.actualSampleSize) : null,
     actual_sample_unit: record.actualSampleUnit || null,
+    sampled_containers: record.sampledContainers || null,
+    sampled_by: record.sampledBy || null,
+    sampling_date_time: record.samplingDateTime || null,
   };
 
   return payload;
@@ -309,6 +312,9 @@ export const warehouseService = {
             revertedAt: d.reverted_at || d.revertedAt,
             actualSampleSize: d.actual_sample_size !== undefined && d.actual_sample_size !== null ? Number(d.actual_sample_size) : d.actualSampleSize,
             actualSampleUnit: d.actual_sample_unit || d.actualSampleUnit,
+            sampledContainers: d.sampled_containers || d.sampledContainers,
+            sampledBy: d.sampled_by || d.sampledBy,
+            samplingDateTime: d.sampling_date_time || d.samplingDateTime,
             sealCondition: d.seal_condition,
             packagingCondition: d.packaging_condition,
             coaAttachment: d.coa_attachment || d.coaAttachment,
@@ -353,6 +359,9 @@ export const warehouseService = {
                     revertedAt: rec.revertedAt || qcRep.revertedAt,
                     actualSampleSize: rec.actualSampleSize !== undefined ? rec.actualSampleSize : qcRep.actualSampleSize,
                     actualSampleUnit: rec.actualSampleUnit || qcRep.actualSampleUnit,
+                    sampledContainers: rec.sampledContainers || qcRep.sampledContainers,
+                    sampledBy: rec.sampledBy || qcRep.sampledBy,
+                    samplingDateTime: rec.samplingDateTime || qcRep.samplingDateTime,
                   };
                 });
               }
@@ -402,6 +411,9 @@ export const warehouseService = {
               revertedAt: rec.revertedAt || qcRep.revertedAt,
               actualSampleSize: rec.actualSampleSize !== undefined ? rec.actualSampleSize : qcRep.actualSampleSize,
               actualSampleUnit: rec.actualSampleUnit || qcRep.actualSampleUnit,
+              sampledContainers: rec.sampledContainers || qcRep.sampledContainers,
+              sampledBy: rec.sampledBy || qcRep.sampledBy,
+              samplingDateTime: rec.samplingDateTime || qcRep.samplingDateTime,
             };
           });
         }

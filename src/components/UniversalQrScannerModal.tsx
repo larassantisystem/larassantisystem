@@ -20,10 +20,16 @@ import {
   AlertTriangle,
   Building2,
   Boxes,
+  FlaskConical,
+  RotateCcw,
+  Loader2,
+  Check,
 } from 'lucide-react';
 import jsQR from 'jsqr';
 import { qualityService } from '../features/quality/qualityService';
 import { warehouseService } from '../features/warehouse/warehouseService';
+import { authService } from '../core/auth/authService';
+import { isContainerSampled } from '../features/quality/utils/samplingUtils';
 
 interface UniversalQrScannerModalProps {
   isOpen: boolean;
@@ -65,6 +71,14 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
   const [scannedResult, setScannedResult] = useState<ParsedQrData | null>(null);
   const [isScanning, setIsScanning] = useState<boolean>(true);
   const [matchedReport, setMatchedReport] = useState<any | null>(null);
+
+  // Field sampling states for QC
+  const [currentUser] = useState(() => authService.getCurrentUser());
+  const [activeContainerIndex, setActiveContainerIndex] = useState<number>(1);
+  const [isSavingSampling, setIsSavingSampling] = useState<boolean>(false);
+  const [samplingSuccessMessage, setSamplingSuccessMessage] = useState<string | null>(null);
+  const [sampleSizeInput, setSampleSizeInput] = useState<string>('50');
+  const [sampleUnitInput, setSampleUnitInput] = useState<string>('gram');
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -239,6 +253,10 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
           map.matCode = trimmed.substring(5);
         } else if (trimmed.startsWith('GRN:')) {
           map.grn = trimmed.substring(4);
+        } else if (trimmed.startsWith('NO:')) {
+          map.grn = trimmed.substring(3);
+        } else if (trimmed.startsWith('BATCH:')) {
+          map.batch = trimmed.substring(6);
         } else if (trimmed.startsWith('LOT-') || trimmed.startsWith('GRN-')) {
           map.lot = trimmed;
         } else if (trimmed === 'PASSED' || trimmed === 'PASS') {
@@ -253,24 +271,140 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
     }
 
     setScannedResult(parsed);
+    const parsedContainer = parsed.containerIndex || 1;
+    setActiveContainerIndex(parsedContainer);
+    setSamplingSuccessMessage(null);
 
     // Cross-match with internal records
     try {
       const qcReports = qualityService.getLocalReports();
       const targetLot = parsed.lot || parsed.grn;
+      let found: any = null;
       if (targetLot) {
-        const found = qcReports.find(
+        found = qcReports.find(
           (r) =>
             r.lotInternalNumber === targetLot ||
             r.grnNumber === targetLot ||
+            r.grnId === targetLot ||
             (parsed.matCode && r.materialCode === parsed.matCode)
         );
-        if (found) {
-          setMatchedReport(found);
+      }
+      if (!found && parsed.matCode) {
+        found = qcReports.find((r) => r.materialCode === parsed.matCode);
+      }
+
+      // If not in QC local cache, query warehouse records
+      if (!found) {
+        const warehouseRecords = warehouseService.getLocalRecords();
+        const grnFound = warehouseRecords.find(
+          (g) =>
+            g.grnNumber === targetLot ||
+            g.id === targetLot ||
+            (g as any).internalLotNumber === targetLot ||
+            g.materialCode === parsed.matCode
+        );
+        if (grnFound) {
+          found = qcReports.find((r) => r.grnId === grnFound.id || r.grnNumber === grnFound.grnNumber) || {
+            id: grnFound.id,
+            grnId: grnFound.id,
+            grnNumber: grnFound.grnNumber,
+            lotInternalNumber: (grnFound as any).internalLotNumber || `LBB-${grnFound.grnNumber.replace(/[^0-9]/g, '').slice(-6)}`,
+            materialCode: grnFound.materialCode,
+            materialName: grnFound.materialName,
+            materialType: grnFound.materialType,
+            containerCount: grnFound.containerCount,
+            containerType: grnFound.containerType,
+            quantityReceived: grnFound.quantityReceived,
+            unit: grnFound.unit,
+            status: grnFound.qcStatus || 'QUARANTINE',
+            sampledContainers: grnFound.sampledContainers,
+            sampledBy: grnFound.sampledBy,
+            samplingDateTime: grnFound.samplingDateTime,
+            actualSampleSize: grnFound.actualSampleSize,
+            actualSampleUnit: grnFound.actualSampleUnit,
+            manufacturer: grnFound.manufacturer,
+            expiryDate: grnFound.expiryDate,
+          };
+        }
+      }
+
+      if (found) {
+        setMatchedReport(found);
+        if (found.actualSampleSize) {
+          setSampleSizeInput(String(found.actualSampleSize));
+        } else if (found.samplingInfo?.sampleSizeWeight) {
+          setSampleSizeInput(String(found.samplingInfo.sampleSizeWeight));
+        } else {
+          setSampleSizeInput('50');
+        }
+
+        if (found.actualSampleUnit) {
+          setSampleUnitInput(found.actualSampleUnit);
+        } else if (found.materialType === 'packaging') {
+          setSampleUnitInput('pcs');
+        } else {
+          setSampleUnitInput('gram');
         }
       }
     } catch (e) {
       console.warn('Error matching reports:', e);
+    }
+  };
+
+  // Handler for updating container sampling status directly in field
+  const handleToggleContainerSampling = async (targetIndex: number, shouldSample: boolean) => {
+    setIsSavingSampling(true);
+    setSamplingSuccessMessage(null);
+
+    try {
+      const targetIdentifier =
+        matchedReport?.id ||
+        matchedReport?.grnId ||
+        matchedReport?.grnNumber ||
+        scannedResult?.grn ||
+        scannedResult?.lot;
+
+      if (!targetIdentifier) {
+        throw new Error('Identitas Lot atau Nomor GRN tidak ditemukan pada hasil scan.');
+      }
+
+      const sampleSizeNum = parseFloat(sampleSizeInput) || undefined;
+      const res = await qualityService.updateContainerSampling(
+        targetIdentifier,
+        targetIndex,
+        shouldSample,
+        currentUser,
+        sampleSizeNum,
+        sampleUnitInput || 'gram'
+      );
+
+      // Update local states immediately
+      setMatchedReport({ ...res.report });
+      setScannedResult((prev) =>
+        prev
+          ? {
+              ...prev,
+              sampled: shouldSample,
+              sampleSize: sampleSizeNum ? `${sampleSizeNum} ${sampleUnitInput}` : prev.sampleSize,
+              samplingDate: new Date().toISOString(),
+            }
+          : null
+      );
+
+      setSamplingSuccessMessage(
+        shouldSample
+          ? `✓ Wadah #${targetIndex} berhasil ditandai TELAH DISAMPLING dan tersimpan ke Database Supabase & Sistem CPKB!`
+          : `✓ Status sampling Wadah #${targetIndex} berhasil dibatalkan.`
+      );
+
+      setTimeout(() => {
+        setSamplingSuccessMessage(null);
+      }, 6000);
+    } catch (err: any) {
+      console.error('Failed to update container sampling:', err);
+      alert(`Gagal memperbarui status sampling: ${err.message || 'Terjadi kesalahan sistem'}`);
+    } finally {
+      setIsSavingSampling(false);
     }
   };
 
@@ -325,6 +459,8 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
   const handleResetScan = () => {
     setScannedResult(null);
     setMatchedReport(null);
+    setSamplingSuccessMessage(null);
+    setIsScanning(true);
     startCamera();
   };
 
@@ -532,10 +668,177 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
                   </div>
                 </div>
 
-                {/* Sampling Details Box */}
+                {/* FIELD SAMPLING ACTION PANEL (Paperless CPKB Database Sync) */}
+                {(() => {
+                  const totalContainers = matchedReport?.containerCount || scannedResult.totalContainers || 1;
+                  const isCurrentSampled = isContainerSampled(matchedReport?.sampledContainers, activeContainerIndex);
+
+                  return (
+                    <div className="rounded-2xl border-2 border-teal-500/40 bg-gradient-to-br from-teal-500/5 via-white to-emerald-500/5 p-4.5 shadow-sm space-y-4">
+                      <div className="flex items-center justify-between border-b border-teal-100 pb-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="p-2 bg-teal-600 text-white rounded-xl shadow-xs">
+                            <FlaskConical className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <h4 className="text-xs font-black text-slate-900 tracking-tight flex items-center gap-1.5">
+                              Aksi Lapangan: Pengambilan Contoh (Sampling)
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-teal-100 text-teal-800">
+                                Sinkronisasi Database
+                              </span>
+                            </h4>
+                            <p className="text-[11px] text-slate-500">
+                              Petugas QC dapat scan QR label dan langsung memperbarui status wadah ke database tanpa perlu paraf kertas manual.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Container Carousel if totalContainers > 1 */}
+                      {totalContainers > 1 && (
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-bold text-slate-700 text-[11px]">
+                              Daftar Wadah Lot Ini (Total {totalContainers} {matchedReport?.containerType || 'Wadah'}):
+                            </span>
+                            <span className="text-[10px] text-slate-500">
+                              Wadah yang dilihat/diedit:{' '}
+                              <strong className="text-teal-800 font-bold">Wadah #{activeContainerIndex}</strong>
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 scrollbar-thin">
+                            {Array.from({ length: totalContainers }, (_, i) => i + 1).map((cNum) => {
+                              const isSampled = isContainerSampled(matchedReport?.sampledContainers, cNum);
+                              const isSelected = cNum === activeContainerIndex;
+                              return (
+                                <button
+                                  key={cNum}
+                                  type="button"
+                                  onClick={() => setActiveContainerIndex(cNum)}
+                                  className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-all cursor-pointer flex items-center gap-1.5 border ${
+                                    isSelected
+                                      ? 'bg-teal-700 text-white border-teal-800 shadow-sm ring-2 ring-teal-500/30'
+                                      : isSampled
+                                      ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                                  }`}
+                                >
+                                  <span>Wadah #{cNum}</span>
+                                  {isSampled ? (
+                                    <CheckCircle2 className={`w-3.5 h-3.5 ${isSelected ? 'text-teal-200' : 'text-emerald-600'}`} />
+                                  ) : (
+                                    <span className={`text-[9px] px-1 rounded ${isSelected ? 'bg-teal-800 text-teal-200' : 'bg-slate-100 text-slate-500'}`}>
+                                      Segel
+                                    </span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Active Container Status Box */}
+                      <div
+                        className={`p-3.5 rounded-xl border flex flex-col md:flex-row md:items-center justify-between gap-3 ${
+                          isCurrentSampled
+                            ? 'bg-emerald-50 border-emerald-300 text-emerald-950'
+                            : 'bg-amber-50/80 border-amber-300 text-amber-950'
+                        }`}
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-extrabold text-xs">
+                              Status Wadah #{activeContainerIndex}:
+                            </span>
+                            <span
+                              className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
+                                isCurrentSampled
+                                  ? 'bg-emerald-600 text-white shadow-xs'
+                                  : 'bg-amber-500 text-white shadow-xs'
+                              }`}
+                            >
+                              {isCurrentSampled ? '✓ TELAH DISAMPLING' : '⚠ BELUM DISAMPLING (SEGEL UTUH)'}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-600">
+                            {isCurrentSampled
+                              ? `Tercatat disampling oleh ${matchedReport?.sampledBy || 'Staf Analis QC'} pada ${
+                                  matchedReport?.samplingDateTime
+                                    ? new Date(matchedReport.samplingDateTime).toLocaleString('id-ID')
+                                    : 'Hari ini'
+                                }.`
+                              : 'Wadah masih tersegel utuh di area karantina gudang dan belum dibuka untuk uji laboratorium.'}
+                          </p>
+                        </div>
+
+                        {/* Action buttons */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          {isCurrentSampled ? (
+                            <button
+                              type="button"
+                              disabled={isSavingSampling}
+                              onClick={() => handleToggleContainerSampling(activeContainerIndex, false)}
+                              className="px-3.5 py-2 bg-white hover:bg-rose-50 text-rose-700 border border-rose-300 hover:border-rose-400 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                            >
+                              {isSavingSampling ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <RotateCcw className="w-3.5 h-3.5" />
+                              )}
+                              <span>Batalkan Tanda Sampling</span>
+                            </button>
+                          ) : (
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <div className="flex items-center gap-1 bg-white border border-amber-300 rounded-xl px-2.5 py-1.5 shadow-xs">
+                                <span className="text-[10px] font-bold text-slate-500">Bobot:</span>
+                                <input
+                                  type="number"
+                                  value={sampleSizeInput}
+                                  onChange={(e) => setSampleSizeInput(e.target.value)}
+                                  className="w-14 text-xs font-bold text-slate-900 border-none p-0 focus:ring-0 text-center"
+                                  placeholder="50"
+                                />
+                                <span className="text-[10px] font-bold text-slate-600">{sampleUnitInput}</span>
+                              </div>
+                              <button
+                                type="button"
+                                disabled={isSavingSampling}
+                                onClick={() => handleToggleContainerSampling(activeContainerIndex, true)}
+                                className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-black flex items-center gap-1.5 transition-all shadow-md cursor-pointer disabled:opacity-50 active:scale-95"
+                              >
+                                {isSavingSampling ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-teal-200" />
+                                )}
+                                <span>Tandai Wadah #{activeContainerIndex} Telah Disampling</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Feedback Alert */}
+                      {samplingSuccessMessage && (
+                        <div className="p-3 bg-emerald-600 text-white rounded-xl text-xs font-bold flex items-center justify-between shadow-sm animate-in fade-in duration-200">
+                          <div className="flex items-center gap-2">
+                            <Check className="w-4 h-4 text-emerald-200 shrink-0" />
+                            <span>{samplingSuccessMessage}</span>
+                          </div>
+                          <span className="text-[10px] text-emerald-200 uppercase font-mono">SUPABASE SYNCED</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Sampling Details Summary Box */}
                 <div
                   className={`p-3.5 rounded-xl border ${
-                    scannedResult.sampled === true || scannedResult.sampled === 'YES' || (matchedReport && matchedReport.sampledContainers?.includes(scannedResult.containerIndex))
+                    scannedResult.sampled === true ||
+                    scannedResult.sampled === 'YES' ||
+                    isContainerSampled(matchedReport?.sampledContainers, activeContainerIndex)
                       ? 'bg-teal-50/80 border-teal-200 text-teal-950'
                       : 'bg-slate-50 border-slate-200 text-slate-700'
                   }`}
@@ -543,23 +846,36 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Tag className="w-4 h-4 text-teal-700" />
-                      <span className="text-xs font-extrabold">Status Pengambilan Contoh (Sampling):</span>
+                      <span className="text-xs font-extrabold">Ringkasan Pengambilan Contoh (Sampling):</span>
                     </div>
                     <span
                       className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        scannedResult.sampled === true || scannedResult.sampled === 'YES' || (matchedReport && matchedReport.sampledContainers?.includes(scannedResult.containerIndex))
+                        scannedResult.sampled === true ||
+                        scannedResult.sampled === 'YES' ||
+                        isContainerSampled(matchedReport?.sampledContainers, activeContainerIndex)
                           ? 'bg-teal-600 text-white'
                           : 'bg-slate-200 text-slate-700'
                       }`}
                     >
-                      {scannedResult.sampled === true || scannedResult.sampled === 'YES' || (matchedReport && matchedReport.sampledContainers?.includes(scannedResult.containerIndex))
+                      {scannedResult.sampled === true ||
+                      scannedResult.sampled === 'YES' ||
+                      isContainerSampled(matchedReport?.sampledContainers, activeContainerIndex)
                         ? '✓ TELAH DISAMPLING QC'
                         : 'SEGEL UTUH (TIDAK DIBUKA)'}
                     </span>
                   </div>
 
-                  {(scannedResult.sampleSize || (matchedReport && matchedReport.actualSampleSize)) && (
+                  {matchedReport?.sampledContainers && (
                     <div className="mt-2 text-xs flex items-center justify-between border-t border-teal-200/60 pt-2 font-medium">
+                      <span>Catatan Wadah Disampling:</span>
+                      <span className="font-bold text-teal-900">
+                        {matchedReport.sampledContainers}
+                      </span>
+                    </div>
+                  )}
+
+                  {(scannedResult.sampleSize || (matchedReport && matchedReport.actualSampleSize)) && (
+                    <div className="mt-1 text-xs flex items-center justify-between font-medium">
                       <span>Jumlah Fisik Sampel Diambil:</span>
                       <span className="font-bold text-teal-900">
                         {scannedResult.sampleSize || `${matchedReport.actualSampleSize} ${matchedReport.actualSampleUnit || 'gram'}`}
@@ -567,10 +883,12 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
                     </div>
                   )}
 
-                  {scannedResult.samplingDate && (
+                  {(scannedResult.samplingDate || matchedReport?.samplingDateTime) && (
                     <div className="mt-1 text-[11px] text-slate-500 flex items-center justify-between">
                       <span>Waktu Sampling Digital:</span>
-                      <span className="font-mono">{new Date(scannedResult.samplingDate).toLocaleString('id-ID')}</span>
+                      <span className="font-mono">
+                        {new Date(scannedResult.samplingDate || matchedReport.samplingDateTime).toLocaleString('id-ID')}
+                      </span>
                     </div>
                   )}
                 </div>

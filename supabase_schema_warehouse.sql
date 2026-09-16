@@ -65,6 +65,9 @@ ALTER TABLE public.warehouse_grn ADD COLUMN IF NOT EXISTS reverted_by VARCHAR(15
 ALTER TABLE public.warehouse_grn ADD COLUMN IF NOT EXISTS reverted_at TIMESTAMPTZ;
 ALTER TABLE public.warehouse_grn ADD COLUMN IF NOT EXISTS actual_sample_size NUMERIC(12, 3);
 ALTER TABLE public.warehouse_grn ADD COLUMN IF NOT EXISTS actual_sample_unit VARCHAR(50);
+ALTER TABLE public.warehouse_grn ADD COLUMN IF NOT EXISTS sampled_containers TEXT;
+ALTER TABLE public.warehouse_grn ADD COLUMN IF NOT EXISTS sampled_by VARCHAR(150);
+ALTER TABLE public.warehouse_grn ADD COLUMN IF NOT EXISTS sampling_date_time TIMESTAMPTZ;
 
 -- 4. Lepaskan batasan NOT NULL pada kolom opsional / alias agar penulisan selalu berhasil
 ALTER TABLE public.warehouse_grn ALTER COLUMN purchase_order_number DROP NOT NULL;

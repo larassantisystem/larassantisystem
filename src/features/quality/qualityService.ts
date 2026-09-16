@@ -15,6 +15,7 @@ import { authService } from '../../core/auth/authService';
 import { isQualityManager } from '../../core/auth/permissionGuard';
 import { UserProfile } from '../../types';
 import { soundService } from '../../core/utils/soundService';
+import { toggleContainerSampled } from './utils/samplingUtils';
 
 const QC_REPORTS_STORAGE_KEY = 'lsm_qc_reports_v2';
 const QC_NOTIFICATIONS_STORAGE_KEY = 'lsm_qc_notifications_v2';
@@ -145,6 +146,11 @@ export const qualityService = {
           status: (grn.qcStatus as QcInspectionStatus) || 'QUARANTINE',
           samplingInfo,
           parameters,
+          sampledContainers: grn.sampledContainers || undefined,
+          sampledBy: grn.sampledBy || undefined,
+          samplingDateTime: grn.samplingDateTime || undefined,
+          actualSampleSize: grn.actualSampleSize,
+          actualSampleUnit: grn.actualSampleUnit,
           createdAt: grn.createdAt || new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
@@ -154,6 +160,17 @@ export const qualityService = {
       } else {
         // Sync basic warehouse edits if reverted or updated
         let needsUpdate = false;
+        
+        if (grn.sampledContainers && (!existingReport.sampledContainers || existingReport.sampledContainers !== grn.sampledContainers)) {
+          existingReport.sampledContainers = grn.sampledContainers;
+          existingReport.sampledBy = grn.sampledBy || existingReport.sampledBy;
+          existingReport.samplingDateTime = grn.samplingDateTime || existingReport.samplingDateTime;
+          if (grn.actualSampleSize !== undefined && grn.actualSampleSize !== null) {
+            existingReport.actualSampleSize = grn.actualSampleSize;
+            existingReport.actualSampleUnit = grn.actualSampleUnit;
+          }
+          needsUpdate = true;
+        }
         
         // If warehouse updated the status back to QUARANTINE from REVERTED_TO_WAREHOUSE:
         if (grn.qcStatus === 'QUARANTINE' && existingReport.status === 'REVERTED_TO_WAREHOUSE') {
@@ -608,6 +625,118 @@ export const qualityService = {
   },
 
   /**
+   * Update sampling status for a specific container of a QC Inspection Report & Warehouse GRN
+   * Persists both to local storage and remote database (Supabase warehouse_grn)
+   */
+  updateContainerSampling: async (
+    reportOrGrnId: string,
+    containerIndex: number,
+    isSampled: boolean,
+    user?: UserProfile | null,
+    actualSampleSize?: number,
+    actualSampleUnit?: string
+  ): Promise<{ report: QcInspectionReport; grn?: GrnRecord }> => {
+    let reports = await qualityService.getReports();
+    let report = reports.find(
+      (r) =>
+        r.id === reportOrGrnId ||
+        r.grnId === reportOrGrnId ||
+        r.grnNumber === reportOrGrnId ||
+        r.lotInternalNumber === reportOrGrnId
+    );
+
+    if (!report) {
+      // Fallback: search in warehouse records directly
+      const grnRecords = await warehouseService.getGrnRecords();
+      const matchedGrn = grnRecords.find(
+        (g) => g.id === reportOrGrnId || g.grnNumber === reportOrGrnId || (g as any).internalLotNumber === reportOrGrnId
+      );
+      if (matchedGrn) {
+        reports = await qualityService.getReports();
+        report = reports.find((r) => r.grnId === matchedGrn.id || r.grnNumber === matchedGrn.grnNumber);
+      }
+    }
+
+    if (!report) {
+      throw new Error(`Catatan QC untuk ID/GRN/Lot ${reportOrGrnId} tidak ditemukan.`);
+    }
+
+    const defaultCount = report.samplingInfo?.sampleSizeQuantity || 1;
+    const newSampledStr = toggleContainerSampled(
+      report.sampledContainers,
+      containerIndex,
+      report.containerCount,
+      report.containerType,
+      isSampled,
+      defaultCount
+    );
+
+    const operatorName = user?.name || (user as any)?.fullName || report.sampledBy || 'Staf Analis QC';
+    const nowIso = new Date().toISOString();
+
+    report.sampledContainers = newSampledStr;
+    report.sampledBy = operatorName;
+    report.samplingDateTime = nowIso;
+    if (actualSampleSize !== undefined && actualSampleSize !== null && !isNaN(Number(actualSampleSize))) {
+      report.actualSampleSize = Number(actualSampleSize);
+      if (actualSampleUnit) {
+        report.actualSampleUnit = actualSampleUnit;
+      }
+    }
+    report.updatedAt = nowIso;
+
+    // Save to QC storage
+    localStorage.setItem(QC_REPORTS_STORAGE_KEY, JSON.stringify(reports));
+
+    // Sync to Warehouse & Supabase database
+    let updatedGrn: GrnRecord | undefined;
+    try {
+      const records = await warehouseService.getGrnRecords();
+      const targetGrn = records.find((g) => g.id === report!.grnId || g.grnNumber === report!.grnNumber);
+      if (targetGrn) {
+        targetGrn.sampledContainers = newSampledStr;
+        targetGrn.sampledBy = operatorName;
+        targetGrn.samplingDateTime = nowIso;
+        if (actualSampleSize !== undefined && actualSampleSize !== null && !isNaN(Number(actualSampleSize))) {
+          targetGrn.actualSampleSize = Number(actualSampleSize);
+        }
+        if (actualSampleUnit) {
+          targetGrn.actualSampleUnit = actualSampleUnit;
+        }
+
+        updatedGrn = await warehouseService.updateGrnRecord(targetGrn.id, {
+          sampledContainers: newSampledStr,
+          sampledBy: operatorName,
+          samplingDateTime: nowIso,
+          actualSampleSize: targetGrn.actualSampleSize,
+          actualSampleUnit: targetGrn.actualSampleUnit,
+        });
+      }
+    } catch (err) {
+      console.warn('Failed to sync sampling to warehouse/database:', err);
+    }
+
+    soundService.play('success');
+
+    // Notify listeners / custom event for real-time reactivity across tabs/components
+    window.dispatchEvent(
+      new CustomEvent('qc_sampling_updated', {
+        detail: {
+          reportId: report.id,
+          grnNumber: report.grnNumber,
+          containerIndex,
+          isSampled,
+          sampledContainers: newSampledStr,
+          sampledBy: operatorName,
+          samplingDateTime: nowIso,
+        },
+      })
+    );
+
+    return { report, grn: updatedGrn };
+  },
+
+  /**
    * Helper to sync status with warehouse GRN records in storage and database
    */
   syncGrnStatus: async (
@@ -620,6 +749,9 @@ export const qualityService = {
       revertedAt?: string;
       actualSampleSize?: number;
       actualSampleUnit?: string;
+      sampledContainers?: string;
+      sampledBy?: string;
+      samplingDateTime?: string;
     }
   ) => {
     try {
@@ -634,6 +766,9 @@ export const qualityService = {
         if (opts.revertedAt !== undefined) target.revertedAt = opts.revertedAt;
         if (opts.actualSampleSize !== undefined) target.actualSampleSize = opts.actualSampleSize;
         if (opts.actualSampleUnit !== undefined) target.actualSampleUnit = opts.actualSampleUnit;
+        if (opts.sampledContainers !== undefined) target.sampledContainers = opts.sampledContainers;
+        if (opts.sampledBy !== undefined) target.sampledBy = opts.sampledBy;
+        if (opts.samplingDateTime !== undefined) target.samplingDateTime = opts.samplingDateTime;
 
         localStorage.setItem('lsm_warehouse_grn_v1', JSON.stringify(records));
 
@@ -646,6 +781,9 @@ export const qualityService = {
           revertedAt: opts.revertedAt !== undefined ? opts.revertedAt : target.revertedAt,
           actualSampleSize: opts.actualSampleSize !== undefined ? opts.actualSampleSize : target.actualSampleSize,
           actualSampleUnit: opts.actualSampleUnit !== undefined ? opts.actualSampleUnit : target.actualSampleUnit,
+          sampledContainers: target.sampledContainers,
+          sampledBy: target.sampledBy,
+          samplingDateTime: target.samplingDateTime,
         });
       }
     } catch (e) {
