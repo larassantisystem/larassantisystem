@@ -188,6 +188,22 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
 
   useEffect(() => {
     loadData();
+
+    const handleUpdate = () => {
+      qualityService.getReports().then((data) => {
+        setReports(data);
+      });
+    };
+
+    window.addEventListener('qc_reports_updated', handleUpdate);
+    window.addEventListener('qc_sampling_updated', handleUpdate);
+    window.addEventListener('warehouse_grn_updated', handleUpdate);
+
+    return () => {
+      window.removeEventListener('qc_reports_updated', handleUpdate);
+      window.removeEventListener('qc_sampling_updated', handleUpdate);
+      window.removeEventListener('warehouse_grn_updated', handleUpdate);
+    };
   }, []);
 
   useEffect(() => {

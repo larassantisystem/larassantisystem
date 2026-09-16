@@ -1,6 +1,7 @@
 import { GrnRecord, GrnStats } from './types/grnTypes';
 import { supabase, isSupabaseConfigured } from '../../core/auth/supabaseClient';
 import { calculateSamplingPlan } from '../quality/utils/milStd105e';
+import { packGrnNotes, unpackGrnNotes } from '../../core/utils/qcStorageSync';
 
 const WAREHOUSE_GRN_STORAGE_KEY = 'lsm_warehouse_grn_v1';
 
@@ -33,7 +34,7 @@ function buildPrimarySupabasePayload(record: GrnRecord): Record<string, any> {
     delivery_note_number: record.deliveryNoteNumber || '-',
     purchase_order_number: record.poNumber || (record as any).purchaseOrderNumber || '-',
     supplier_batch_number: record.batchNumber || (record as any).supplierBatchNumber || '-',
-    internal_lot_number: (record as any).internalLotNumber || lotCode,
+    internal_lot_number: record.internalLotNumber || (record as any).internal_lot_number || lotCode,
     received_date: record.receivedDate || new Date().toISOString().slice(0, 10),
     expiration_date: expDate,
     quantity_received: Number(record.quantityReceived) || 0,
@@ -57,7 +58,7 @@ function buildPrimarySupabasePayload(record: GrnRecord): Record<string, any> {
     coa_drive_view_link: record.coaDriveViewLink || null,
     received_by: record.receivedBy || 'Staf Gudang',
     received_by_nik: (record as any).receivedByNik || 'NIK-WH-001',
-    notes: record.notes || null,
+    notes: packGrnNotes(record.notes, record.qcPayload) || null,
     revert_reason: record.revertReason || null,
     reverted_by: record.revertedBy || null,
     reverted_at: record.revertedAt || null,
@@ -282,45 +283,50 @@ export const warehouseService = {
         );
 
         if (!error && data && data.length > 0) {
-          const mapped: GrnRecord[] = data.map((d: any) => ({
-            id: d.id,
-            grnNumber: d.grn_number || d.grnNumber,
-            materialType: d.material_type || d.materialType || 'raw',
-            materialId: d.material_id || d.materialId || '',
-            materialCode: d.material_code || d.materialCode,
-            materialName: d.material_name || d.materialName,
-            manufacturer: d.manufacturer || '-',
-            distributor: d.distributor || '-',
-            poNumber: d.purchase_order_number || d.po_number || d.poNumber || '-',
-            deliveryNoteNumber: d.delivery_note_number || d.deliveryNoteNumber || '-',
-            batchNumber: d.supplier_batch_number || d.batch_number || d.batchNumber || '-',
-            receivedDate: d.received_date || d.receivedDate,
-            expiryDate: d.expiration_date || d.expiry_date || d.expiryDate,
-            quantityReceived: Number(d.quantity_received || d.quantityReceived || 0),
-            unit: d.unit || 'kg',
-            containerCount: Number(d.container_count || d.containerCount || 1),
-            containerType: d.container_type || d.containerType || 'Drum / Zak',
-            storageLocation: d.storage_location || d.storageLocation || 'Gudang Karantina',
-            storageConditions: d.storage_conditions || d.storageConditions,
-            qcStatus: (d.qc_status || d.qcStatus || 'QUARANTINE') as any,
-            qcParametersCount: Number(d.qc_parameters_count || d.qcParametersCount || 0),
-            receivedBy: d.received_by || d.receivedBy || 'Staf Gudang',
-            createdAt: d.created_at || d.createdAt || new Date().toISOString(),
-            notes: d.notes,
-            revertReason: d.revert_reason || d.revertReason,
-            revertedBy: d.reverted_by || d.revertedBy,
-            revertedAt: d.reverted_at || d.revertedAt,
-            actualSampleSize: d.actual_sample_size !== undefined && d.actual_sample_size !== null ? Number(d.actual_sample_size) : d.actualSampleSize,
-            actualSampleUnit: d.actual_sample_unit || d.actualSampleUnit,
-            sampledContainers: d.sampled_containers || d.sampledContainers,
-            sampledBy: d.sampled_by || d.sampledBy,
-            samplingDateTime: d.sampling_date_time || d.samplingDateTime,
-            sealCondition: d.seal_condition,
-            packagingCondition: d.packaging_condition,
-            coaAttachment: d.coa_attachment || d.coaAttachment,
-            coaDriveFileId: d.coa_drive_file_id || d.coaDriveFileId,
-            coaDriveViewLink: d.coa_drive_view_link || d.coaDriveViewLink,
-          }));
+          const mapped: GrnRecord[] = data.map((d: any) => {
+            const { userNotes, qcPayload } = unpackGrnNotes(d.notes);
+            return {
+              id: d.id,
+              grnNumber: d.grn_number || d.grnNumber,
+              internalLotNumber: d.internal_lot_number || d.internalLotNumber || '',
+              materialType: d.material_type || d.materialType || 'raw',
+              materialId: d.material_id || d.materialId || '',
+              materialCode: d.material_code || d.materialCode,
+              materialName: d.material_name || d.materialName,
+              manufacturer: d.manufacturer || '-',
+              distributor: d.distributor || '-',
+              poNumber: d.purchase_order_number || d.po_number || d.poNumber || '-',
+              deliveryNoteNumber: d.delivery_note_number || d.deliveryNoteNumber || '-',
+              batchNumber: d.supplier_batch_number || d.batch_number || d.batchNumber || '-',
+              receivedDate: d.received_date || d.receivedDate,
+              expiryDate: d.expiration_date || d.expiry_date || d.expiryDate,
+              quantityReceived: Number(d.quantity_received || d.quantityReceived || 0),
+              unit: d.unit || 'kg',
+              containerCount: Number(d.container_count || d.containerCount || 1),
+              containerType: d.container_type || d.containerType || 'Drum / Zak',
+              storageLocation: d.storage_location || d.storageLocation || 'Gudang Karantina',
+              storageConditions: d.storage_conditions || d.storageConditions,
+              qcStatus: (d.qc_status || d.qcStatus || 'QUARANTINE') as any,
+              qcParametersCount: Number(d.qc_parameters_count || d.qcParametersCount || 0),
+              receivedBy: d.received_by || d.receivedBy || 'Staf Gudang',
+              createdAt: d.created_at || d.createdAt || new Date().toISOString(),
+              notes: userNotes,
+              qcPayload: qcPayload || undefined,
+              revertReason: d.revert_reason || d.revertReason,
+              revertedBy: d.reverted_by || d.revertedBy,
+              revertedAt: d.reverted_at || d.revertedAt,
+              actualSampleSize: d.actual_sample_size !== undefined && d.actual_sample_size !== null ? Number(d.actual_sample_size) : d.actualSampleSize,
+              actualSampleUnit: d.actual_sample_unit || d.actualSampleUnit,
+              sampledContainers: d.sampled_containers || d.sampledContainers,
+              sampledBy: d.sampled_by || d.sampledBy,
+              samplingDateTime: d.sampling_date_time || d.samplingDateTime,
+              sealCondition: d.seal_condition,
+              packagingCondition: d.packaging_condition,
+              coaAttachment: d.coa_attachment || d.coaAttachment,
+              coaDriveFileId: d.coa_drive_file_id || d.coaDriveFileId,
+              coaDriveViewLink: d.coa_drive_view_link || d.coaDriveViewLink,
+            };
+          });
 
           // Merge with any local-only records that haven't synced yet
           const local = warehouseService.getLocalRecords();
@@ -485,6 +491,11 @@ export const warehouseService = {
 
     const updated = [newRecord, ...existing.filter((e) => e.id !== newRecord.id)];
     localStorage.setItem(WAREHOUSE_GRN_STORAGE_KEY, JSON.stringify(updated));
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('warehouse_grn_updated', { detail: { id: newRecord.id, record: newRecord } }));
+    }
+
     return newRecord;
   },
 
@@ -498,9 +509,33 @@ export const warehouseService = {
       throw new Error('Catatan GRN tidak ditemukan');
     }
 
+    // Protect against concurrency: retrieve current remote row to preserve remote payload
+    let remotePayload: any = null;
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data: remoteRow } = await supabase
+          .from('warehouse_grn')
+          .select('notes, internal_lot_number, qc_status')
+          .eq('id', id)
+          .maybeSingle();
+        if (remoteRow?.notes) {
+          const { userNotes, qcPayload } = unpackGrnNotes(remoteRow.notes);
+          if (qcPayload && !updatedData.qcPayload) {
+            remotePayload = qcPayload;
+          }
+          if (userNotes && updatedData.notes === undefined) {
+            existing[index].notes = userNotes;
+          }
+        }
+      } catch (e) {
+        console.warn('[warehouseService] Pre-fetch remote row warning:', e);
+      }
+    }
+
     const updatedRecord: GrnRecord = {
       ...existing[index],
       ...updatedData,
+      qcPayload: updatedData.qcPayload !== undefined ? updatedData.qcPayload : (existing[index].qcPayload || remotePayload),
     };
 
     existing[index] = updatedRecord;
@@ -587,6 +622,10 @@ export const warehouseService = {
       }
     } catch (qcSyncErr) {
       console.warn('[warehouseService] Error synchronizing QC report on update:', qcSyncErr);
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('warehouse_grn_updated', { detail: { id, record: updatedRecord } }));
     }
 
     return updatedRecord;

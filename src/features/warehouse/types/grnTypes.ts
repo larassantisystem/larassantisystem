@@ -22,6 +22,7 @@ export interface GrnRecord {
   poNumber: string;
   deliveryNoteNumber: string;
   batchNumber?: string;
+  internalLotNumber?: string;
   receivedDate: string;
   expiryDate?: string;
   quantityReceived: number;
@@ -42,6 +43,7 @@ export interface GrnRecord {
   receivedBy: string;
   createdAt: string;
   notes?: string;
+  qcPayload?: any;
 
   // Revert info from QC
   revertReason?: string;

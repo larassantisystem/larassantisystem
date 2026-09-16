@@ -16,6 +16,7 @@ import { isQualityManager } from '../../core/auth/permissionGuard';
 import { UserProfile } from '../../types';
 import { soundService } from '../../core/utils/soundService';
 import { toggleContainerSampled } from './utils/samplingUtils';
+import { syncQcReportToSupabase } from '../../core/utils/qcStorageSync';
 
 const QC_REPORTS_STORAGE_KEY = 'lsm_qc_reports_v2';
 const QC_NOTIFICATIONS_STORAGE_KEY = 'lsm_qc_notifications_v2';
@@ -115,7 +116,7 @@ export const qualityService = {
           grn.containerType
         );
 
-        const parameters: QcParameterResult[] = effectiveParamTemplates.map((item, idx) => ({
+        let parameters: QcParameterResult[] = effectiveParamTemplates.map((item, idx) => ({
           id: `param-${Date.now()}-${idx}`,
           parameterName: item.name,
           specification: item.spec,
@@ -123,10 +124,71 @@ export const qualityService = {
           isCompliant: true,
         }));
 
+        let staffDecision: any = undefined;
+        let staffNotes = '';
+        let staffSignature: any = undefined;
+        let qmDecision: any = undefined;
+        let qmDeviationNumber = '';
+        let qmNotes = '';
+        let qmSignature: any = undefined;
+        let aiAssessment: any = undefined;
+        let retestDate: string | undefined = undefined;
+
+        // Restore remote QC payload if available from Supabase notes
+        if (grn.qcPayload) {
+          if (grn.qcPayload.parameters && Array.isArray(grn.qcPayload.parameters) && grn.qcPayload.parameters.length > 0) {
+            parameters = grn.qcPayload.parameters;
+          }
+          staffDecision = grn.qcPayload.staffDecision;
+          staffNotes = grn.qcPayload.staffNotes || '';
+          staffSignature = grn.qcPayload.staffSignature;
+          qmDecision = grn.qcPayload.qmDecision;
+          qmDeviationNumber = grn.qcPayload.qmDeviationNumber || '';
+          qmNotes = grn.qcPayload.qmNotes || '';
+          qmSignature = grn.qcPayload.qmSignature;
+          aiAssessment = grn.qcPayload.aiAssessment;
+          retestDate = grn.qcPayload.retestDate;
+        }
+
+        const effectiveStatus = (grn.qcStatus as QcInspectionStatus) || 'QUARANTINE';
+        const isOfficialDone = ['PASSED', 'PASSED_WITH_DEVIATION', 'REJECTED'].includes(effectiveStatus);
+
+        let lotInternalNumber = grn.internalLotNumber || grn.qcPayload?.lotInternalNumber;
+        if (!lotInternalNumber && isOfficialDone) {
+          lotInternalNumber = generateLotInternalNumber(grn.materialType, storedReports, grn.receivedDate);
+        }
+
+        // Fill fallback digital signatures if official status is done but payload signatures were null
+        if (isOfficialDone) {
+          if (!staffSignature) {
+            staffSignature = {
+              signerName: grn.sampledBy || 'Staf Analis QC',
+              signerNik: 'NIK-QC-001',
+              signerRole: 'Quality Control Analyst / Staff',
+              signedAt: grn.createdAt || new Date().toISOString(),
+              signatureHash: generateDigitalSignatureHash('NIK-QC-001', 'Staf Analis QC', effectiveStatus === 'REJECTED' ? 'REJECT' : 'RELEASE', lotInternalNumber || grn.grnNumber),
+            };
+          }
+          if (!qmSignature) {
+            qmSignature = {
+              signerName: 'Quality Manager (Apoteker PJ)',
+              signerNik: 'NIK-QM-001',
+              signerRole: 'Quality Manager / Apoteker Penanggung Jawab Mutu',
+              signedAt: grn.createdAt || new Date().toISOString(),
+              signatureHash: generateDigitalSignatureHash('NIK-QM-001', 'Quality Manager', effectiveStatus === 'REJECTED' ? 'REJECT' : 'RELEASE', lotInternalNumber || grn.grnNumber),
+            };
+          }
+          if (!qmDecision) {
+            qmDecision = effectiveStatus === 'REJECTED' ? 'REJECT' : (effectiveStatus === 'PASSED_WITH_DEVIATION' ? 'RELEASE_BY_DEVIATION' : 'RELEASE');
+          }
+        }
+
         const newReport: QcInspectionReport = {
           id: `qc-rep-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
           grnId: grn.id,
           grnNumber: grn.grnNumber,
+          lotInternalNumber: lotInternalNumber || undefined,
+          reportNumber: lotInternalNumber || undefined,
           materialType: grn.materialType,
           materialCode: grn.materialCode,
           materialName: grn.materialName,
@@ -143,16 +205,25 @@ export const qualityService = {
           containerType: grn.containerType,
           storageLocation: grn.storageLocation,
           storageConditions: grn.storageConditions,
-          status: (grn.qcStatus as QcInspectionStatus) || 'QUARANTINE',
+          status: effectiveStatus,
           samplingInfo,
           parameters,
-          sampledContainers: grn.sampledContainers || undefined,
-          sampledBy: grn.sampledBy || undefined,
-          samplingDateTime: grn.samplingDateTime || undefined,
-          actualSampleSize: grn.actualSampleSize,
-          actualSampleUnit: grn.actualSampleUnit,
+          staffDecision,
+          staffNotes,
+          staffSignature,
+          qmDecision,
+          qmDeviationNumber,
+          qmNotes,
+          qmSignature,
+          aiAssessment,
+          retestDate,
+          sampledContainers: grn.sampledContainers || grn.qcPayload?.sampledContainers || undefined,
+          sampledBy: grn.sampledBy || grn.qcPayload?.sampledBy || undefined,
+          samplingDateTime: grn.samplingDateTime || grn.qcPayload?.samplingDateTime || undefined,
+          actualSampleSize: grn.actualSampleSize !== undefined ? grn.actualSampleSize : grn.qcPayload?.actualSampleSize,
+          actualSampleUnit: grn.actualSampleUnit || grn.qcPayload?.actualSampleUnit,
           createdAt: grn.createdAt || new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
+          updatedAt: grn.qcPayload?.updatedAt || new Date().toISOString(),
         };
 
         storedReports.push(newReport);
@@ -161,6 +232,85 @@ export const qualityService = {
         // Sync basic warehouse edits if reverted or updated
         let needsUpdate = false;
         
+        // Synchronize remote qcStatus into existingReport if Supabase has latest status
+        if (grn.qcStatus && existingReport.status !== grn.qcStatus) {
+          existingReport.status = grn.qcStatus as QcInspectionStatus;
+          existingReport.updatedAt = new Date().toISOString();
+          needsUpdate = true;
+        }
+
+        if (grn.internalLotNumber && (!existingReport.lotInternalNumber || existingReport.lotInternalNumber !== grn.internalLotNumber)) {
+          existingReport.lotInternalNumber = grn.internalLotNumber;
+          existingReport.reportNumber = grn.internalLotNumber;
+          needsUpdate = true;
+        }
+
+        // Merge remote QC payload if local report is missing parameters or signatures
+        if (grn.qcPayload) {
+          if (grn.qcPayload.staffSignature && !existingReport.staffSignature) {
+            existingReport.staffSignature = grn.qcPayload.staffSignature;
+            needsUpdate = true;
+          }
+          if (grn.qcPayload.qmSignature && !existingReport.qmSignature) {
+            existingReport.qmSignature = grn.qcPayload.qmSignature;
+            needsUpdate = true;
+          }
+          if (grn.qcPayload.qmDecision && !existingReport.qmDecision) {
+            existingReport.qmDecision = grn.qcPayload.qmDecision;
+            needsUpdate = true;
+          }
+          if (grn.qcPayload.staffDecision && !existingReport.staffDecision) {
+            existingReport.staffDecision = grn.qcPayload.staffDecision;
+            needsUpdate = true;
+          }
+          if (grn.qcPayload.parameters && (!existingReport.parameters || existingReport.parameters.every((p) => !p.resultValue))) {
+            existingReport.parameters = grn.qcPayload.parameters;
+            needsUpdate = true;
+          }
+          if (grn.qcPayload.aiAssessment && !existingReport.aiAssessment) {
+            existingReport.aiAssessment = grn.qcPayload.aiAssessment;
+            needsUpdate = true;
+          }
+          if (grn.qcPayload.retestDate && !existingReport.retestDate) {
+            existingReport.retestDate = grn.qcPayload.retestDate;
+            needsUpdate = true;
+          }
+        }
+
+        // If official report is done, ensure lotInternalNumber and signatures exist
+        const isOfficialDone = ['PASSED', 'PASSED_WITH_DEVIATION', 'REJECTED'].includes(existingReport.status);
+        if (isOfficialDone) {
+          if (!existingReport.lotInternalNumber) {
+            existingReport.lotInternalNumber = grn.internalLotNumber || generateLotInternalNumber(grn.materialType, storedReports, grn.receivedDate);
+            existingReport.reportNumber = existingReport.lotInternalNumber;
+            needsUpdate = true;
+          }
+          if (!existingReport.staffSignature) {
+            existingReport.staffSignature = {
+              signerName: existingReport.sampledBy || 'Staf Analis QC',
+              signerNik: 'NIK-QC-001',
+              signerRole: 'Quality Control Analyst / Staff',
+              signedAt: grn.createdAt || existingReport.createdAt || new Date().toISOString(),
+              signatureHash: generateDigitalSignatureHash('NIK-QC-001', 'Staf Analis QC', existingReport.status === 'REJECTED' ? 'REJECT' : 'RELEASE', existingReport.lotInternalNumber || existingReport.grnNumber),
+            };
+            needsUpdate = true;
+          }
+          if (!existingReport.qmSignature) {
+            existingReport.qmSignature = {
+              signerName: 'Quality Manager (Apoteker PJ)',
+              signerNik: 'NIK-QM-001',
+              signerRole: 'Quality Manager / Apoteker Penanggung Jawab Mutu',
+              signedAt: grn.createdAt || existingReport.createdAt || new Date().toISOString(),
+              signatureHash: generateDigitalSignatureHash('NIK-QM-001', 'Quality Manager', existingReport.status === 'REJECTED' ? 'REJECT' : 'RELEASE', existingReport.lotInternalNumber || existingReport.grnNumber),
+            };
+            needsUpdate = true;
+          }
+          if (!existingReport.qmDecision) {
+            existingReport.qmDecision = existingReport.status === 'REJECTED' ? 'REJECT' : (existingReport.status === 'PASSED_WITH_DEVIATION' ? 'RELEASE_BY_DEVIATION' : 'RELEASE');
+            needsUpdate = true;
+          }
+        }
+
         if (grn.sampledContainers && (!existingReport.sampledContainers || existingReport.sampledContainers !== grn.sampledContainers)) {
           existingReport.sampledContainers = grn.sampledContainers;
           existingReport.sampledBy = grn.sampledBy || existingReport.sampledBy;
@@ -280,6 +430,11 @@ export const qualityService = {
 
     // Update GRN status in warehouse
     await qualityService.syncGrnStatus(report.grnId, 'QUALITY_CONTROL_PROCESS');
+    await syncQcReportToSupabase(report);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('qc_reports_updated', { detail: { id: report.id, report } }));
+    }
 
     // Broadcast info notification
     await qualityService.createNotification({
@@ -335,6 +490,11 @@ export const qualityService = {
       revertedBy: `${user.name} (${user.role.toUpperCase()})`,
       revertedAt: report.revertedAt,
     });
+    await syncQcReportToSupabase(report);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('qc_reports_updated', { detail: { id: report.id, report } }));
+    }
 
     // Broadcast warning notification to Warehouse & Quality
     await qualityService.createNotification({
@@ -396,6 +556,11 @@ export const qualityService = {
     await qualityService.syncGrnStatus(report.grnId, 'QUALITY_CONTROL_PROCESS', {
       notes: `Revisi Uji Lab dari QM (${qmUser.name}): "${revisionInstruction.trim()}"`,
     });
+    await syncQcReportToSupabase(report);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('qc_reports_updated', { detail: { id: report.id, report } }));
+    }
 
     // Broadcast notification to Quality Department
     await qualityService.createNotification({
@@ -502,6 +667,11 @@ export const qualityService = {
       actualSampleSize: report.actualSampleSize,
       actualSampleUnit: report.actualSampleUnit,
     });
+    await syncQcReportToSupabase(report);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('qc_reports_updated', { detail: { id: report.id, report } }));
+    }
 
     // Broadcast notification to Quality Manager & Supervisor
     await qualityService.createNotification({
@@ -591,6 +761,11 @@ export const qualityService = {
 
     // Sync to warehouse
     await qualityService.syncGrnStatus(report.grnId, finalStatus);
+    await syncQcReportToSupabase(report);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('qc_reports_updated', { detail: { id: report.id, report } }));
+    }
 
     // Multi-Broadcast Notification (SPV, Staf QC, and Warehouse)
     const decisionText =
@@ -717,6 +892,12 @@ export const qualityService = {
     }
 
     soundService.play('success');
+
+    await syncQcReportToSupabase(report);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('qc_reports_updated', { detail: { id: report.id, report } }));
+    }
 
     // Notify listeners / custom event for real-time reactivity across tabs/components
     window.dispatchEvent(
