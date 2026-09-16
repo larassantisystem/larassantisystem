@@ -212,6 +212,24 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
     }
   }, [subTab]);
 
+  // Check URL query parameter for direct CoA access from QR scan
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const coaQuery = urlParams.get('coa') || urlParams.get('coaId') || urlParams.get('reportId');
+    if (coaQuery && reports.length > 0) {
+      const found = reports.find(
+        (r) =>
+          r.id === coaQuery ||
+          r.lotInternalNumber === coaQuery ||
+          r.reportNumber === coaQuery ||
+          r.grnNumber === coaQuery
+      );
+      if (found) {
+        setPdfReport(found);
+      }
+    }
+  }, [reports]);
+
   // AI Queue Priorities
   const quarantineReports = reports.filter((r) => r.status === 'QUARANTINE');
   const queuePriorities = analyzeQueuePriorities(quarantineReports);
@@ -2711,12 +2729,14 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
         isOpen={!!labelReport}
         onClose={() => setLabelReport(null)}
         report={labelReport}
+        onViewCoa={(rep) => setPdfReport(rep)}
       />
 
       <QcContainerSamplingQrModal
         isOpen={!!smartTagReport}
         onClose={() => setSmartTagReport(null)}
         report={smartTagReport}
+        onViewCoa={(rep) => setPdfReport(rep)}
       />
 
       <QcDiagnosticAuditModal

@@ -22,12 +22,14 @@ interface QcStatusLabelModalProps {
   isOpen: boolean;
   onClose: () => void;
   report: QcInspectionReport | null;
+  onViewCoa?: (report: QcInspectionReport) => void;
 }
 
 export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
   isOpen,
   onClose,
   report,
+  onViewCoa,
 }) => {
   const [containerRange, setContainerRange] = useState<'single' | 'all'>('all');
   const [selectedContainerNum, setSelectedContainerNum] = useState<number>(1);
@@ -376,24 +378,23 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
                     </div>
                   </div>
 
-                  {/* High-visibility large QR Code for mobile camera scanning */}
-                  <div className="shrink-0 flex flex-col items-center justify-center p-2.5 bg-white border-2 border-slate-300 rounded-2xl shadow-xs">
+                  {/* High-visibility large QR Code for mobile camera scanning & Direct CoA Access */}
+                  <div 
+                    onClick={() => onViewCoa && onViewCoa(report)}
+                    className="shrink-0 flex flex-col items-center justify-center p-2.5 bg-white border-2 border-slate-300 rounded-2xl shadow-xs hover:border-emerald-500 hover:shadow-md transition-all cursor-pointer group"
+                    title="Pindai Kamera HP atau Klik untuk langsung membuka Dokumen CoA Internal Resmi"
+                  >
                     <QrCodeBadge
-                      value={`LMS|QC|LOT:${report.lotInternalNumber || report.grnNumber}|W:${containerIndex}/${totalContainers}|S:${
-                        (report.sampledContainers || []).includes(containerIndex)
-                          ? report.actualSampleSize
-                            ? `${report.actualSampleSize}${report.actualSampleUnit || (report.materialType === 'raw' ? 'g' : 'pcs')}`
-                            : 'YES'
-                          : 'NO'
-                      }|ST:${report.status}`}
+                      value={`${window.location.origin}/?coa=${encodeURIComponent(report.lotInternalNumber || report.grnNumber)}&st=${report.status}&w=${containerIndex}/${totalContainers}`}
                       size={115}
-                      className="rounded-lg"
+                      className="rounded-lg group-hover:scale-105 transition-transform"
                     />
-                    <span className="font-mono text-[10px] text-slate-900 mt-1.5 font-black tracking-tight">
-                      {report.lotInternalNumber || report.grnNumber}-W{containerIndex}
+                    <span className="font-mono text-[10px] text-slate-900 mt-1.5 font-black tracking-tight flex items-center gap-1 group-hover:text-emerald-700">
+                      <span>{report.lotInternalNumber || report.grnNumber}-W{containerIndex}</span>
                     </span>
-                    <span className="text-[8px] font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded-sm mt-0.5 uppercase tracking-wider">
-                      Wadah #{containerIndex} / {totalContainers}
+                    <span className="text-[8px] font-extrabold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-sm mt-0.5 uppercase tracking-wider flex items-center gap-1">
+                      <FileText className="w-2.5 h-2.5" />
+                      <span>Scan ➔ Buka CoA</span>
                     </span>
                   </div>
                 </div>
@@ -409,6 +410,15 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
           </p>
 
           <div className="flex items-center gap-2.5">
+            {onViewCoa && (
+              <button
+                onClick={() => onViewCoa(report)}
+                className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <FileText className="w-4 h-4 text-emerald-600" />
+                <span>Lihat CoA Internal</span>
+              </button>
+            )}
             <button
               onClick={onClose}
               className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
