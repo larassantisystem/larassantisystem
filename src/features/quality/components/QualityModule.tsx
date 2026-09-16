@@ -889,12 +889,12 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
                   }`}
                 >
                   {item.status === 'PASSED'
-                    ? 'LOLOS QC (RELEASE)'
+                    ? 'RELEASE'
                     : item.status === 'PASSED_WITH_DEVIATION'
                     ? 'RELEASE BY DEVIATION'
                     : item.status === 'REJECTED'
-                    ? 'REJECTED (DITOLAK)'
-                    : 'REVERTED'}
+                    ? 'REJECT'
+                    : 'KARANTINA'}
                 </span>
               </td>
               <td className={`${isCompactMode ? 'p-1.5' : 'p-3'} text-right`}>

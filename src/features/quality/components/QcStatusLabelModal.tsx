@@ -18,6 +18,7 @@ import {
 import { QcInspectionReport } from '../types/qcTypes';
 import { QrCodeBadge } from '../../../components/QrCodeBadge';
 import { getQrTargetUrl } from '../../../core/utils/qrUrlHelper';
+import { normalizeLotNumber } from '../utils/qcNumbering';
 
 interface QcStatusLabelModalProps {
   isOpen: boolean;
@@ -387,7 +388,7 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
                   >
                     <QrCodeBadge
                       value={getQrTargetUrl(
-                        report.lotInternalNumber || report.grnNumber,
+                        normalizeLotNumber(report.lotInternalNumber || report.grnNumber),
                         report.status,
                         `${containerIndex}/${totalContainers}`
                       )}
@@ -395,7 +396,7 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
                       className="rounded-lg group-hover:scale-105 transition-transform"
                     />
                     <span className="font-mono text-[10px] text-slate-900 mt-1.5 font-black tracking-tight flex items-center gap-1 group-hover:text-emerald-700">
-                      <span>{report.lotInternalNumber || report.grnNumber}-W{containerIndex}</span>
+                      <span>{normalizeLotNumber(report.lotInternalNumber || report.grnNumber)}-W{containerIndex}</span>
                     </span>
                     <span className="text-[8px] font-extrabold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-sm mt-0.5 uppercase tracking-wider flex items-center gap-1">
                       <FileText className="w-2.5 h-2.5" />

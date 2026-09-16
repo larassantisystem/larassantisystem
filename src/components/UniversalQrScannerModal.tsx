@@ -31,6 +31,7 @@ import { qualityService } from '../features/quality/qualityService';
 import { warehouseService } from '../features/warehouse/warehouseService';
 import { authService } from '../core/auth/authService';
 import { isContainerSampled } from '../features/quality/utils/samplingUtils';
+import { normalizeLotNumber } from '../features/quality/utils/qcNumbering';
 
 interface UniversalQrScannerModalProps {
   isOpen: boolean;
@@ -356,7 +357,7 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
             id: grnFound.id,
             grnId: grnFound.id,
             grnNumber: grnFound.grnNumber,
-            lotInternalNumber: (grnFound as any).internalLotNumber || `LBB-${grnFound.grnNumber.replace(/[^0-9]/g, '').slice(-6)}`,
+            lotInternalNumber: normalizeLotNumber((grnFound as any).internalLotNumber || (grnFound.materialType === 'raw' ? `LBB2609${grnFound.grnNumber.replace(/[^0-9]/g, '').slice(-3) || '001'}` : `LBK2609${grnFound.grnNumber.replace(/[^0-9]/g, '').slice(-3) || '001'}`)),
             materialCode: grnFound.materialCode,
             materialName: grnFound.materialName,
             materialType: grnFound.materialType,

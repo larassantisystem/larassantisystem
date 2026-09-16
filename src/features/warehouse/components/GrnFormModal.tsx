@@ -659,7 +659,7 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
                     required
                   />
                   <p className="text-[11px] text-slate-400 mt-1">
-                    *Tanggal kadaluarsa tidak boleh lebih kecil dari tanggal terima.
+                    *Tanggal uji ulang (Retest Date) akan otomatis disetel sistem ke 3 bulan sebelum tanggal kedaluwarsa.
                   </p>
                 </div>
               )}

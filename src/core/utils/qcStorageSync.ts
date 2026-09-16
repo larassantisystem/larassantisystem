@@ -1,6 +1,7 @@
 import { QcInspectionReport, QcInspectionStatus } from '../../features/quality/types/qcTypes';
 import { GrnRecord } from '../../features/warehouse/types/grnTypes';
 import { supabase, isSupabaseConfigured } from '../auth/supabaseClient';
+import { normalizeLotNumber, calculateAutoRetestDate } from '../../features/quality/utils/qcNumbering';
 
 const QC_TAG_START = '<!--QC_PAYLOAD_START-->';
 const QC_TAG_END = '<!--QC_PAYLOAD_END-->';
@@ -37,9 +38,11 @@ export function packGrnNotes(userNotes?: string | null, qcReport?: Partial<QcIns
 
   if (!qcReport) return cleanUserText;
 
+  const normalizedLot = qcReport.lotInternalNumber ? normalizeLotNumber(qcReport.lotInternalNumber) : undefined;
+
   const payload: SerializedQcPayload = {
-    lotInternalNumber: qcReport.lotInternalNumber,
-    reportNumber: qcReport.reportNumber || qcReport.lotInternalNumber,
+    lotInternalNumber: normalizedLot,
+    reportNumber: normalizedLot,
     status: qcReport.status || 'QUARANTINE',
     parameters: qcReport.parameters,
     staffDecision: qcReport.staffDecision,
@@ -55,7 +58,7 @@ export function packGrnNotes(userNotes?: string | null, qcReport?: Partial<QcIns
     sampledContainers: qcReport.sampledContainers,
     sampledBy: qcReport.sampledBy,
     samplingDateTime: qcReport.samplingDateTime,
-    retestDate: qcReport.retestDate,
+    retestDate: qcReport.retestDate || (qcReport.materialType === 'raw' ? calculateAutoRetestDate('raw', qcReport.expiryDate, qcReport.receivedDate) : undefined),
     updatedAt: qcReport.updatedAt || new Date().toISOString(),
   };
 
@@ -123,13 +126,14 @@ export async function syncQcReportToSupabase(
 
     const updatePayload: Record<string, any> = {
       qc_status: report.status,
-      internal_lot_number: report.lotInternalNumber || remoteRow?.internal_lot_number || null,
+      internal_lot_number: normalizeLotNumber(report.lotInternalNumber || remoteRow?.internal_lot_number) || null,
       notes: packedNotes,
       updated_at: new Date().toISOString(),
     };
 
-    if (report.retestDate) {
-      updatePayload.retest_date = report.retestDate;
+    const effectiveRetest = report.retestDate || (report.materialType === 'raw' ? calculateAutoRetestDate('raw', report.expiryDate, report.receivedDate) : undefined);
+    if (effectiveRetest) {
+      updatePayload.retest_date = effectiveRetest;
     }
     if (report.sampledContainers) {
       updatePayload.sampled_containers = report.sampledContainers;

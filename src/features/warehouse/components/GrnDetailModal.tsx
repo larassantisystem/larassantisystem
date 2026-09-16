@@ -272,6 +272,13 @@ export const GrnDetailModal: React.FC<GrnDetailModalProps> = ({
                 Tgl Expired:{' '}
                 <strong className="text-slate-800">{record.expiryDate || '-'}</strong>
               </p>
+              {record.retestDate && (
+                <p className="text-xs text-slate-500">
+                  Tgl Retest (Uji Ulang):{' '}
+                  <strong className="text-emerald-700 font-mono font-bold">{record.retestDate}</strong>
+                  <span className="ml-1 text-[10px] text-emerald-600 font-medium">(Otomatis H-3 Bulan)</span>
+                </p>
+              )}
             </div>
 
             {/* 5. Lokasi & Penyimpanan */}

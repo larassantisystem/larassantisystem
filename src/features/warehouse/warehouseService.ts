@@ -2,6 +2,7 @@ import { GrnRecord, GrnStats } from './types/grnTypes';
 import { supabase, isSupabaseConfigured } from '../../core/auth/supabaseClient';
 import { calculateSamplingPlan } from '../quality/utils/milStd105e';
 import { packGrnNotes, unpackGrnNotes } from '../../core/utils/qcStorageSync';
+import { generateLotInternalNumber, normalizeLotNumber, calculateAutoRetestDate } from '../quality/utils/qcNumbering';
 
 const WAREHOUSE_GRN_STORAGE_KEY = 'lsm_warehouse_grn_v1';
 
@@ -12,10 +13,11 @@ const defaultGrnRecords: GrnRecord[] = [];
  * with snake_case column names (supplier_batch_number, purchase_order_number, expiration_date).
  */
 function buildPrimarySupabasePayload(record: GrnRecord): Record<string, any> {
-  const lotCode =
-    record.materialType === 'raw'
-      ? `LBB-${record.grnNumber.replace(/[^0-9]/g, '').slice(-6) || '260901'}`
-      : `LBK-${record.grnNumber.replace(/[^0-9]/g, '').slice(-6) || '260901'}`;
+  const dateParts = (record.receivedDate || new Date().toISOString().slice(0, 10)).split('-');
+  const yy = dateParts[0].length === 4 ? dateParts[0].slice(2) : dateParts[0];
+  const mm = (dateParts[1] || '01').padStart(2, '0');
+  const typeCode = record.materialType === 'raw' ? 'BB' : 'BK';
+  const lotCode = `L${typeCode}${yy}${mm}001`;
 
   // Default expiration date if not set (packaging or materials with long shelf life)
   let expDate = record.expiryDate;
@@ -24,6 +26,10 @@ function buildPrimarySupabasePayload(record: GrnRecord): Record<string, any> {
     rDate.setFullYear(rDate.getFullYear() + 2);
     expDate = rDate.toISOString().slice(0, 10);
   }
+
+  const autoRetestDate = record.materialType === 'raw'
+    ? (record.retestDate || calculateAutoRetestDate('raw', expDate, record.receivedDate))
+    : null;
 
   const payload: Record<string, any> = {
     grn_number: record.grnNumber,
@@ -37,6 +43,7 @@ function buildPrimarySupabasePayload(record: GrnRecord): Record<string, any> {
     internal_lot_number: record.internalLotNumber || (record as any).internal_lot_number || lotCode,
     received_date: record.receivedDate || new Date().toISOString().slice(0, 10),
     expiration_date: expDate,
+    retest_date: autoRetestDate || null,
     quantity_received: Number(record.quantityReceived) || 0,
     unit: record.unit || 'kg',
     container_count: Number(record.containerCount) || 1,
@@ -261,17 +268,11 @@ export const warehouseService = {
    * Helper to retrieve localStorage records safely
    */
   getLocalRecords: (): GrnRecord[] => {
-    try {
-      const saved = localStorage.getItem(WAREHOUSE_GRN_STORAGE_KEY);
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.error('Error parsing local GRN records:', e);
-    }
-    return defaultGrnRecords;
+    // Explicitly do not read from local storage anymore as per mandate. Always return empty array.
+    return [];
   },
 
   getGrnRecords: async (): Promise<GrnRecord[]> => {
-    // Try supabase first if available
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await withTimeout(
@@ -279,16 +280,44 @@ export const warehouseService = {
             .from('warehouse_grn')
             .select('*')
             .order('created_at', { ascending: false }),
-          3000
+          5000
         );
 
         if (!error && data && data.length > 0) {
-          const mapped: GrnRecord[] = data.map((d: any) => {
+          const mapped: GrnRecord[] = [];
+          
+          for (const d of data) {
+            // Exclude system ledger or other internal-only non-GRN rows
+            if (d.grn_number === 'SYSTEM-STOCK-LEDGER') {
+              continue;
+            }
+
             const { userNotes, qcPayload } = unpackGrnNotes(d.notes);
-            return {
+            
+            // Normalize internal lot number on the fly
+            const unnormalizedLot = d.internal_lot_number || d.internalLotNumber || '';
+            const normalizedLot = normalizeLotNumber(unnormalizedLot, d.received_date || d.receivedDate);
+            
+            // If the database has an unnormalized legacy lot number, correct it on the fly in Supabase!
+            if (unnormalizedLot && normalizedLot && normalizedLot !== unnormalizedLot) {
+              console.log(`[warehouseService] Correcting unnormalized lot number: ${unnormalizedLot} -> ${normalizedLot}`);
+              supabase
+                .from('warehouse_grn')
+                .update({ internal_lot_number: normalizedLot })
+                .eq('id', d.id)
+                .then(({ error: upErr }) => {
+                  if (upErr) {
+                    console.error(`[warehouseService] Failed to update lot number for ID ${d.id}:`, upErr);
+                  } else {
+                    console.log(`[warehouseService] Lot number successfully migrated to ${normalizedLot} in database.`);
+                  }
+                });
+            }
+
+            mapped.push({
               id: d.id,
               grnNumber: d.grn_number || d.grnNumber,
-              internalLotNumber: d.internal_lot_number || d.internalLotNumber || '',
+              internalLotNumber: normalizedLot,
               materialType: d.material_type || d.materialType || 'raw',
               materialId: d.material_id || d.materialId || '',
               materialCode: d.material_code || d.materialCode,
@@ -300,6 +329,13 @@ export const warehouseService = {
               batchNumber: d.supplier_batch_number || d.batch_number || d.batchNumber || '-',
               receivedDate: d.received_date || d.receivedDate,
               expiryDate: d.expiration_date || d.expiry_date || d.expiryDate,
+              retestDate:
+                d.retest_date ||
+                d.retestDate ||
+                qcPayload?.retestDate ||
+                ((d.material_type || d.materialType || 'raw') === 'raw'
+                  ? calculateAutoRetestDate('raw', d.expiration_date || d.expiry_date || d.expiryDate, d.received_date || d.receivedDate)
+                  : undefined),
               quantityReceived: Number(d.quantity_received || d.quantityReceived || 0),
               unit: d.unit || 'kg',
               containerCount: Number(d.container_count || d.containerCount || 1),
@@ -325,134 +361,19 @@ export const warehouseService = {
               coaAttachment: d.coa_attachment || d.coaAttachment,
               coaDriveFileId: d.coa_drive_file_id || d.coaDriveFileId,
               coaDriveViewLink: d.coa_drive_view_link || d.coaDriveViewLink,
-            };
-          });
-
-          // Merge with any local-only records that haven't synced yet
-          const local = warehouseService.getLocalRecords();
-          const supabaseGrnNumbers = new Set(mapped.map((m) => m.grnNumber));
-          const unsyncedLocal = local.filter((l) => !supabaseGrnNumbers.has(l.grnNumber));
-
-          let merged = [...unsyncedLocal, ...mapped];
-
-          // Cross-reference with live QC reports to ensure real-time QC status in GRN table
-          try {
-            const qcReportsRaw = localStorage.getItem('lsm_qc_reports_v2');
-            if (qcReportsRaw) {
-              const qcReports = JSON.parse(qcReportsRaw);
-              if (Array.isArray(qcReports) && qcReports.length > 0) {
-                const qcMap = new Map<string, any>();
-                qcReports.forEach((rep: any) => {
-                  if (rep.grnId) qcMap.set(rep.grnId, rep);
-                  if (rep.grnNumber) qcMap.set(rep.grnNumber, rep);
-                });
-
-                let qcStorageNeedsUpdate = false;
-
-                merged = merged.map((rec) => {
-                  const qcRep = qcMap.get(rec.id) || qcMap.get(rec.grnNumber);
-                  if (!qcRep) return rec;
-
-                  const liveQcStatus = qcRep.status;
-                  let resolvedStatus = rec.qcStatus;
-
-                  const isRemoteDone = ['PASSED', 'PASSED_WITH_DEVIATION', 'REJECTED'].includes(rec.qcStatus);
-                  const isLocalDone = ['PASSED', 'PASSED_WITH_DEVIATION', 'REJECTED'].includes(liveQcStatus);
-
-                  // Supabase is authoritative for official completed states
-                  if (isRemoteDone) {
-                    resolvedStatus = rec.qcStatus;
-                    // Heal stale local quarantine cache if cloud already has final decision
-                    if (qcRep.status !== rec.qcStatus) {
-                      qcRep.status = rec.qcStatus;
-                      qcStorageNeedsUpdate = true;
-                    }
-                  } else if (liveQcStatus && (isLocalDone || liveQcStatus === 'AWAITING_QM_AUTHORIZATION' || liveQcStatus === 'QUALITY_CONTROL_PROCESS')) {
-                    // Local has actively progressed beyond initial quarantine
-                    resolvedStatus = liveQcStatus as any;
-                  }
-
-                  return {
-                    ...rec,
-                    qcStatus: resolvedStatus,
-                    revertReason: rec.revertReason || qcRep.revertReason,
-                    revertedBy: rec.revertedBy || qcRep.revertedBy,
-                    revertedAt: rec.revertedAt || qcRep.revertedAt,
-                    actualSampleSize: rec.actualSampleSize !== undefined ? rec.actualSampleSize : qcRep.actualSampleSize,
-                    actualSampleUnit: rec.actualSampleUnit || qcRep.actualSampleUnit,
-                    sampledContainers: rec.sampledContainers || qcRep.sampledContainers,
-                    sampledBy: rec.sampledBy || qcRep.sampledBy,
-                    samplingDateTime: rec.samplingDateTime || qcRep.samplingDateTime,
-                  };
-                });
-
-                if (qcStorageNeedsUpdate) {
-                  localStorage.setItem('lsm_qc_reports_v2', JSON.stringify(qcReports));
-                }
-              }
-            }
-          } catch (e) {
-            console.warn('[warehouseService] Error cross-referencing QC status:', e);
+            });
           }
 
-          localStorage.setItem(WAREHOUSE_GRN_STORAGE_KEY, JSON.stringify(merged));
-          return merged;
+          return mapped;
         } else if (error) {
           console.warn('[warehouseService] Supabase GRN query warning:', error.message);
         }
       } catch (err) {
-        console.warn('[warehouseService] Supabase GRN fetch error, using local fallback:', err);
+        console.warn('[warehouseService] Supabase GRN fetch error:', err);
       }
     }
 
-    // LocalStorage fallback
-    let local = warehouseService.getLocalRecords();
-    try {
-      const qcReportsRaw = localStorage.getItem('lsm_qc_reports_v2');
-      if (qcReportsRaw) {
-        const qcReports = JSON.parse(qcReportsRaw);
-        if (Array.isArray(qcReports) && qcReports.length > 0) {
-          const qcMap = new Map<string, any>();
-          qcReports.forEach((rep: any) => {
-            if (rep.grnId) qcMap.set(rep.grnId, rep);
-            if (rep.grnNumber) qcMap.set(rep.grnNumber, rep);
-          });
-
-          local = local.map((rec) => {
-            const qcRep = qcMap.get(rec.id) || qcMap.get(rec.grnNumber);
-            if (!qcRep) return rec;
-
-            const liveQcStatus = qcRep.status;
-            let resolvedStatus = rec.qcStatus;
-
-            const isRemoteDone = ['PASSED', 'PASSED_WITH_DEVIATION', 'REJECTED'].includes(rec.qcStatus);
-            const isLocalDone = ['PASSED', 'PASSED_WITH_DEVIATION', 'REJECTED'].includes(liveQcStatus);
-
-            if (isRemoteDone) {
-              resolvedStatus = rec.qcStatus;
-            } else if (liveQcStatus && (isLocalDone || liveQcStatus === 'AWAITING_QM_AUTHORIZATION' || liveQcStatus === 'QUALITY_CONTROL_PROCESS')) {
-              resolvedStatus = liveQcStatus as any;
-            }
-
-            return {
-              ...rec,
-              qcStatus: resolvedStatus,
-              revertReason: rec.revertReason || qcRep.revertReason,
-              revertedBy: rec.revertedBy || qcRep.revertedBy,
-              revertedAt: rec.revertedAt || qcRep.revertedAt,
-              actualSampleSize: rec.actualSampleSize !== undefined ? rec.actualSampleSize : qcRep.actualSampleSize,
-              actualSampleUnit: rec.actualSampleUnit || qcRep.actualSampleUnit,
-              sampledContainers: rec.sampledContainers || qcRep.sampledContainers,
-              sampledBy: rec.sampledBy || qcRep.sampledBy,
-              samplingDateTime: rec.samplingDateTime || qcRep.samplingDateTime,
-            };
-          });
-        }
-      }
-    } catch (e) {
-      console.warn('[warehouseService] Error cross-referencing QC status:', e);
-    }
-    return local;
+    return [];
   },
 
   saveGrnRecord: async (
@@ -485,10 +406,16 @@ export const warehouseService = {
     const nextSeq = String(maxSeq + 1).padStart(2, '0');
     const grnNumber = `${targetPrefix}${nextSeq}`;
 
+    const internalLotNumber = normalizeLotNumber(
+      record.internalLotNumber?.trim() ||
+      generateLotInternalNumber(record.materialType, existing, record.receivedDate)
+    );
+
     const newRecord: GrnRecord = {
       ...record,
       id: `grn-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
       grnNumber,
+      internalLotNumber,
       createdAt: new Date().toISOString(),
     };
 
@@ -513,9 +440,6 @@ export const warehouseService = {
         console.error('[warehouseService] Supabase GRN insert exception:', err);
       }
     }
-
-    const updated = [newRecord, ...existing.filter((e) => e.id !== newRecord.id)];
-    localStorage.setItem(WAREHOUSE_GRN_STORAGE_KEY, JSON.stringify(updated));
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('warehouse_grn_updated', { detail: { id: newRecord.id, record: newRecord } }));
@@ -566,9 +490,6 @@ export const warehouseService = {
       qcPayload: updatedData.qcPayload !== undefined ? updatedData.qcPayload : (existing[index].qcPayload || remotePayload),
     };
 
-    existing[index] = updatedRecord;
-    localStorage.setItem(WAREHOUSE_GRN_STORAGE_KEY, JSON.stringify(existing));
-
     if (isSupabaseConfigured && supabase) {
       try {
         const payload = buildPrimarySupabasePayload(updatedRecord);
@@ -586,70 +507,6 @@ export const warehouseService = {
       } catch (e) {
         console.warn('[warehouseService] Failed to update Supabase record:', e);
       }
-    }
-
-    // Synchronize directly with QC Inspection Report & recalculate sampling plan
-    try {
-      const qcRaw = localStorage.getItem('lsm_qc_reports_v2');
-      if (qcRaw) {
-        const qcList = JSON.parse(qcRaw);
-        if (Array.isArray(qcList)) {
-          let qcChanged = false;
-          const targetQc = qcList.find((r: any) => r.grnId === id || r.grnNumber === updatedRecord.grnNumber);
-          if (targetQc) {
-            if (updatedData.batchNumber !== undefined) targetQc.batchNumberVendor = updatedData.batchNumber;
-            if (updatedData.manufacturer !== undefined) targetQc.manufacturer = updatedData.manufacturer;
-            if (updatedData.distributor !== undefined) targetQc.distributor = updatedData.distributor;
-            if (updatedData.deliveryNoteNumber !== undefined) targetQc.deliveryNoteNumber = updatedData.deliveryNoteNumber;
-            if (updatedData.poNumber !== undefined) targetQc.poNumber = updatedData.poNumber;
-            if (updatedData.expiryDate !== undefined) targetQc.expiryDate = updatedData.expiryDate;
-            if (updatedData.storageLocation !== undefined) targetQc.storageLocation = updatedData.storageLocation;
-            if (updatedData.storageConditions !== undefined) targetQc.storageConditions = updatedData.storageConditions;
-
-            const qtyChanged = updatedData.quantityReceived !== undefined && updatedData.quantityReceived !== targetQc.quantityReceived;
-            const containersChanged = updatedData.containerCount !== undefined && updatedData.containerCount !== targetQc.containerCount;
-            const unitChanged = updatedData.unit !== undefined && updatedData.unit !== targetQc.unit;
-            const containerTypeChanged = updatedData.containerType !== undefined && updatedData.containerType !== targetQc.containerType;
-
-            if (updatedData.quantityReceived !== undefined) targetQc.quantityReceived = updatedData.quantityReceived;
-            if (updatedData.unit !== undefined) targetQc.unit = updatedData.unit;
-            if (updatedData.containerCount !== undefined) targetQc.containerCount = updatedData.containerCount;
-            if (updatedData.containerType !== undefined) targetQc.containerType = updatedData.containerType;
-
-            if (qtyChanged || containersChanged || unitChanged || containerTypeChanged || targetQc.status === 'REVERTED_TO_WAREHOUSE') {
-              targetQc.samplingInfo = calculateSamplingPlan(
-                targetQc.materialType,
-                targetQc.quantityReceived,
-                targetQc.containerCount,
-                targetQc.unit,
-                targetQc.containerType
-              );
-              qcChanged = true;
-            }
-
-            if (updatedData.qcStatus === 'QUARANTINE' && targetQc.status === 'REVERTED_TO_WAREHOUSE') {
-              targetQc.status = 'QUARANTINE';
-              targetQc.updatedAt = new Date().toISOString();
-              qcChanged = true;
-            }
-
-            if (updatedData.actualSampleSize !== undefined) {
-              targetQc.actualSampleSize = updatedData.actualSampleSize;
-              qcChanged = true;
-            }
-            if (updatedData.actualSampleUnit !== undefined) {
-              targetQc.actualSampleUnit = updatedData.actualSampleUnit;
-              qcChanged = true;
-            }
-
-            if (qcChanged) {
-              localStorage.setItem('lsm_qc_reports_v2', JSON.stringify(qcList));
-            }
-          }
-        }
-      }
-    } catch (qcSyncErr) {
-      console.warn('[warehouseService] Error synchronizing QC report on update:', qcSyncErr);
     }
 
     if (typeof window !== 'undefined') {
@@ -680,9 +537,6 @@ export const warehouseService = {
         `Penghapusan ditolak: Penerimaan (${target.grnNumber}) sudah berada dalam tahap "${statusLabel}". Gudang tidak dapat menghapus data yang sedang/sudah diuji. Silakan koordinasi dengan tim QC untuk melakukan pembatalan/revert inspeksi terlebih dahulu.`
       );
     }
-
-    const filtered = existing.filter((item) => item.id !== id && item.grnNumber !== id);
-    localStorage.setItem(WAREHOUSE_GRN_STORAGE_KEY, JSON.stringify(filtered));
 
     if (isSupabaseConfigured && supabase) {
       try {

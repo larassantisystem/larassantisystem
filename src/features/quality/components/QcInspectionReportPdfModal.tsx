@@ -8,6 +8,7 @@ import {
   Info
 } from 'lucide-react';
 import { QcInspectionReport } from '../types/qcTypes';
+import { normalizeLotNumber } from '../utils/qcNumbering';
 
 interface QcInspectionReportPdfModalProps {
   isOpen: boolean;
@@ -70,7 +71,7 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
               <h3 className="font-bold text-sm leading-tight flex items-center gap-2">
                 <span>Dokumen Resmi Laporan Pemeriksaan Mutu (CPKB)</span>
                 <span className="font-mono text-xs px-2 py-0.5 rounded-md bg-emerald-950 border border-emerald-700 text-emerald-300 font-bold">
-                  {docNumber} • Lot: {report.lotInternalNumber || report.grnNumber}
+                  {docNumber} • Lot: {normalizeLotNumber(report.lotInternalNumber || report.grnNumber)}
                 </span>
               </h3>
               <p className="text-[11px] text-slate-400">
@@ -148,7 +149,7 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
                           Industri Kosmetika & Personal Care • Sertifikasi CPKB Golongan A
                         </p>
                         <p className="text-[10px] text-slate-600 max-w-md leading-tight mt-0.5">
-                          Jl. Pembangunan 3 No.38 A, RT.005/RW.004, Batusari, Kec. Batuceper, Kota Tangerang, Banten 15121
+                          Jl. Pembangunan 3 No.38 A, B, C, D, RT.002/RW.001, Batusari, Kec. Batuceper, Kota Tangerang, Banten 15121
                         </p>
                       </div>
                     </div>
@@ -166,7 +167,7 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
                       {docTitle}
                     </h2>
                     <div className="text-xs font-mono font-bold text-emerald-900 mt-0.5">
-                      NO. LOT / LAPORAN: {report.lotInternalNumber || report.grnNumber}
+                      NO. LOT / LAPORAN: {normalizeLotNumber(report.lotInternalNumber || report.grnNumber)}
                     </div>
                   </div>
                 </div>
@@ -372,10 +373,10 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
                           >
                             STATUS DISPOSISI:{' '}
                             {isRejected
-                              ? 'DITOLAK / REJECTED (TIDAK MEMENUHI SYARAT)'
+                              ? 'DITOLAK / REJECT'
                               : hasDeviation
-                              ? `DILULUSKAN DENGAN DEVIASI (NO: ${report.qmDeviationNumber || '-'})`
-                              : 'DILULUSKAN / RELEASE (MEMENUHI SYARAT CPKB)'}
+                              ? 'DILULUSKAN BERSYARAT (RELEASE BY DEVIATION)'
+                              : 'DILULUSKAN / RELEASE'}
                           </div>
                         </div>
                         <div className="text-right">
@@ -493,7 +494,7 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
                           PT. LARASSANTI MAKMUR SEJAHTERA • INTERNAL COA
                         </div>
                         <div className="text-[11px] text-slate-600 font-semibold">
-                          Lanjutan Laporan Mutu Lot #{report.lotInternalNumber || report.grnNumber} - {report.materialName}
+                          Lanjutan Laporan Mutu Lot #{normalizeLotNumber(report.lotInternalNumber || report.grnNumber)} - {report.materialName}
                         </div>
                       </div>
                       <div className="text-right font-mono text-[10px] text-slate-600 space-y-0.5">
@@ -575,10 +576,10 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
                           >
                             STATUS DISPOSISI:{' '}
                             {isRejected
-                              ? 'DITOLAK / REJECTED (TIDAK MEMENUHI SYARAT)'
+                              ? 'DITOLAK / REJECT'
                               : hasDeviation
-                              ? `DILULUSKAN DENGAN DEVIASI (NO: ${report.qmDeviationNumber || '-'})`
-                              : 'DILULUSKAN / RELEASE (MEMENUHI SYARAT CPKB)'}
+                              ? 'DILULUSKAN BERSYARAT (RELEASE BY DEVIATION)'
+                              : 'DILULUSKAN / RELEASE'}
                           </div>
                         </div>
                         <div className="text-right">
@@ -662,7 +663,7 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
                   <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-[9px] text-slate-500">
                     <div className="flex items-center gap-1">
                       <QrCode className="w-3.5 h-3.5 text-slate-700" />
-                      <span>VERIFIED CPKB LOT #{report.lotInternalNumber || report.grnNumber} • PT. Larassanti Makmur Sejahtera • Sistem Terpadu Pengawasan Mutu CPKB</span>
+                      <span>VERIFIED CPKB LOT #{normalizeLotNumber(report.lotInternalNumber || report.grnNumber)} • PT. Larassanti Makmur Sejahtera • Sistem Terpadu Pengawasan Mutu CPKB</span>
                     </div>
                     <div className="font-mono font-bold text-slate-700">
                       Halaman 2 dari 2 (Selesai)

@@ -9,7 +9,7 @@ import { warehouseService } from '../warehouse/warehouseService';
 import { packagingService } from '../rnd/materials/packagingService';
 import { materialService } from '../rnd/materials/materialService';
 import { calculateSamplingPlan } from './utils/milStd105e';
-import { generateLotInternalNumber, generateDigitalSignatureHash } from './utils/qcNumbering';
+import { generateLotInternalNumber, generateDigitalSignatureHash, normalizeLotNumber, calculateAutoRetestDate } from './utils/qcNumbering';
 import { analyzeLabResults, analyzeQueuePriorities } from './utils/qcAiAssistant';
 import { authService } from '../../core/auth/authService';
 import { isQualityManager } from '../../core/auth/permissionGuard';
@@ -21,19 +21,13 @@ import { syncQcReportToSupabase } from '../../core/utils/qcStorageSync';
 const QC_REPORTS_STORAGE_KEY = 'lsm_qc_reports_v2';
 const QC_NOTIFICATIONS_STORAGE_KEY = 'lsm_qc_notifications_v2';
 
+let memoryNotifications: QcNotification[] = [];
+
 export const qualityService = {
   /**
    * Read cached QC inspection reports synchronously for instant (0ms) render
    */
   getLocalReports: (): QcInspectionReport[] => {
-    const saved = localStorage.getItem(QC_REPORTS_STORAGE_KEY);
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error('Failed to parse QC reports from storage:', e);
-      }
-    }
     return [];
   },
 
@@ -150,13 +144,17 @@ export const qualityService = {
           retestDate = grn.qcPayload.retestDate;
         }
 
+        if (!retestDate && grn.materialType === 'raw') {
+          retestDate = grn.retestDate || calculateAutoRetestDate('raw', grn.expiryDate, grn.receivedDate);
+        }
+
         const effectiveStatus = (grn.qcStatus as QcInspectionStatus) || 'QUARANTINE';
         const isOfficialDone = ['PASSED', 'PASSED_WITH_DEVIATION', 'REJECTED'].includes(effectiveStatus);
 
-        let lotInternalNumber = grn.internalLotNumber || grn.qcPayload?.lotInternalNumber;
-        if (!lotInternalNumber && isOfficialDone) {
-          lotInternalNumber = generateLotInternalNumber(grn.materialType, storedReports, grn.receivedDate);
-        }
+        let rawLot = grn.internalLotNumber || grn.qcPayload?.lotInternalNumber;
+        let lotInternalNumber = rawLot
+          ? normalizeLotNumber(rawLot, grn.receivedDate)
+          : generateLotInternalNumber(grn.materialType, storedReports, grn.receivedDate);
 
         // Fill fallback digital signatures if official status is done but payload signatures were null
         if (isOfficialDone) {
@@ -283,8 +281,9 @@ export const qualityService = {
             existingReport.aiAssessment = grn.qcPayload.aiAssessment;
             needsUpdate = true;
           }
-          if (grn.qcPayload.retestDate && !existingReport.retestDate) {
-            existingReport.retestDate = grn.qcPayload.retestDate;
+          const targetRetest = grn.qcPayload.retestDate || grn.retestDate || (existingReport.materialType === 'raw' ? calculateAutoRetestDate('raw', existingReport.expiryDate, existingReport.receivedDate) : undefined);
+          if (targetRetest && existingReport.retestDate !== targetRetest) {
+            existingReport.retestDate = targetRetest;
             needsUpdate = true;
           }
         }
@@ -292,9 +291,13 @@ export const qualityService = {
         // If official report is done, ensure lotInternalNumber and signatures exist
         const isOfficialDone = ['PASSED', 'PASSED_WITH_DEVIATION', 'REJECTED'].includes(existingReport.status);
         if (isOfficialDone) {
-          if (!existingReport.lotInternalNumber) {
-            existingReport.lotInternalNumber = grn.internalLotNumber || generateLotInternalNumber(grn.materialType, storedReports, grn.receivedDate);
-            existingReport.reportNumber = existingReport.lotInternalNumber;
+          const currentLot = existingReport.lotInternalNumber || grn.internalLotNumber;
+          const normalized = currentLot
+            ? normalizeLotNumber(currentLot, grn.receivedDate)
+            : generateLotInternalNumber(grn.materialType, storedReports, grn.receivedDate);
+          if (existingReport.lotInternalNumber !== normalized) {
+            existingReport.lotInternalNumber = normalized;
+            existingReport.reportNumber = normalized;
             needsUpdate = true;
           }
           if (!existingReport.staffSignature) {
@@ -425,10 +428,6 @@ export const qualityService = {
       }
     });
 
-    if (isModified || !localStorage.getItem(QC_REPORTS_STORAGE_KEY)) {
-      localStorage.setItem(QC_REPORTS_STORAGE_KEY, JSON.stringify(storedReports));
-    }
-
     return storedReports;
   },
 
@@ -442,8 +441,6 @@ export const qualityService = {
 
     report.status = 'QUALITY_CONTROL_PROCESS';
     report.updatedAt = new Date().toISOString();
-
-    localStorage.setItem(QC_REPORTS_STORAGE_KEY, JSON.stringify(reports));
 
     // Update GRN status in warehouse
     await qualityService.syncGrnStatus(report.grnId, 'QUALITY_CONTROL_PROCESS');
@@ -497,8 +494,6 @@ export const qualityService = {
     report.revertedBy = `${user.name} (${user.role.toUpperCase()})`;
     report.revertedAt = new Date().toISOString();
     report.updatedAt = new Date().toISOString();
-
-    localStorage.setItem(QC_REPORTS_STORAGE_KEY, JSON.stringify(reports));
 
     // Sync to warehouse
     await qualityService.syncGrnStatus(report.grnId, 'REVERTED_TO_WAREHOUSE', {
@@ -565,9 +560,6 @@ export const qualityService = {
     report.qmRevertToLabBy = `${qmUser.name} (Quality Manager)`;
     report.qmRevertToLabAt = now;
     report.updatedAt = now;
-
-    // Save to local storage
-    localStorage.setItem(QC_REPORTS_STORAGE_KEY, JSON.stringify(reports));
 
     // Sync to warehouse
     await qualityService.syncGrnStatus(report.grnId, 'QUALITY_CONTROL_PROCESS', {
@@ -648,6 +640,8 @@ export const qualityService = {
     }
     if (retestDate) {
       report.retestDate = retestDate;
+    } else if (!report.retestDate && report.materialType === 'raw') {
+      report.retestDate = calculateAutoRetestDate('raw', report.expiryDate, report.receivedDate);
     }
     if (sampledContainers) {
       report.sampledContainers = sampledContainers;
@@ -676,8 +670,6 @@ export const qualityService = {
 
     report.status = 'AWAITING_QM_AUTHORIZATION';
     report.updatedAt = new Date().toISOString();
-
-    localStorage.setItem(QC_REPORTS_STORAGE_KEY, JSON.stringify(reports));
 
     // Sync to warehouse
     await qualityService.syncGrnStatus(report.grnId, 'AWAITING_QM_AUTHORIZATION', {
@@ -773,8 +765,6 @@ export const qualityService = {
 
     report.status = finalStatus;
     report.updatedAt = new Date().toISOString();
-
-    localStorage.setItem(QC_REPORTS_STORAGE_KEY, JSON.stringify(reports));
 
     // Sync to warehouse
     await qualityService.syncGrnStatus(report.grnId, finalStatus);
@@ -877,9 +867,6 @@ export const qualityService = {
     }
     report.updatedAt = nowIso;
 
-    // Save to QC storage
-    localStorage.setItem(QC_REPORTS_STORAGE_KEY, JSON.stringify(reports));
-
     // Sync to Warehouse & Supabase database
     let updatedGrn: GrnRecord | undefined;
     try {
@@ -968,8 +955,6 @@ export const qualityService = {
         if (opts.sampledBy !== undefined) target.sampledBy = opts.sampledBy;
         if (opts.samplingDateTime !== undefined) target.samplingDateTime = opts.samplingDateTime;
 
-        localStorage.setItem('lsm_warehouse_grn_v1', JSON.stringify(records));
-
         // Synchronize directly with Supabase via warehouseService
         await warehouseService.updateGrnRecord(target.id, {
           qcStatus: newStatus as any,
@@ -993,13 +978,7 @@ export const qualityService = {
    * Notification Center Management
    */
   getNotifications: (): QcNotification[] => {
-    const raw = localStorage.getItem(QC_NOTIFICATIONS_STORAGE_KEY);
-    if (!raw) return [];
-    try {
-      return JSON.parse(raw);
-    } catch {
-      return [];
-    }
+    return memoryNotifications;
   },
 
   createNotification: async (notif: Omit<QcNotification, 'id' | 'timestamp' | 'isRead'>) => {
@@ -1010,36 +989,25 @@ export const qualityService = {
       timestamp: new Date().toISOString(),
       isRead: false,
     };
-    const updated = [newNotif, ...existing].slice(0, 50); // Keep latest 50
-    localStorage.setItem(QC_NOTIFICATIONS_STORAGE_KEY, JSON.stringify(updated));
+    memoryNotifications = [newNotif, ...existing].slice(0, 50); // Keep latest 50
     return newNotif;
   },
 
   markNotificationAsRead: (id: string) => {
     const existing = qualityService.getNotifications();
-    const updated = existing.map((n) => (n.id === id ? { ...n, isRead: true } : n));
-    localStorage.setItem(QC_NOTIFICATIONS_STORAGE_KEY, JSON.stringify(updated));
+    memoryNotifications = existing.map((n) => (n.id === id ? { ...n, isRead: true } : n));
   },
 
   markAllNotificationsAsRead: () => {
     const existing = qualityService.getNotifications();
-    const updated = existing.map((n) => ({ ...n, isRead: true }));
-    localStorage.setItem(QC_NOTIFICATIONS_STORAGE_KEY, JSON.stringify(updated));
+    memoryNotifications = existing.map((n) => ({ ...n, isRead: true }));
   },
 
   /**
    * Delete QC inspection report when corresponding GRN is deleted in warehouse
    */
   deleteReportByGrnId: async (grnId: string): Promise<void> => {
-    const saved = localStorage.getItem(QC_REPORTS_STORAGE_KEY);
-    if (!saved) return;
-    try {
-      const list: QcInspectionReport[] = JSON.parse(saved);
-      const updated = list.filter((r) => r.grnId !== grnId);
-      localStorage.setItem(QC_REPORTS_STORAGE_KEY, JSON.stringify(updated));
-    } catch (e) {
-      console.error('Error deleting QC report by grnId', e);
-    }
+    // No-op since reports are derived dynamically from GRNs in Supabase
   },
 
   /**
@@ -1057,7 +1025,7 @@ export const qualityService = {
       ? reports.filter((r) => r.id === reportId)
       : reports.filter((r) => r.status === 'QUARANTINE');
 
-    targetReports.forEach((rep) => {
+    for (const rep of targetReports) {
       let masterParams: Array<{ name: string; spec: string }> = [];
       if (rep.materialType === 'packaging') {
         const pm = packagingMaterials.find(
@@ -1088,10 +1056,10 @@ export const qualityService = {
           isCompliant: rep.parameters.find((p) => p.parameterName === item.name)?.isCompliant ?? true,
         }));
         updatedCount++;
+        await syncQcReportToSupabase(rep);
       }
-    });
+    }
 
-    localStorage.setItem(QC_REPORTS_STORAGE_KEY, JSON.stringify(reports));
     return {
       updatedCount,
       message: `Berhasil menyinkronkan ${updatedCount} catatan inspeksi QC dengan kriteria Master Data terbaru.`,
