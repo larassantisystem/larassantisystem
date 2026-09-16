@@ -97,14 +97,21 @@ export async function syncQcReportToSupabase(
     return false;
   }
 
+  const isUuid = (str?: string) => Boolean(str && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str));
+
   try {
     // 1. Fetch current remote row to avoid overwriting concurrent edits
-    const { data: remoteRow, error: fetchErr } = await supabase
+    let remoteQuery = supabase
       .from('warehouse_grn')
-      .select('id, grn_number, notes, internal_lot_number')
-      .or(`id.eq.${report.grnId},grn_number.eq.${report.grnNumber}`)
-      .limit(1)
-      .maybeSingle();
+      .select('id, grn_number, notes, internal_lot_number');
+
+    if (report.grnId && isUuid(report.grnId)) {
+      remoteQuery = remoteQuery.or(`id.eq.${report.grnId},grn_number.eq.${report.grnNumber}`);
+    } else {
+      remoteQuery = remoteQuery.eq('grn_number', report.grnNumber);
+    }
+
+    const { data: remoteRow, error: fetchErr } = await remoteQuery.limit(1).maybeSingle();
 
     if (fetchErr) {
       console.warn('[syncQcReportToSupabase] Fetch remote row error:', fetchErr);
@@ -124,12 +131,31 @@ export async function syncQcReportToSupabase(
     if (report.retestDate) {
       updatePayload.retest_date = report.retestDate;
     }
+    if (report.sampledContainers) {
+      updatePayload.sampled_containers = report.sampledContainers;
+    }
+    if (report.sampledBy) {
+      updatePayload.sampled_by = report.sampledBy;
+    }
+    if (report.samplingDateTime) {
+      updatePayload.sampling_date_time = report.samplingDateTime;
+    }
+    if (report.actualSampleSize !== undefined && report.actualSampleSize !== null) {
+      updatePayload.actual_sample_size = report.actualSampleSize;
+    }
+    if (report.actualSampleUnit) {
+      updatePayload.actual_sample_unit = report.actualSampleUnit;
+    }
 
-    const targetId = remoteRow?.id || report.grnId;
-    const { error: updateErr } = await supabase
-      .from('warehouse_grn')
-      .update(updatePayload)
-      .eq('id', targetId);
+    const targetId = remoteRow?.id;
+    let updateQuery;
+    if (targetId && isUuid(targetId)) {
+      updateQuery = supabase.from('warehouse_grn').update(updatePayload).eq('id', targetId);
+    } else {
+      updateQuery = supabase.from('warehouse_grn').update(updatePayload).eq('grn_number', report.grnNumber);
+    }
+
+    const { error: updateErr } = await updateQuery;
 
     if (updateErr) {
       console.warn('[syncQcReportToSupabase] Update Supabase error:', updateErr);

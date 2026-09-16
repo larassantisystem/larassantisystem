@@ -347,13 +347,28 @@ export const warehouseService = {
                   if (rep.grnNumber) qcMap.set(rep.grnNumber, rep);
                 });
 
+                let qcStorageNeedsUpdate = false;
+
                 merged = merged.map((rec) => {
                   const qcRep = qcMap.get(rec.id) || qcMap.get(rec.grnNumber);
                   if (!qcRep) return rec;
 
                   const liveQcStatus = qcRep.status;
                   let resolvedStatus = rec.qcStatus;
-                  if (liveQcStatus) {
+
+                  const isRemoteDone = ['PASSED', 'PASSED_WITH_DEVIATION', 'REJECTED'].includes(rec.qcStatus);
+                  const isLocalDone = ['PASSED', 'PASSED_WITH_DEVIATION', 'REJECTED'].includes(liveQcStatus);
+
+                  // Supabase is authoritative for official completed states
+                  if (isRemoteDone) {
+                    resolvedStatus = rec.qcStatus;
+                    // Heal stale local quarantine cache if cloud already has final decision
+                    if (qcRep.status !== rec.qcStatus) {
+                      qcRep.status = rec.qcStatus;
+                      qcStorageNeedsUpdate = true;
+                    }
+                  } else if (liveQcStatus && (isLocalDone || liveQcStatus === 'AWAITING_QM_AUTHORIZATION' || liveQcStatus === 'QUALITY_CONTROL_PROCESS')) {
+                    // Local has actively progressed beyond initial quarantine
                     resolvedStatus = liveQcStatus as any;
                   }
 
@@ -370,6 +385,10 @@ export const warehouseService = {
                     samplingDateTime: rec.samplingDateTime || qcRep.samplingDateTime,
                   };
                 });
+
+                if (qcStorageNeedsUpdate) {
+                  localStorage.setItem('lsm_qc_reports_v2', JSON.stringify(qcReports));
+                }
               }
             }
           } catch (e) {
@@ -405,7 +424,13 @@ export const warehouseService = {
 
             const liveQcStatus = qcRep.status;
             let resolvedStatus = rec.qcStatus;
-            if (liveQcStatus) {
+
+            const isRemoteDone = ['PASSED', 'PASSED_WITH_DEVIATION', 'REJECTED'].includes(rec.qcStatus);
+            const isLocalDone = ['PASSED', 'PASSED_WITH_DEVIATION', 'REJECTED'].includes(liveQcStatus);
+
+            if (isRemoteDone) {
+              resolvedStatus = rec.qcStatus;
+            } else if (liveQcStatus && (isLocalDone || liveQcStatus === 'AWAITING_QM_AUTHORIZATION' || liveQcStatus === 'QUALITY_CONTROL_PROCESS')) {
               resolvedStatus = liveQcStatus as any;
             }
 
@@ -513,11 +538,14 @@ export const warehouseService = {
     let remotePayload: any = null;
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data: remoteRow } = await supabase
+        const isUuid = Boolean(id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
+        const query = supabase
           .from('warehouse_grn')
-          .select('notes, internal_lot_number, qc_status')
-          .eq('id', id)
-          .maybeSingle();
+          .select('notes, internal_lot_number, qc_status');
+        const { data: remoteRow } = isUuid
+          ? await query.eq('id', id).maybeSingle()
+          : await query.eq('grn_number', existing[index].grnNumber).maybeSingle();
+
         if (remoteRow?.notes) {
           const { userNotes, qcPayload } = unpackGrnNotes(remoteRow.notes);
           if (qcPayload && !updatedData.qcPayload) {

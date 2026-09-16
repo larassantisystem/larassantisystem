@@ -245,7 +245,7 @@ export const qualityService = {
           needsUpdate = true;
         }
 
-        // Merge remote QC payload if local report is missing parameters or signatures
+        // Merge remote QC payload if local report is missing parameters, notes, or signatures
         if (grn.qcPayload) {
           if (grn.qcPayload.staffSignature && !existingReport.staffSignature) {
             existingReport.staffSignature = grn.qcPayload.staffSignature;
@@ -261,6 +261,18 @@ export const qualityService = {
           }
           if (grn.qcPayload.staffDecision && !existingReport.staffDecision) {
             existingReport.staffDecision = grn.qcPayload.staffDecision;
+            needsUpdate = true;
+          }
+          if (grn.qcPayload.staffNotes && !existingReport.staffNotes) {
+            existingReport.staffNotes = grn.qcPayload.staffNotes;
+            needsUpdate = true;
+          }
+          if (grn.qcPayload.qmNotes && !existingReport.qmNotes) {
+            existingReport.qmNotes = grn.qcPayload.qmNotes;
+            needsUpdate = true;
+          }
+          if (grn.qcPayload.qmDeviationNumber && !existingReport.qmDeviationNumber) {
+            existingReport.qmDeviationNumber = grn.qcPayload.qmDeviationNumber;
             needsUpdate = true;
           }
           if (grn.qcPayload.parameters && (!existingReport.parameters || existingReport.parameters.every((p) => !p.resultValue))) {
@@ -308,6 +320,11 @@ export const qualityService = {
           if (!existingReport.qmDecision) {
             existingReport.qmDecision = existingReport.status === 'REJECTED' ? 'REJECT' : (existingReport.status === 'PASSED_WITH_DEVIATION' ? 'RELEASE_BY_DEVIATION' : 'RELEASE');
             needsUpdate = true;
+          }
+          if (!grn.qcPayload) {
+            syncQcReportToSupabase(existingReport, grn.notes).catch((e) => {
+              console.warn('[qualityService] Background payload sync to Supabase warning:', e);
+            });
           }
         }
 
