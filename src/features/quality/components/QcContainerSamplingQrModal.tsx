@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { QcInspectionReport } from '../types/qcTypes';
 import { QrCodeBadge } from '../../../components/QrCodeBadge';
+import { getQrTargetUrl } from '../../../core/utils/qrUrlHelper';
 import { qualityService } from '../qualityService';
 import { authService } from '../../../core/auth/authService';
 import { isContainerSampled } from '../utils/samplingUtils';
@@ -92,7 +93,11 @@ export const QcContainerSamplingQrModal: React.FC<QcContainerSamplingQrModalProp
   const currentDrumSampled = getIsSampled(selectedDrumIndex);
 
   const isReportFinal = report.status === 'PASSED' || report.status === 'PASSED_WITH_DEVIATION' || report.status === 'REJECTED';
-  const coaDirectUrl = `${window.location.origin}/?coa=${encodeURIComponent(report.lotInternalNumber || report.grnNumber)}&st=${report.status}&w=${selectedDrumIndex}/${totalContainers}`;
+  const coaDirectUrl = getQrTargetUrl(
+    report.lotInternalNumber || report.grnNumber,
+    report.status,
+    `${selectedDrumIndex}/${totalContainers}`
+  );
 
   // Ultra-compact QR Code Payload Data (Fast, responsive camera detection with direct CoA link)
   const qrCompactValue = coaDirectUrl;

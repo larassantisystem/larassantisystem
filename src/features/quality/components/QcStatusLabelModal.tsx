@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { QcInspectionReport } from '../types/qcTypes';
 import { QrCodeBadge } from '../../../components/QrCodeBadge';
+import { getQrTargetUrl } from '../../../core/utils/qrUrlHelper';
 
 interface QcStatusLabelModalProps {
   isOpen: boolean;
@@ -385,7 +386,11 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
                     title="Pindai Kamera HP atau Klik untuk langsung membuka Dokumen CoA Internal Resmi"
                   >
                     <QrCodeBadge
-                      value={`${window.location.origin}/?coa=${encodeURIComponent(report.lotInternalNumber || report.grnNumber)}&st=${report.status}&w=${containerIndex}/${totalContainers}`}
+                      value={getQrTargetUrl(
+                        report.lotInternalNumber || report.grnNumber,
+                        report.status,
+                        `${containerIndex}/${totalContainers}`
+                      )}
                       size={115}
                       className="rounded-lg group-hover:scale-105 transition-transform"
                     />

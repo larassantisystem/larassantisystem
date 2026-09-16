@@ -214,16 +214,39 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
 
   // Check URL query parameter for direct CoA access from QR scan
   useEffect(() => {
+    if (typeof window === 'undefined') return;
     const urlParams = new URLSearchParams(window.location.search);
-    const coaQuery = urlParams.get('coa') || urlParams.get('coaId') || urlParams.get('reportId');
-    if (coaQuery && reports.length > 0) {
-      const found = reports.find(
-        (r) =>
-          r.id === coaQuery ||
-          r.lotInternalNumber === coaQuery ||
-          r.reportNumber === coaQuery ||
-          r.grnNumber === coaQuery
-      );
+    const rawCoaQuery = urlParams.get('coa') || urlParams.get('coaId') || urlParams.get('reportId') || urlParams.get('lot');
+    
+    if (rawCoaQuery && reports.length > 0) {
+      let targetTerm = rawCoaQuery.trim().toLowerCase();
+      
+      // Handle legacy format LMS|QC|LOT:LBB2609001|...
+      if (targetTerm.includes('lot:')) {
+        const parts = targetTerm.split('|');
+        const lotPart = parts.find((p) => p.startsWith('lot:'));
+        if (lotPart) {
+          targetTerm = lotPart.replace('lot:', '').trim();
+        }
+      }
+
+      const found = reports.find((r) => {
+        const lot = (r.lotInternalNumber || '').toLowerCase();
+        const grn = (r.grnNumber || '').toLowerCase();
+        const repNum = (r.reportNumber || '').toLowerCase();
+        const id = (r.id || '').toLowerCase();
+
+        return (
+          id === targetTerm ||
+          lot === targetTerm ||
+          grn === targetTerm ||
+          repNum === targetTerm ||
+          (lot && targetTerm.includes(lot)) ||
+          (grn && targetTerm.includes(grn)) ||
+          (repNum && targetTerm.includes(repNum))
+        );
+      });
+
       if (found) {
         setPdfReport(found);
       }

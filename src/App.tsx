@@ -38,6 +38,18 @@ const MainAppContent: React.FC = () => {
   const [activeWarehouseSubTab, setActiveWarehouseSubTab] = useState<'inbound' | 'stock-raw' | 'stock-packaging' | 'weighing' | 'finished-goods'>('inbound');
   const [activeQualitySubTab, setActiveQualitySubTab] = useState<'queue' | 'testing' | 'approval' | 'archive'>('queue');
 
+  // Auto-switch to Quality tab if scanned via QR Code with ?coa= param
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const coaQuery = urlParams.get('coa') || urlParams.get('coaId') || urlParams.get('reportId') || urlParams.get('lot');
+      if (coaQuery) {
+        setActiveTab('quality');
+        setActiveQualitySubTab('archive');
+      }
+    }
+  }, [isAuthenticated]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center font-sans">
