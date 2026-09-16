@@ -347,28 +347,37 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
                 </div>
 
                 {/* Footer Signatures & QR Code */}
-                <div className={`mt-4 pt-3 border-t-2 border-dashed ${theme.borderAccent} grid grid-cols-3 gap-3 items-end`}>
-                  <div className="border border-slate-200 rounded-xl p-2 text-center bg-slate-50">
-                    <span className="text-[9px] font-extrabold text-slate-400 uppercase block">Petugas Analis QC</span>
-                    <div className="h-9 flex items-center justify-center font-serif text-slate-700 font-bold italic text-xs">
-                      {report.inspectedBy?.name || 'Staf Analis QC'}
+                {/* Footer Signatures & Large Scannable QR Code */}
+                <div className={`mt-4 pt-3 border-t-2 border-dashed ${theme.borderAccent} flex flex-col sm:flex-row gap-4 items-center justify-between`}>
+                  <div className="flex-1 w-full grid grid-cols-2 gap-3">
+                    <div className="border border-slate-200 rounded-xl p-2.5 text-center bg-slate-50">
+                      <span className="text-[9px] font-extrabold text-slate-400 uppercase block">Petugas Analis QC</span>
+                      <div className="h-10 flex items-center justify-center font-serif text-slate-700 font-bold italic text-xs">
+                        {report.inspectedBy?.name || 'Staf Analis QC'}
+                      </div>
+                      <span className="text-[9px] text-slate-400 block border-t border-slate-200 pt-1">
+                        Paraf & Tanggal Uji
+                      </span>
                     </div>
-                    <span className="text-[9px] text-slate-400 block border-t border-slate-200 pt-0.5">
-                      Paraf & Tanggal Uji
-                    </span>
+
+                    <div className="border border-slate-200 rounded-xl p-2.5 text-center bg-slate-50">
+                      <span className="text-[9px] font-extrabold text-slate-400 uppercase block">Quality Manager (Otorisasi)</span>
+                      <div className="h-10 flex items-center justify-center font-serif text-emerald-800 font-bold italic text-xs">
+                        {report.qmSignature?.signerName || 'Quality Manager'}
+                      </div>
+                      <span className="text-[9px] text-slate-400 block border-t border-slate-200 pt-1">
+                        Tanda Tangan & Cap Sah
+                      </span>
+                    </div>
+
+                    <div className="col-span-2 text-[10px] text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-2 flex items-center gap-2">
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <span>Barcode resmi kelulusan mutu CPKB. Dapat dipindai untuk audit penelusuran digital.</span>
+                    </div>
                   </div>
 
-                  <div className="border border-slate-200 rounded-xl p-2 text-center bg-slate-50">
-                    <span className="text-[9px] font-extrabold text-slate-400 uppercase block">Quality Manager (Otorisasi)</span>
-                    <div className="h-9 flex items-center justify-center font-serif text-emerald-800 font-bold italic text-xs">
-                      {report.qmSignature?.signerName || 'Quality Manager'}
-                    </div>
-                    <span className="text-[9px] text-slate-400 block border-t border-slate-200 pt-0.5">
-                      Tanda Tangan & Cap Sah
-                    </span>
-                  </div>
-
-                  <div className="flex flex-col items-center justify-center">
+                  {/* High-visibility large QR Code for mobile camera scanning */}
+                  <div className="shrink-0 flex flex-col items-center justify-center p-2.5 bg-white border-2 border-slate-300 rounded-2xl shadow-xs">
                     <QrCodeBadge
                       value={`LMS|QC|LOT:${report.lotInternalNumber || report.grnNumber}|W:${containerIndex}/${totalContainers}|S:${
                         (report.sampledContainers || []).includes(containerIndex)
@@ -377,10 +386,14 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
                             : 'YES'
                           : 'NO'
                       }|ST:${report.status}`}
-                      size={62}
+                      size={115}
+                      className="rounded-lg"
                     />
-                    <span className="font-mono text-[9px] text-slate-600 mt-1 font-bold">
+                    <span className="font-mono text-[10px] text-slate-900 mt-1.5 font-black tracking-tight">
                       {report.lotInternalNumber || report.grnNumber}-W{containerIndex}
+                    </span>
+                    <span className="text-[8px] font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded-sm mt-0.5 uppercase tracking-wider">
+                      Wadah #{containerIndex} / {totalContainers}
                     </span>
                   </div>
                 </div>

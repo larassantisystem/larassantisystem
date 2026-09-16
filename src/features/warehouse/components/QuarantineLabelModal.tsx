@@ -261,35 +261,47 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
                   </div>
                 </div>
 
-                {/* Footer Signatures & QR Code */}
-                <div className="mt-4 pt-3 border-t-2 border-dashed border-amber-300 grid grid-cols-3 gap-3 items-end">
-                  <div className="border border-slate-200 rounded-xl p-2 text-center bg-slate-50">
-                    <span className="text-[9px] font-extrabold text-slate-400 uppercase block">Petugas Penerima Gudang</span>
-                    <div className="h-9 flex items-center justify-center font-serif text-slate-700 font-bold italic text-xs">
-                      {record.receivedBy || 'Staf Gudang'}
+                {/* Footer Signatures & Large Scannable QR Code */}
+                <div className="mt-4 pt-3 border-t-2 border-dashed border-amber-300 flex flex-col sm:flex-row gap-4 items-center justify-between">
+                  <div className="flex-1 w-full grid grid-cols-2 gap-3">
+                    <div className="border border-slate-200 rounded-xl p-2.5 text-center bg-slate-50">
+                      <span className="text-[9px] font-extrabold text-slate-400 uppercase block">Petugas Penerima Gudang</span>
+                      <div className="h-10 flex items-center justify-center font-serif text-slate-700 font-bold italic text-xs">
+                        {record.receivedBy || 'Staf Gudang'}
+                      </div>
+                      <span className="text-[9px] text-slate-400 block border-t border-slate-200 pt-1">
+                        Paraf & Tanggal Terima
+                      </span>
                     </div>
-                    <span className="text-[9px] text-slate-400 block border-t border-slate-200 pt-0.5">
-                      Paraf & Tanggal Terima
-                    </span>
+
+                    <div className="border border-slate-200 rounded-xl p-2.5 text-center bg-slate-50">
+                      <span className="text-[9px] font-extrabold text-slate-400 uppercase block">Pengambilan Contoh (QC)</span>
+                      <div className="h-10 flex items-center justify-center font-sans text-amber-700 font-bold text-[10px]">
+                        [ Menunggu Sampling ]
+                      </div>
+                      <span className="text-[9px] text-slate-400 block border-t border-slate-200 pt-1">
+                        Paraf & Tanggal Sampling
+                      </span>
+                    </div>
+
+                    <div className="col-span-2 text-[10px] text-slate-500 bg-amber-50/60 border border-amber-200/80 rounded-lg p-2 flex items-center gap-2">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                      <span>Scan QR Code di samping menggunakan HP/Scanner untuk konfirmasi pengambilan contoh (Sampling CPKB).</span>
+                    </div>
                   </div>
 
-                  <div className="border border-slate-200 rounded-xl p-2 text-center bg-slate-50">
-                    <span className="text-[9px] font-extrabold text-slate-400 uppercase block">Pengambilan Contoh (QC)</span>
-                    <div className="h-9 flex items-center justify-center font-sans text-amber-700 font-bold text-[10px]">
-                      [ Menunggu Sampling ]
-                    </div>
-                    <span className="text-[9px] text-slate-400 block border-t border-slate-200 pt-0.5">
-                      Paraf & Tanggal Sampling
-                    </span>
-                  </div>
-
-                  <div className="flex flex-col items-center justify-center">
+                  {/* High-visibility large QR Code for fast mobile camera scanning */}
+                  <div className="shrink-0 flex flex-col items-center justify-center p-2.5 bg-white border-2 border-amber-400 rounded-2xl shadow-xs">
                     <QrCodeBadge
                       value={`GRN|NO:${record.grnNumber}|W:${containerIndex}/${totalContainers}|CODE:${record.materialCode}|BATCH:${record.batchNumber || '-'}`}
-                      size={54}
+                      size={110}
+                      className="rounded-lg"
                     />
-                    <span className="font-mono text-[9px] text-slate-600 mt-1 font-bold">
+                    <span className="font-mono text-[10px] text-slate-900 mt-1.5 font-black tracking-tight">
                       {record.grnNumber}-W{containerIndex}
+                    </span>
+                    <span className="text-[8px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded-sm mt-0.5 uppercase tracking-wider">
+                      Wadah #{containerIndex} / {totalContainers}
                     </span>
                   </div>
                 </div>

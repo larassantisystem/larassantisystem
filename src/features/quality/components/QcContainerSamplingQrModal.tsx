@@ -15,6 +15,8 @@ import {
   Check,
   RotateCcw,
   Loader2,
+  ZoomIn,
+  Maximize2,
 } from 'lucide-react';
 import { QcInspectionReport } from '../types/qcTypes';
 import { QrCodeBadge } from '../../../components/QrCodeBadge';
@@ -39,6 +41,7 @@ export const QcContainerSamplingQrModal: React.FC<QcContainerSamplingQrModalProp
   const [copied, setCopied] = useState<boolean>(false);
   const [isUpdatingSampling, setIsUpdatingSampling] = useState<boolean>(false);
   const [updateSuccessMsg, setUpdateSuccessMsg] = useState<string | null>(null);
+  const [showFullQrModal, setShowFullQrModal] = useState<boolean>(false);
 
   if (!isOpen || !report) return null;
 
@@ -240,19 +243,40 @@ export const QcContainerSamplingQrModal: React.FC<QcContainerSamplingQrModalProp
 
           {/* Smart Digital Tag Detail View */}
           <div className="bg-gradient-to-br from-slate-900 to-slate-950 text-white rounded-2xl p-5 shadow-xl border border-slate-800 grid grid-cols-1 md:grid-cols-3 gap-5">
-            {/* Left QR Display */}
-            <div className="flex flex-col items-center justify-center p-3 bg-white rounded-xl border border-slate-200 text-slate-900 shrink-0">
-              <QrCodeBadge
-                value={qrCompactValue}
-                size={135}
-                className="w-34 h-34"
-              />
-              <span className="text-[10px] font-mono text-slate-500 font-bold mt-2">
-                SCAN DENGAN HP / SCANNER
-              </span>
-              <span className="text-[9px] text-slate-400 text-center">
-                Wadah #{selectedDrumIndex} / {totalContainers}
-              </span>
+            {/* Left QR Display (Enlarged for seamless scanning) */}
+            <div className="flex flex-col items-center justify-center p-4 bg-white rounded-2xl border-2 border-slate-200 text-slate-900 shrink-0 relative group">
+              <button
+                type="button"
+                onClick={() => setShowFullQrModal(true)}
+                className="relative cursor-pointer transition-transform hover:scale-105 active:scale-95 block"
+                title="Klik untuk memperbesar QR Code ke layar penuh"
+              >
+                <QrCodeBadge
+                  value={qrCompactValue}
+                  size={175}
+                  className="rounded-xl shadow-sm"
+                />
+                <div className="absolute inset-0 bg-teal-900/10 opacity-0 group-hover:opacity-100 rounded-xl flex items-center justify-center transition-opacity">
+                  <span className="bg-slate-900/90 text-white text-[10px] font-bold px-2 py-1 rounded-md flex items-center gap-1 shadow-md">
+                    <ZoomIn className="w-3 h-3" />
+                    Perbesar
+                  </span>
+                </div>
+              </button>
+
+              <div className="mt-2.5 flex flex-col items-center gap-1 w-full">
+                <button
+                  type="button"
+                  onClick={() => setShowFullQrModal(true)}
+                  className="w-full py-1 px-2 text-[10px] font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                >
+                  <Maximize2 className="w-3 h-3" />
+                  <span>Buka Layar Penuh (HD)</span>
+                </button>
+                <span className="text-[9px] text-slate-500 font-bold">
+                  Wadah #{selectedDrumIndex} dari {totalContainers}
+                </span>
+              </div>
             </div>
 
             {/* Right Tag Metadata */}
@@ -390,6 +414,56 @@ export const QcContainerSamplingQrModal: React.FC<QcContainerSamplingQrModalProp
           </button>
         </div>
       </div>
+
+      {/* Full-Screen Ultra-Large QR Modal for Immediate Scanning */}
+      {showFullQrModal && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center flex flex-col items-center shadow-2xl border border-slate-200 relative">
+            <button
+              type="button"
+              onClick={() => setShowFullQrModal(false)}
+              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-full cursor-pointer transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <span className="text-xs font-black uppercase text-teal-700 tracking-wider mb-1">
+              QR Code Mode Layar Penuh
+            </span>
+            <h3 className="text-base font-bold text-slate-900 mb-1">
+              {report.materialName}
+            </h3>
+            <p className="text-xs text-slate-500 mb-4">
+              Wadah #{selectedDrumIndex} dari {totalContainers} ({report.containerType})
+            </p>
+
+            {/* Huge QR Code (300px) */}
+            <div className="p-4 bg-white border-2 border-teal-500 rounded-2xl shadow-lg flex items-center justify-center">
+              <QrCodeBadge
+                value={qrCompactValue}
+                size={280}
+                className="rounded-lg"
+              />
+            </div>
+
+            <div className="mt-4 p-2 bg-slate-100 rounded-xl text-[11px] font-mono font-bold text-slate-800 w-full truncate">
+              {qrCompactValue}
+            </div>
+
+            <p className="text-[11px] text-slate-500 mt-2">
+              Arahkan kamera scanner atau HP ke QR Code di atas. Jarak ideal: 20-50 cm.
+            </p>
+
+            <button
+              type="button"
+              onClick={() => setShowFullQrModal(false)}
+              className="mt-4 w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"
+            >
+              Kembali ke Detail Tag
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

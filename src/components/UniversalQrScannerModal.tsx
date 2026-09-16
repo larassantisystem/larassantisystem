@@ -24,6 +24,7 @@ import {
   RotateCcw,
   Loader2,
   Check,
+  ZoomIn,
 } from 'lucide-react';
 import jsQR from 'jsqr';
 import { qualityService } from '../features/quality/qualityService';
@@ -68,6 +69,7 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const [torchOn, setTorchOn] = useState<boolean>(false);
+  const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [scannedResult, setScannedResult] = useState<ParsedQrData | null>(null);
   const [isScanning, setIsScanning] = useState<boolean>(true);
   const [matchedReport, setMatchedReport] = useState<any | null>(null);
@@ -97,7 +99,7 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
     }
   };
 
-  // Start camera
+  // Start camera with high resolution for sharp QR detection
   const startCamera = async () => {
     stopCamera();
     setCameraError(null);
@@ -110,8 +112,8 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: facingMode,
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
+          width: { ideal: 1920, min: 1280 },
+          height: { ideal: 1080, min: 720 },
         },
       });
 
@@ -136,6 +138,31 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
     }
   };
 
+  // Toggle Camera Zoom (1x -> 1.8x -> 2.5x -> 1x)
+  const handleToggleZoom = async () => {
+    const nextZoom = zoomLevel === 1 ? 1.8 : zoomLevel === 1.8 ? 2.5 : 1;
+    setZoomLevel(nextZoom);
+
+    if (streamRef.current) {
+      const track = streamRef.current.getVideoTracks()[0];
+      if (track && (track.getCapabilities as any)) {
+        try {
+          const caps = (track.getCapabilities as any)();
+          if (caps.zoom) {
+            const minZ = caps.zoom.min || 1;
+            const maxZ = caps.zoom.max || 3;
+            const targetZ = Math.min(Math.max(nextZoom, minZ), maxZ);
+            await (track as any).applyConstraints({
+              advanced: [{ zoom: targetZ }],
+            });
+          }
+        } catch (e) {
+          // Hardware zoom ignored if unsupported
+        }
+      }
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
       setScannedResult(null);
@@ -150,7 +177,7 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
     };
   }, [isOpen, facingMode]);
 
-  // Frame processing loop
+  // Frame processing loop with high-resolution center-crop recognition
   const tick = () => {
     if (!videoRef.current || !canvasRef.current) return;
 
@@ -160,23 +187,44 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
       if (ctx) {
-        // Scale canvas to optimal 480-640px for ultra-fast 60fps jsQR recognition
-        const maxDim = 640;
-        let scanWidth = video.videoWidth;
-        let scanHeight = video.videoHeight;
-        if (scanWidth > maxDim) {
-          scanHeight = Math.round((scanHeight * maxDim) / scanWidth);
-          scanWidth = maxDim;
-        }
+        const vWidth = video.videoWidth;
+        const vHeight = video.videoHeight;
 
-        canvas.width = scanWidth;
-        canvas.height = scanHeight;
-        ctx.drawImage(video, 0, 0, scanWidth, scanHeight);
+        // Pass 1: High-resolution center-crop (matches viewfinder targeting)
+        // By taking 1:1 sensor pixels from the center 70%, even small or high-density
+        // QR codes maintain sharp module edges without blurring.
+        const cropSize = Math.round(Math.min(vWidth, vHeight) * 0.72);
+        const startX = Math.round((vWidth - cropSize) / 2);
+        const startY = Math.round((vHeight - cropSize) / 2);
 
-        const imageData = ctx.getImageData(0, 0, scanWidth, scanHeight);
-        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+        canvas.width = cropSize;
+        canvas.height = cropSize;
+        ctx.drawImage(video, startX, startY, cropSize, cropSize, 0, 0, cropSize, cropSize);
+
+        let imageData = ctx.getImageData(0, 0, cropSize, cropSize);
+        let code = jsQR(imageData.data, imageData.width, imageData.height, {
           inversionAttempts: 'attemptBoth',
         });
+
+        // Pass 2: Fallback to full frame if QR code is off-center
+        if (!code) {
+          const maxDim = 960;
+          let scanWidth = vWidth;
+          let scanHeight = vHeight;
+          if (scanWidth > maxDim) {
+            scanHeight = Math.round((scanHeight * maxDim) / scanWidth);
+            scanWidth = maxDim;
+          }
+
+          canvas.width = scanWidth;
+          canvas.height = scanHeight;
+          ctx.drawImage(video, 0, 0, scanWidth, scanHeight);
+
+          imageData = ctx.getImageData(0, 0, scanWidth, scanHeight);
+          code = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: 'attemptBoth',
+          });
+        }
 
         if (code && code.data) {
           handleSuccessfulScan(code.data);
@@ -524,55 +572,82 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
                   <>
                     <video
                       ref={videoRef}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover transition-transform duration-200 ease-out"
+                      style={{
+                        transform: zoomLevel > 1 ? `scale(${zoomLevel})` : 'none',
+                        transformOrigin: 'center center',
+                      }}
                       muted
                       playsInline
                     />
                     <canvas ref={canvasRef} className="hidden" />
 
                     {/* Viewfinder Overlay Frame */}
-                    <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                      {/* Darkened edges */}
-                      <div className="w-64 h-64 border-2 border-teal-400 rounded-2xl relative shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]">
+                    <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center">
+                      {/* Darkened edges & Enlarged Target Box */}
+                      <div className="w-72 h-72 sm:w-80 sm:h-80 border-2 border-teal-400 rounded-2xl relative shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
                         {/* Corner markers */}
-                        <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-teal-300 rounded-tl-lg" />
-                        <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-teal-300 rounded-tr-lg" />
-                        <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-teal-300 rounded-bl-lg" />
-                        <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-teal-300 rounded-br-lg" />
+                        <div className="absolute -top-1 -left-1 w-7 h-7 border-t-4 border-l-4 border-teal-300 rounded-tl-lg" />
+                        <div className="absolute -top-1 -right-1 w-7 h-7 border-t-4 border-r-4 border-teal-300 rounded-tr-lg" />
+                        <div className="absolute -bottom-1 -left-1 w-7 h-7 border-b-4 border-l-4 border-teal-300 rounded-bl-lg" />
+                        <div className="absolute -bottom-1 -right-1 w-7 h-7 border-b-4 border-r-4 border-teal-300 rounded-br-lg" />
 
                         {/* Animated Laser Scanning Line */}
                         <div className="absolute left-2 right-2 h-0.5 bg-gradient-to-r from-transparent via-teal-300 to-transparent shadow-[0_0_12px_#2dd4bf] animate-[bounce_2s_infinite]" />
+
+                        <div className="absolute -bottom-7 left-0 right-0 text-center">
+                          <span className="text-[10px] font-bold text-teal-200 bg-slate-900/80 px-2 py-0.5 rounded-full border border-teal-500/30">
+                            Arahkan QR Code ke dalam kotak
+                          </span>
+                        </div>
                       </div>
                     </div>
 
                     {/* Camera Control Overlay Buttons */}
                     <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between pointer-events-auto">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5 sm:gap-2">
                         <button
                           type="button"
                           onClick={() => setFacingMode(facingMode === 'environment' ? 'user' : 'environment')}
-                          className="px-3 py-1.5 bg-slate-900/80 hover:bg-slate-900 backdrop-blur-md text-white text-xs font-semibold rounded-xl border border-white/20 flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
+                          className="px-2.5 sm:px-3 py-1.5 bg-slate-900/80 hover:bg-slate-900 backdrop-blur-md text-white text-xs font-semibold rounded-xl border border-white/20 flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
+                          title="Ganti Kamera Depan / Belakang"
                         >
                           <RefreshCw className="w-3.5 h-3.5" />
-                          <span>Ganti Kamera</span>
+                          <span className="hidden sm:inline">Kamera</span>
                         </button>
+
+                        {/* Zoom Level Toggle Button */}
+                        <button
+                          type="button"
+                          onClick={handleToggleZoom}
+                          className={`px-2.5 sm:px-3 py-1.5 backdrop-blur-md text-xs font-semibold rounded-xl border flex items-center gap-1 shadow-md cursor-pointer transition-all ${
+                            zoomLevel > 1
+                              ? 'bg-teal-500 text-slate-950 border-teal-300 font-bold'
+                              : 'bg-slate-900/80 hover:bg-slate-900 text-white border-white/20'
+                          }`}
+                          title="Perbesar Tampilan Kamera untuk QR Kecil / Jauh"
+                        >
+                          <ZoomIn className="w-3.5 h-3.5" />
+                          <span>{zoomLevel}x</span>
+                        </button>
+
                         <button
                           type="button"
                           onClick={handleToggleTorch}
-                          className={`px-3 py-1.5 backdrop-blur-md text-xs font-semibold rounded-xl border flex items-center gap-1.5 shadow-md cursor-pointer transition-all ${
+                          className={`px-2.5 sm:px-3 py-1.5 backdrop-blur-md text-xs font-semibold rounded-xl border flex items-center gap-1.5 shadow-md cursor-pointer transition-all ${
                             torchOn
                               ? 'bg-amber-500 text-slate-950 border-amber-300'
                               : 'bg-slate-900/80 hover:bg-slate-900 text-white border-white/20'
                           }`}
                         >
                           <Flashlight className="w-3.5 h-3.5" />
-                          <span>{torchOn ? 'Flash Hidup' : 'Flash'}</span>
+                          <span className="hidden sm:inline">{torchOn ? 'Flash Hidup' : 'Flash'}</span>
                         </button>
                       </div>
 
                       <label className="px-3 py-1.5 bg-slate-900/80 hover:bg-slate-900 backdrop-blur-md text-white text-xs font-semibold rounded-xl border border-white/20 flex items-center gap-1.5 shadow-md cursor-pointer transition-all">
                         <Upload className="w-3.5 h-3.5" />
-                        <span>Pilih File</span>
+                        <span>Pilih Foto</span>
                         <input
                           type="file"
                           accept="image/*"

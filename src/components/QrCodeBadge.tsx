@@ -19,10 +19,10 @@ export const QrCodeBadge: React.FC<QrCodeBadgeProps> = ({
     if (!value) return;
 
     QRCode.toDataURL(value, {
-      width: Math.max(size * 3, 180), // Ultra-sharp resolution for printing & camera scanning
-      margin: 1,
+      width: Math.max(size * 4, 360), // Ultra-sharp resolution for printing & camera scanning
+      margin: 2, // Standard quiet zone recommended for camera decoders
       color: {
-        dark: '#020617',
+        dark: '#000000',
         light: '#ffffff',
       },
       errorCorrectionLevel: 'M',
