@@ -30,6 +30,8 @@ export const StockOpnameModal: React.FC<StockOpnameModalProps> = ({
   const [selectedLotInternal, setSelectedLotInternal] = useState('');
   const [actualQty, setActualQty] = useState('');
   const [reason, setReason] = useState('');
+  const [isInitialStock, setIsInitialStock] = useState(false);
+  const [initialStockExpiryDate, setInitialStockExpiryDate] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -71,6 +73,10 @@ export const StockOpnameModal: React.FC<StockOpnameModalProps> = ({
       setErrorMsg('Masukkan jumlah fisik aktual yang valid.');
       return;
     }
+    if (isInitialStock && !initialStockExpiryDate) {
+      setErrorMsg('Tanggal Kedaluwarsa (ED) wajib diisi untuk Saldo Awal / Mixed Lot.');
+      return;
+    }
     if (!reason.trim()) {
       setErrorMsg('Tuliskan alasan penyesuaian stok opname.');
       return;
@@ -109,6 +115,8 @@ export const StockOpnameModal: React.FC<StockOpnameModalProps> = ({
           unit: currentMaterial?.unit || 'kg',
           reason,
           auditorName: userName,
+          isInitialStock,
+          initialStockExpiryDate: isInitialStock ? initialStockExpiryDate : undefined,
         });
         setShowPasswordModal(false);
         onSuccess();
@@ -156,6 +164,12 @@ export const StockOpnameModal: React.FC<StockOpnameModalProps> = ({
   const handleSubmitExcel = async () => {
     if (parsedRows.length === 0) {
       setErrorMsg('Silakan unggah file Excel yang memiliki baris data valid.');
+      return;
+    }
+
+    const invalidRow = parsedRows.find(r => r.isInitialStock && !r.initialStockExpiryDate);
+    if (invalidRow) {
+      setErrorMsg(`Bahan ${invalidRow.materialCode} ditandai sebagai Saldo Awal, tetapi Tanggal ED kosong. Harap perbaiki Excel.`);
       return;
     }
 
@@ -329,6 +343,33 @@ export const StockOpnameModal: React.FC<StockOpnameModalProps> = ({
                 onChange={(e) => setActualQty(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 font-bold focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
               />
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={isInitialStock}
+                  onChange={(e) => setIsInitialStock(e.target.checked)}
+                  className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span className="text-xs font-bold text-slate-700">Tandai sebagai Saldo Awal / Lot Gabungan Hilang Identitas (Bypass FIFO)</span>
+              </label>
+              
+              {isInitialStock && (
+                <div className="mt-3">
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Estimasi Tanggal Kedaluwarsa (ED) Terpendek <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={initialStockExpiryDate}
+                    onChange={(e) => setInitialStockExpiryDate(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-800 font-bold focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">Lot ini akan diposisikan pada antrean awal untuk memprioritaskan FEFO/FIFO.</p>
+                </div>
+              )}
             </div>
 
             <div>

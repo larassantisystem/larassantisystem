@@ -3,6 +3,7 @@ import { supabase, isSupabaseConfigured } from '../../core/auth/supabaseClient';
 import { calculateSamplingPlan } from '../quality/utils/milStd105e';
 import { packGrnNotes, unpackGrnNotes } from '../../core/utils/qcStorageSync';
 import { generateLotInternalNumber, normalizeLotNumber, calculateAutoRetestDate } from '../quality/utils/qcNumbering';
+import { formatToIsoDateString } from '../../core/utils/dateUtils';
 
 const WAREHOUSE_GRN_STORAGE_KEY = 'lsm_warehouse_grn_v1';
 
@@ -15,7 +16,8 @@ const knownMissingColumns = new Set<string>();
  * with snake_case column names (supplier_batch_number, purchase_order_number, expiration_date).
  */
 function buildPrimarySupabasePayload(record: GrnRecord): Record<string, any> {
-  const dateParts = (record.receivedDate || new Date().toISOString().slice(0, 10)).split('-');
+  const normalizedReceivedDate = formatToIsoDateString(record.receivedDate);
+  const dateParts = normalizedReceivedDate.split('-');
   const yy = dateParts[0].length === 4 ? dateParts[0].slice(2) : dateParts[0];
   const mm = (dateParts[1] || '01').padStart(2, '0');
   const typeCode = record.materialType === 'raw' ? 'BB' : 'BK';
@@ -24,14 +26,19 @@ function buildPrimarySupabasePayload(record: GrnRecord): Record<string, any> {
   // Default expiration date if not set (packaging or materials with long shelf life)
   let expDate = record.expiryDate;
   if (!expDate) {
-    const rDate = record.receivedDate ? new Date(record.receivedDate) : new Date();
+    const rDate = new Date(normalizedReceivedDate);
     rDate.setFullYear(rDate.getFullYear() + 2);
     expDate = rDate.toISOString().slice(0, 10);
   }
+  const normalizedExpDate = formatToIsoDateString(expDate);
 
   const autoRetestDate = record.materialType === 'raw'
-    ? (record.retestDate || calculateAutoRetestDate('raw', expDate, record.receivedDate))
+    ? (record.retestDate || calculateAutoRetestDate('raw', normalizedExpDate, normalizedReceivedDate))
     : null;
+  const normalizedRetestDate = autoRetestDate ? formatToIsoDateString(autoRetestDate) : null;
+
+  const rawQcStatus = record.qcStatus || 'QUARANTINE';
+  const mappedQcStatus = (rawQcStatus === 'RELEASED' || rawQcStatus === 'RELEASE_DEVIATION') ? 'PASSED' : rawQcStatus;
 
   const payload: Record<string, any> = {
     grn_number: record.grnNumber,
@@ -43,9 +50,9 @@ function buildPrimarySupabasePayload(record: GrnRecord): Record<string, any> {
     purchase_order_number: record.poNumber || (record as any).purchaseOrderNumber || '-',
     supplier_batch_number: record.batchNumber || (record as any).supplierBatchNumber || '-',
     internal_lot_number: record.internalLotNumber || (record as any).internal_lot_number || lotCode,
-    received_date: record.receivedDate || new Date().toISOString().slice(0, 10),
-    expiration_date: expDate,
-    retest_date: autoRetestDate || null,
+    received_date: normalizedReceivedDate,
+    expiration_date: normalizedExpDate,
+    retest_date: normalizedRetestDate,
     quantity_received: Number(record.quantityReceived) || 0,
     unit: record.unit || 'kg',
     container_count: Number(record.containerCount) || 1,
@@ -54,7 +61,7 @@ function buildPrimarySupabasePayload(record: GrnRecord): Record<string, any> {
     manufacturer: record.manufacturer || '-',
     storage_location: record.storageLocation || 'Gudang Karantina',
     storage_conditions: record.storageConditions || null,
-    qc_status: record.qcStatus || 'QUARANTINE',
+    qc_status: mappedQcStatus,
     qc_parameters_count: Number(record.qcParametersCount) || 0,
     seal_condition: ['intact', 'broken', 'tampered'].includes(record.sealCondition as string)
       ? record.sealCondition
@@ -121,6 +128,33 @@ async function executeWithSchemaAdaptiveRetry(
 
     const error = result.error;
     const errMsg = error.message || '';
+
+    // Handle check constraint error (code 23514: e.g. warehouse_grn_qc_status_check)
+    if (
+      error.code === '23514' ||
+      errMsg.toLowerCase().includes('check constraint') ||
+      errMsg.includes('warehouse_grn_qc_status_check')
+    ) {
+      console.warn(
+        `[warehouseService] Check constraint violation on 'qc_status' ('${payload.qc_status}'). Applying adaptive status mapping (Attempt ${attempts})...`
+      );
+      const currentStatus = String(payload.qc_status || '').toUpperCase();
+      if (currentStatus === 'RELEASED' || currentStatus === 'RELEASE_DEVIATION' || currentStatus === 'PASSED_WITH_DEVIATION') {
+        payload.qc_status = 'PASSED';
+      } else if (currentStatus === 'PASSED') {
+        payload.qc_status = 'RELEASED';
+      } else if (
+        currentStatus === 'QUALITY_CONTROL_PROCESS' ||
+        currentStatus === 'AWAITING_QM_AUTHORIZATION' ||
+        currentStatus === 'REVERTED_TO_WAREHOUSE'
+      ) {
+        payload.qc_status = 'QUARANTINE';
+      } else {
+        payload.qc_status = 'QUARANTINE';
+      }
+      continue;
+    }
+
     const isMissingColumn =
       error.code === 'PGRST204' ||
       error.code === '42703' ||
@@ -172,7 +206,7 @@ async function executeWithSchemaAdaptiveRetry(
     received_date: record.receivedDate || new Date().toISOString().slice(0, 10),
     quantity_received: Number(record.quantityReceived) || 0,
     unit: record.unit || 'kg',
-    qc_status: record.qcStatus || 'QUARANTINE',
+    qc_status: (record.qcStatus === 'RELEASED' || record.qcStatus === 'RELEASE_DEVIATION') ? 'PASSED' : (record.qcStatus || 'QUARANTINE'),
     notes: packGrnNotes(record.notes, record.qcPayload) || null,
   };
 
@@ -338,9 +372,26 @@ export const warehouseService = {
                 });
             }
 
-            const resolvedQcStatus = (qcPayload?.status && qcPayload.status !== 'QUARANTINE')
-              ? qcPayload.status
-              : (d.qc_status || d.qcStatus || qcPayload?.status || 'QUARANTINE');
+            const isOpnameGrn =
+              (d.grn_number || '').startsWith('GRN-OPNAME-') ||
+              (d.batch_number || '') === 'STK-OPNAME' ||
+              (d.manufacturer || '') === 'Stock Opname Adjustment';
+
+            const rawDbStatus = String(d.qc_status || d.qcStatus || '').toUpperCase();
+            const payloadStatus = qcPayload?.status ? String(qcPayload.status).toUpperCase() : '';
+
+            let resolvedQcStatus = 'QUARANTINE';
+            if (isOpnameGrn) {
+              resolvedQcStatus = 'RELEASED';
+            } else if (payloadStatus && payloadStatus !== 'QUARANTINE') {
+              resolvedQcStatus = payloadStatus === 'PASSED' ? 'RELEASED' : payloadStatus;
+            } else if (rawDbStatus === 'PASSED' || rawDbStatus === 'RELEASED') {
+              resolvedQcStatus = 'RELEASED';
+            } else if (rawDbStatus === 'REJECTED') {
+              resolvedQcStatus = 'REJECTED';
+            } else {
+              resolvedQcStatus = d.qc_status || d.qcStatus || 'QUARANTINE';
+            }
 
             mapped.push({
               id: d.id,
@@ -407,7 +458,7 @@ export const warehouseService = {
   },
 
   saveGrnRecord: async (
-    record: Omit<GrnRecord, 'id' | 'createdAt' | 'grnNumber'>
+    record: Omit<GrnRecord, 'id' | 'createdAt'> & { grnNumber?: string }
   ): Promise<GrnRecord> => {
     const existing = await warehouseService.getGrnRecords();
 
@@ -433,8 +484,11 @@ export const warehouseService = {
       }
     });
 
-    const nextSeq = String(maxSeq + 1).padStart(2, '0');
-    const grnNumber = `${targetPrefix}${nextSeq}`;
+    let grnNumber = record.grnNumber;
+    if (!grnNumber) {
+      const nextSeq = String(maxSeq + 1).padStart(2, '0');
+      grnNumber = `${targetPrefix}${nextSeq}`;
+    }
 
     const internalLotNumber = normalizeLotNumber(
       record.internalLotNumber?.trim() ||
@@ -451,23 +505,48 @@ export const warehouseService = {
 
     // Save to Supabase if configured with schema adaptive retry
     if (isSupabaseConfigured && supabase) {
-      try {
-        const initialPayload = buildPrimarySupabasePayload(newRecord);
-        const { data, error } = await executeWithSchemaAdaptiveRetry(
-          'warehouse_grn',
-          initialPayload,
-          newRecord,
-          'insert'
-        );
+      let insertAttempts = 0;
+      let currentGrnNumber = grnNumber;
+      let currentMaxSeq = maxSeq;
 
-        if (error) {
-          console.error('[warehouseService] Supabase insert error:', error);
-        } else if (data && data.id) {
-          newRecord.id = data.id;
-          console.log('[warehouseService] Sukses menyimpan GRN ke Supabase ID:', data.id);
+      while (insertAttempts < 5) {
+        insertAttempts++;
+        try {
+          const newRecordWithGrn = { ...newRecord, grnNumber: currentGrnNumber };
+          const initialPayload = buildPrimarySupabasePayload(newRecordWithGrn);
+          const { data, error } = await executeWithSchemaAdaptiveRetry(
+            'warehouse_grn',
+            initialPayload,
+            newRecordWithGrn,
+            'insert'
+          );
+
+          if (error) {
+            if (error.code === '23505' || error.message?.includes('duplicate key value')) {
+              // Duplicate GRN Number, increment seq and retry
+              if (record.grnNumber) {
+                 // If explicitly provided, just append a random string to avoid targetPrefix reset
+                 currentGrnNumber = `${record.grnNumber}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
+              } else {
+                 currentMaxSeq++;
+                 currentGrnNumber = `${targetPrefix}${String(currentMaxSeq + 1).padStart(2, '0')}`;
+              }
+              continue;
+            }
+            console.error('[warehouseService] Supabase insert error:', error);
+            throw new Error(`Gagal menyimpan ke database: ${error.message}`);
+          } else if (data && data.id) {
+            newRecord.id = data.id;
+            newRecord.grnNumber = currentGrnNumber;
+            console.log('[warehouseService] Sukses menyimpan GRN ke Supabase ID:', data.id);
+            break;
+          }
+        } catch (err: any) {
+          console.error('[warehouseService] Supabase GRN insert exception:', err);
+          if (insertAttempts >= 5) {
+            throw err;
+          }
         }
-      } catch (err) {
-        console.error('[warehouseService] Supabase GRN insert exception:', err);
       }
     }
 

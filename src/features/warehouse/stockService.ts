@@ -12,6 +12,7 @@ import { qualityService } from '../quality/qualityService';
 import { materialService } from '../rnd/materials/materialService';
 import { packagingService } from '../rnd/materials/packagingService';
 import { normalizeLotNumber } from '../quality/utils/qcNumbering';
+import { formatToIsoDateString } from '../../core/utils/dateUtils';
 
 export const stockService = {
   /**
@@ -32,7 +33,12 @@ export const stockService = {
       let lotInternal = '';
       let releasedDate: string | undefined;
 
-      if (qcReport) {
+      // Automatically map initial stock records to RELEASED
+      if (grn.grnNumber && grn.grnNumber.startsWith('SA-OPN-')) {
+        currentQcStatus = 'RELEASED';
+        lotInternal = grn.internalLotNumber || grn.qcPayload?.lotInternalNumber || 'STK-AWAL';
+        releasedDate = grn.receivedDate;
+      } else if (qcReport) {
         if (qcReport.status === 'PASSED' || qcReport.status === 'PASSED_WITH_DEVIATION') {
           currentQcStatus = 'RELEASED';
         } else if (qcReport.status === 'REJECTED') {
@@ -49,9 +55,13 @@ export const stockService = {
       }
 
       if (!lotInternal) {
-        const prefix = grn.materialType === 'raw' ? 'LBB' : 'LBK';
-        const numPart = grn.grnNumber.replace(/[^0-9]/g, '').slice(-6) || '260901';
-        lotInternal = normalizeLotNumber(`${prefix}${numPart}`);
+        if (grn.grnNumber && grn.grnNumber.startsWith('GRN-OPNAME-')) {
+            lotInternal = grn.internalLotNumber || grn.qcPayload?.lotInternalNumber || `STK-${grn.grnNumber.slice(-6)}`;
+        } else {
+            const prefix = grn.materialType === 'raw' ? 'LBB' : 'LBK';
+            const numPart = grn.grnNumber.replace(/[^0-9]/g, '').slice(-6) || '260901';
+            lotInternal = normalizeLotNumber(`${prefix}${numPart}`);
+        }
       }
 
       const initialQty = grn.quantityReceived;
@@ -272,127 +282,336 @@ export const stockService = {
   },
 
   /**
+   * Helper to create virtual GRN for new stock opname lot
+   */
+  createVirtualOpnameGrn: async (params: {
+    materialCode: string;
+    materialName: string;
+    materialType: 'raw' | 'packaging';
+    targetLotNumber: string;
+    actualQuantity: number;
+    unit: string;
+    reason: string;
+    auditorName: string;
+    todayStr: string;
+    isInitialStock?: boolean;
+    initialStockExpiryDate?: string;
+  }) => {
+    const {
+      materialCode,
+      materialName,
+      materialType,
+      targetLotNumber,
+      actualQuantity,
+      unit,
+      reason,
+      auditorName,
+      todayStr,
+      isInitialStock,
+      initialStockExpiryDate,
+    } = params;
+
+    const newLog: StockMovementLedger = {
+      id: `led-opn-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      timestamp: new Date().toISOString(),
+      materialCode,
+      materialName,
+      materialType,
+      lotInternalNumber: targetLotNumber,
+      movementType: 'OPNAME_ADJUSTMENT',
+      referenceNumber: `OPNAME-${todayStr}`,
+      qtyBefore: 0,
+      qtyChange: actualQuantity,
+      qtyAfter: actualQuantity,
+      unit: unit || (materialType === 'raw' ? 'kg' : 'pcs'),
+      performer: {
+        name: auditorName || 'Auditor Gudang',
+        role: 'Auditor Stock Opname',
+        department: 'Warehouse / QA',
+      },
+      notes: `Penyesuaian Fisik Opname (Lot Baru): ${reason}`,
+    };
+
+    let expiry = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    if (isInitialStock && initialStockExpiryDate) {
+      expiry = formatToIsoDateString(initialStockExpiryDate, expiry);
+    }
+
+    const virtualGrn = {
+      id: `grn-opname-${Date.now()}`,
+      grnNumber: isInitialStock ? `SA-OPN-${todayStr}-${Math.random().toString(36).substring(2, 6).toUpperCase()}` : `GRN-OPNAME-${todayStr}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
+      receivedDate: new Date().toISOString().slice(0, 10), // Always today to force FIFO priority if it's the first
+      materialCode,
+      materialName,
+      materialType,
+      quantityReceived: actualQuantity,
+      unit: unit || (materialType === 'raw' ? 'kg' : 'pcs'),
+      containerCount: 1,
+      containerType: 'Koli',
+      storageLocation: materialType === 'raw' ? 'Gudang Utama BB (Penyesuaian Opname)' : 'Gudang Utama BK (Penyesuaian Opname)',
+      qcStatus: 'RELEASED',
+      internalLotNumber: targetLotNumber,
+      batchNumber: isInitialStock ? 'STK-AWAL' : 'STK-OPNAME',
+      manufacturer: isInitialStock ? 'Saldo Awal / Mixed Lot' : 'Stock Opname Adjustment',
+      distributor: 'Internal',
+      expiryDate: expiry,
+      qcPayload: {
+        status: 'PASSED',
+        lotInternalNumber: targetLotNumber,
+        currentQuantity: actualQuantity,
+        stockLedger: [newLog],
+      },
+    };
+
+    await warehouseService.saveGrnRecord(virtualGrn as any);
+  },
+
+  /**
    * Adjust stock via Stock Opname
    */
   adjustStockOpname: async (payload: StockOpnamePayload): Promise<boolean> => {
     const grns = await warehouseService.getGrnRecords();
-    const todayStr = new Date().toISOString().slice(2, 10).replace(/-/g, ''); // e.g. 260903
+    const todayStr = new Date().toISOString().slice(2, 10).replace(/-/g, '');
     const defaultStkLotName = `STK-${todayStr}`;
 
+    const cleanCode = payload.materialCode.trim().toUpperCase();
+    const materialType: 'raw' | 'packaging' = cleanCode.startsWith('B') ? 'raw' : 'packaging';
+
+    // Lookup real material name from master list or existing GRNs
+    let materialName = payload.materialCode;
+    try {
+      if (materialType === 'raw') {
+        const rms = await materialService.getMaterials();
+        const found = rms.find((r) => r.code?.trim().toUpperCase() === cleanCode);
+        if (found) materialName = found.name;
+      } else {
+        const pms = await packagingService.getPackagingMaterials();
+        const found = pms.find((p) => p.code?.trim().toUpperCase() === cleanCode);
+        if (found) materialName = found.name;
+      }
+    } catch (e) {
+      // Fallback
+    }
+
     let targetLotNumber = payload.lotInternalNumber?.trim();
+    const isSpecificLot = Boolean(
+      targetLotNumber &&
+      targetLotNumber !== 'AUTO' &&
+      targetLotNumber !== 'STK' &&
+      targetLotNumber !== ''
+    );
+
     if (!targetLotNumber || targetLotNumber === 'AUTO' || targetLotNumber === 'STK') {
       targetLotNumber = defaultStkLotName;
     }
 
     const targetLotNormalized = normalizeLotNumber(targetLotNumber);
-    let targetGrn = grns.find((g) => {
-      const qcReport = g.qcPayload;
-      const lotInternal = qcReport?.lotInternalNumber || g.internalLotNumber;
-      return (
-        g.materialCode === payload.materialCode &&
-        (lotInternal === targetLotNumber ||
-          (lotInternal && normalizeLotNumber(lotInternal) === targetLotNormalized))
-      );
-    });
 
-    let qtyBefore = 0;
-    let materialName = payload.materialCode;
-    let materialType: 'raw' | 'packaging' = payload.materialCode.startsWith('B') ? 'raw' : 'packaging';
+    // Filter all GRNs for this material
+    const materialGrns = grns.filter((g) => g.materialCode?.trim().toUpperCase() === cleanCode);
 
-    if (targetGrn) {
-      qtyBefore = targetGrn.qcPayload?.currentQuantity !== undefined
-        ? targetGrn.qcPayload.currentQuantity
-        : targetGrn.quantityReceived;
-      materialName = targetGrn.materialName;
-      materialType = targetGrn.materialType;
-
-      const qtyAfter = payload.actualQuantity;
-      const qtyChange = qtyAfter - qtyBefore;
-
-      const newLog: StockMovementLedger = {
-        id: `led-opn-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-        timestamp: new Date().toISOString(),
-        materialCode: payload.materialCode,
+    if (payload.isInitialStock) {
+      // Force creation of a new virtual GRN for initial / mixed stock
+      await stockService.createVirtualOpnameGrn({
+        materialCode: cleanCode,
         materialName,
         materialType,
-        lotInternalNumber: targetLotNumber,
-        movementType: 'OPNAME_ADJUSTMENT',
-        referenceNumber: `OPNAME-${todayStr}`,
-        qtyBefore,
-        qtyChange,
-        qtyAfter,
+        targetLotNumber,
+        actualQuantity: payload.actualQuantity,
         unit: payload.unit,
-        performer: {
-          name: payload.auditorName || 'Auditor Gudang',
-          role: 'Auditor Stock Opname',
-          department: 'Warehouse / QA',
-        },
-        notes: `Penyesuaian Fisik Opname: ${payload.reason}`,
-      };
-
-      const existingQcPayload = targetGrn.qcPayload || { status: targetGrn.qcStatus || 'QUARANTINE' };
-      const updatedQcPayload = {
-        ...existingQcPayload,
-        currentQuantity: qtyAfter,
-        stockLedger: [newLog, ...(existingQcPayload.stockLedger || [])],
-      };
-
-      await warehouseService.updateGrnRecord(targetGrn.id, {
-        qcPayload: updatedQcPayload,
+        reason: payload.reason,
+        auditorName: payload.auditorName,
+        todayStr,
+        isInitialStock: true,
+        initialStockExpiryDate: payload.initialStockExpiryDate,
       });
-    } else {
-      // Create new virtual GRN for stock opname
-      const qtyAfter = payload.actualQuantity;
-      const qtyChange = qtyAfter - qtyBefore;
+      return true;
+    }
 
-      const newLog: StockMovementLedger = {
-        id: `led-opn-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-        timestamp: new Date().toISOString(),
-        materialCode: payload.materialCode,
-        materialName,
-        materialType,
-        lotInternalNumber: targetLotNumber,
-        movementType: 'OPNAME_ADJUSTMENT',
-        referenceNumber: `OPNAME-${todayStr}`,
-        qtyBefore,
-        qtyChange,
-        qtyAfter,
-        unit: payload.unit,
-        performer: {
-          name: payload.auditorName || 'Auditor Gudang',
-          role: 'Auditor Stock Opname',
-          department: 'Warehouse / QA',
-        },
-        notes: `Penyesuaian Fisik Opname (Lot Baru): ${payload.reason}`,
-      };
+    if (isSpecificLot) {
+      // Adjust a specific lot
+      const targetGrn = materialGrns.find((g) => {
+        const qcReport = g.qcPayload;
+        const lotInternal = qcReport?.lotInternalNumber || g.internalLotNumber;
+        return (
+          lotInternal === targetLotNumber ||
+          (lotInternal && normalizeLotNumber(lotInternal) === targetLotNormalized)
+        );
+      });
 
-      const virtualGrn = {
-        id: `grn-opname-${Date.now()}`,
-        grnNumber: `GRN-OPNAME-${todayStr}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
-        receivedDate: new Date().toISOString().slice(0, 10),
-        materialCode: payload.materialCode,
-        materialName: payload.materialCode,
-        materialType: materialType,
-        quantityReceived: payload.actualQuantity,
-        unit: payload.unit || 'kg',
-        containerCount: 1,
-        containerType: 'Koli',
-        storageLocation: materialType === 'raw' ? 'Gudang Utama BB (Penyesuaian Opname)' : 'Gudang Utama BK (Penyesuaian Opname)',
-        qcStatus: 'RELEASED',
-        internalLotNumber: targetLotNumber,
-        batchNumber: 'STK-OPNAME',
-        manufacturer: 'Stock Opname Adjustment',
-        distributor: 'Internal',
-        expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
-        qcPayload: {
-          status: 'RELEASED',
+      if (targetGrn) {
+        const qtyBefore = targetGrn.qcPayload?.currentQuantity !== undefined
+          ? targetGrn.qcPayload.currentQuantity
+          : targetGrn.quantityReceived;
+        const qtyAfter = payload.actualQuantity;
+        const qtyChange = qtyAfter - qtyBefore;
+
+        const newLog: StockMovementLedger = {
+          id: `led-opn-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          timestamp: new Date().toISOString(),
+          materialCode: cleanCode,
+          materialName: targetGrn.materialName || materialName,
+          materialType,
           lotInternalNumber: targetLotNumber,
-          currentQuantity: payload.actualQuantity,
-          stockLedger: [newLog],
-        }
-      };
+          movementType: 'OPNAME_ADJUSTMENT',
+          referenceNumber: `OPNAME-${todayStr}`,
+          qtyBefore,
+          qtyChange,
+          qtyAfter,
+          unit: payload.unit || targetGrn.unit || 'kg',
+          performer: {
+            name: payload.auditorName || 'Auditor Gudang',
+            role: 'Auditor Stock Opname',
+            department: 'Warehouse / QA',
+          },
+          notes: `Penyesuaian Fisik Opname (Lot ${targetLotNumber}): ${payload.reason}`,
+        };
 
-      await warehouseService.saveGrnRecord(virtualGrn as any);
+        const existingQcPayload = targetGrn.qcPayload || { status: targetGrn.qcStatus || 'RELEASED' };
+        const updatedQcPayload = {
+          ...existingQcPayload,
+          currentQuantity: qtyAfter,
+          stockLedger: [newLog, ...(existingQcPayload.stockLedger || [])],
+        };
+
+        await warehouseService.updateGrnRecord(targetGrn.id, {
+          qcPayload: updatedQcPayload,
+        });
+      } else {
+        // Create new virtual GRN for specific lot
+        await stockService.createVirtualOpnameGrn({
+          materialCode: cleanCode,
+          materialName,
+          materialType,
+          targetLotNumber,
+          actualQuantity: payload.actualQuantity,
+          unit: payload.unit,
+          reason: payload.reason,
+          auditorName: payload.auditorName,
+          todayStr,
+        });
+      }
+    } else {
+      // General stock opname for material (no specific lot specified)
+      // Find all RELEASED GRNs for this material
+      const releasedGrns = materialGrns.filter((g) => {
+        const status = g.qcPayload?.status || g.qcStatus;
+        return status === 'RELEASED' || status === 'RELEASE_DEVIATION' || status === 'PASSED';
+      });
+
+      if (releasedGrns.length > 0) {
+        // Find existing STK lot or pick the first active RELEASED GRN
+        const targetGrn = releasedGrns.find((g) => {
+          const lot = g.qcPayload?.lotInternalNumber || g.internalLotNumber || '';
+          return lot.startsWith('STK-');
+        }) || releasedGrns[0];
+
+        // Other released GRNs (excluding targetGrn)
+        const otherGrns = releasedGrns.filter((g) => g.id !== targetGrn.id);
+        const otherLotsTotal = otherGrns.reduce((acc, g) => {
+          const q = g.qcPayload?.currentQuantity !== undefined ? g.qcPayload.currentQuantity : g.quantityReceived;
+          return acc + (Number(q) || 0);
+        }, 0);
+
+        const qtyBefore = targetGrn.qcPayload?.currentQuantity !== undefined
+          ? targetGrn.qcPayload.currentQuantity
+          : targetGrn.quantityReceived;
+
+        // Calculate target GRN's new quantity so total stock equals payload.actualQuantity
+        let targetQty = Math.max(0, payload.actualQuantity - otherLotsTotal);
+        let remainingNeededToDeduct = payload.actualQuantity < otherLotsTotal ? (otherLotsTotal - payload.actualQuantity) : 0;
+
+        // If actualQuantity < otherLotsTotal, set target GRN to 0 and deduct from other GRNs if needed
+        if (remainingNeededToDeduct > 0) {
+          targetQty = 0;
+          for (const g of otherGrns) {
+            if (remainingNeededToDeduct <= 0) break;
+            const currentQ = g.qcPayload?.currentQuantity !== undefined ? g.qcPayload.currentQuantity : g.quantityReceived;
+            const deduct = Math.min(currentQ, remainingNeededToDeduct);
+            const newQ = currentQ - deduct;
+            remainingNeededToDeduct -= deduct;
+
+            const existingQc = g.qcPayload || { status: g.qcStatus || 'RELEASED' };
+            const grnLot = existingQc.lotInternalNumber || g.internalLotNumber || defaultStkLotName;
+            const log: StockMovementLedger = {
+              id: `led-opn-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+              timestamp: new Date().toISOString(),
+              materialCode: cleanCode,
+              materialName: g.materialName || materialName,
+              materialType,
+              lotInternalNumber: grnLot,
+              movementType: 'OPNAME_ADJUSTMENT',
+              referenceNumber: `OPNAME-${todayStr}`,
+              qtyBefore: currentQ,
+              qtyChange: -deduct,
+              qtyAfter: newQ,
+              unit: payload.unit || g.unit || 'kg',
+              performer: {
+                name: payload.auditorName || 'Auditor Gudang',
+                role: 'Auditor Stock Opname',
+                department: 'Warehouse / QA',
+              },
+              notes: `Penyesuaian Fisik Opname (Penyesuaian Total Stock): ${payload.reason}`,
+            };
+
+            await warehouseService.updateGrnRecord(g.id, {
+              qcPayload: {
+                ...existingQc,
+                currentQuantity: newQ,
+                stockLedger: [log, ...(existingQc.stockLedger || [])],
+              },
+            });
+          }
+        }
+
+        const qtyChange = targetQty - qtyBefore;
+        const targetLot = targetGrn.qcPayload?.lotInternalNumber || targetGrn.internalLotNumber || defaultStkLotName;
+
+        const newLog: StockMovementLedger = {
+          id: `led-opn-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          timestamp: new Date().toISOString(),
+          materialCode: cleanCode,
+          materialName: targetGrn.materialName || materialName,
+          materialType,
+          lotInternalNumber: targetLot,
+          movementType: 'OPNAME_ADJUSTMENT',
+          referenceNumber: `OPNAME-${todayStr}`,
+          qtyBefore,
+          qtyChange,
+          qtyAfter: targetQty,
+          unit: payload.unit || targetGrn.unit || 'kg',
+          performer: {
+            name: payload.auditorName || 'Auditor Gudang',
+            role: 'Auditor Stock Opname',
+            department: 'Warehouse / QA',
+          },
+          notes: `Penyesuaian Fisik Opname: ${payload.reason}`,
+        };
+
+        const existingQcPayload = targetGrn.qcPayload || { status: targetGrn.qcStatus || 'RELEASED' };
+        const updatedQcPayload = {
+          ...existingQcPayload,
+          currentQuantity: targetQty,
+          stockLedger: [newLog, ...(existingQcPayload.stockLedger || [])],
+        };
+
+        await warehouseService.updateGrnRecord(targetGrn.id, {
+          qcPayload: updatedQcPayload,
+        });
+      } else {
+        // No RELEASED GRNs exist for this material -> create new virtual GRN
+        await stockService.createVirtualOpnameGrn({
+          materialCode: cleanCode,
+          materialName,
+          materialType,
+          targetLotNumber: defaultStkLotName,
+          actualQuantity: payload.actualQuantity,
+          unit: payload.unit,
+          reason: payload.reason,
+          auditorName: payload.auditorName,
+          todayStr,
+        });
+      }
     }
 
     return true;
@@ -407,6 +626,9 @@ export const stockService = {
       actualQuantity: number;
       reason?: string;
       unit?: string;
+      lotInternalNumber?: string;
+      isInitialStock?: boolean;
+      initialStockExpiryDate?: string;
     }>,
     auditorName: string = 'Auditor Excel Opname'
   ): Promise<{ successCount: number; errors: string[] }> => {
@@ -418,10 +640,13 @@ export const stockService = {
         if (!item.materialCode) continue;
         await stockService.adjustStockOpname({
           materialCode: item.materialCode.trim(),
+          lotInternalNumber: item.lotInternalNumber?.trim(),
           actualQuantity: item.actualQuantity,
           reason: item.reason || 'Impor Batch Stock Opname Excel',
           unit: item.unit || 'kg',
           auditorName,
+          isInitialStock: item.isInitialStock,
+          initialStockExpiryDate: item.initialStockExpiryDate,
         });
         successCount++;
       } catch (err: any) {

@@ -158,6 +158,7 @@ ALTER TABLE public.warehouse_grn ALTER COLUMN distributor DROP NOT NULL;
 ALTER TABLE public.warehouse_grn ALTER COLUMN manufacturer DROP NOT NULL;
 ALTER TABLE public.warehouse_grn ALTER COLUMN storage_location DROP NOT NULL;
 ALTER TABLE public.warehouse_grn ALTER COLUMN delivery_note_number DROP NOT NULL;
+ALTER TABLE public.warehouse_grn DROP CONSTRAINT IF EXISTS warehouse_grn_qc_status_check;
 
 -- 5. Tambahkan Index untuk performa query
 CREATE INDEX IF NOT EXISTS idx_warehouse_grn_code ON public.warehouse_grn (material_code);

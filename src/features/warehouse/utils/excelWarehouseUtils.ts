@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import { MaterialStockSummary } from '../types/stockTypes';
+import { formatToIsoDateString } from '../../../core/utils/dateUtils';
 
 /**
 /*******************************************************************************
@@ -16,6 +17,8 @@ export const downloadStockOpnameTemplate = (materials: MaterialStockSummary[] = 
         'Satuan': m.unit,
         'Saldo Fisik (Aktual)': m.stockReleased || 100,
         'Catatan / Alasan Opname': 'Opname Bulanan Routine',
+        'Tandai Saldo Awal / Mixed Lot? (YA/TIDAK)': '',
+        'Estimasi ED (YYYY-MM-DD)': '',
       }))
     : [
         {
@@ -24,13 +27,17 @@ export const downloadStockOpnameTemplate = (materials: MaterialStockSummary[] = 
           'Satuan': 'kg',
           'Saldo Fisik (Aktual)': 500.5,
           'Catatan / Alasan Opname': 'Rekonsiliasi Timbang Akhir Bulan',
+          'Tandai Saldo Awal / Mixed Lot? (YA/TIDAK)': 'TIDAK',
+          'Estimasi ED (YYYY-MM-DD)': '',
         },
         {
           'Kode Material': 'K0001',
           'Nama Material': 'Pot Cream 12.5g Transparan',
           'Satuan': 'pcs',
           'Saldo Fisik (Aktual)': 1200,
-          'Catatan / Alasan Opname': 'Audit Fisik Rak Gudang',
+          'Catatan / Alasan Opname': 'Input Data Awal / Hilang Identitas',
+          'Tandai Saldo Awal / Mixed Lot? (YA/TIDAK)': 'YA',
+          'Estimasi ED (YYYY-MM-DD)': '2026-12-31',
         },
       ];
 
@@ -43,6 +50,8 @@ export const downloadStockOpnameTemplate = (materials: MaterialStockSummary[] = 
     { wch: 10 }, // Satuan
     { wch: 22 }, // Saldo Fisik
     { wch: 35 }, // Catatan
+    { wch: 45 }, // Saldo Awal Indicator
+    { wch: 25 }, // ED
   ];
 
   const workbook = XLSX.utils.book_new();
@@ -51,11 +60,49 @@ export const downloadStockOpnameTemplate = (materials: MaterialStockSummary[] = 
   XLSX.writeFile(workbook, `Template_Stock_Opname_CPKB_${todayYYMMDD}.xlsx`);
 };
 
+const getRowVal = (row: any, ...aliases: string[]): any => {
+  if (!row || typeof row !== 'object') return undefined;
+  const keys = Object.keys(row);
+  for (const alias of aliases) {
+    const matchedKey = keys.find(
+      (k) => k.trim().toLowerCase() === alias.trim().toLowerCase()
+    );
+    if (matchedKey && row[matchedKey] !== undefined && row[matchedKey] !== null) {
+      return row[matchedKey];
+    }
+  }
+  return undefined;
+};
+
+const parseNumVal = (val: any, fallback = 0): number => {
+  if (val === undefined || val === null || val === '') return fallback;
+  if (typeof val === 'number') return isNaN(val) ? fallback : val;
+
+  let str = String(val).trim();
+  if (!str) return fallback;
+
+  if (str.includes(',') && str.includes('.')) {
+    if (str.indexOf('.') < str.indexOf(',')) {
+      str = str.replace(/\./g, '').replace(',', '.');
+    } else {
+      str = str.replace(/,/g, '');
+    }
+  } else if (str.includes(',')) {
+    str = str.replace(',', '.');
+  }
+
+  const num = parseFloat(str);
+  return isNaN(num) ? fallback : num;
+};
+
 export const parseStockOpnameExcel = (file: File): Promise<Array<{
   materialCode: string;
   actualQuantity: number;
   reason?: string;
   unit?: string;
+  lotInternalNumber?: string;
+  isInitialStock?: boolean;
+  initialStockExpiryDate?: string;
 }>> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -69,21 +116,28 @@ export const parseStockOpnameExcel = (file: File): Promise<Array<{
         const rawJson: any[] = XLSX.utils.sheet_to_json(worksheet);
 
         const parsed = rawJson.map((row) => {
-          const materialCode = String(
-            row['Kode Material'] || row['Kode Bahan'] || row['Kode'] || row['materialCode'] || ''
-          ).trim();
+          const rawCode = getRowVal(row, 'Kode Material', 'Kode Bahan', 'Kode', 'materialCode', 'Kode Barang', 'Kode_Material', 'Material Code', 'Kode_Bahan') ?? '';
+          const materialCode = String(rawCode).trim();
 
-          const actualQuantity = Number(
-            row['Saldo Fisik (Aktual)'] || row['Jumlah Fisik'] || row['Saldo Fisik'] || row['actualQuantity'] || row['Qty'] || 0
-          );
+          const rawQty = getRowVal(row, 'Saldo Fisik (Aktual)', 'Saldo Fisik', 'Jumlah Fisik', 'actualQuantity', 'Qty', 'Jumlah', 'Saldo Aktual', 'Stock Fisik', 'Saldo', 'Fisik');
+          const actualQuantity = parseNumVal(rawQty, 0);
 
-          const reason = String(
-            row['Catatan / Alasan Opname'] || row['Alasan Penyesuaian'] || row['Alasan'] || row['reason'] || 'Impor Opname Excel'
-          ).trim();
+          const rawReason = getRowVal(row, 'Catatan / Alasan Opname', 'Alasan Penyesuaian', 'Alasan', 'reason', 'Catatan', 'Keterangan', 'Notes', 'Alasan Opname');
+          const reason = String(rawReason ?? 'Impor Opname Excel').trim();
 
-          const unit = String(row['Satuan'] || row['unit'] || 'kg').trim();
+          const rawUnit = getRowVal(row, 'Satuan', 'unit', 'SATUAN', 'Unit');
+          const unit = String(rawUnit ?? 'kg').trim();
 
-          return { materialCode, actualQuantity, reason, unit };
+          const rawLot = getRowVal(row, 'No Lot Internal', 'No Lot', 'Lot Internal', 'lotInternalNumber', 'Lot', 'No. Lot');
+          const lotInternalNumber = rawLot ? String(rawLot).trim() : undefined;
+
+          const rawIsInitial = getRowVal(row, 'Tandai Saldo Awal / Mixed Lot? (YA/TIDAK)', 'Saldo Awal', 'Mixed Lot', 'isInitialStock');
+          const isInitialStock = rawIsInitial ? String(rawIsInitial).trim().toUpperCase() === 'YA' : false;
+
+          const rawED = getRowVal(row, 'Estimasi ED (YYYY-MM-DD)', 'ED', 'Expired Date', 'Estimasi ED');
+          const initialStockExpiryDate = rawED ? formatToIsoDateString(rawED) : undefined;
+
+          return { materialCode, actualQuantity, reason, unit, lotInternalNumber, isInitialStock, initialStockExpiryDate };
         }).filter((item) => item.materialCode !== '' && !isNaN(item.actualQuantity));
 
         resolve(parsed);
@@ -178,31 +232,26 @@ export const parseStockDeductExcel = (file: File): Promise<Array<{
         const rawJson: any[] = XLSX.utils.sheet_to_json(worksheet);
 
         const parsed = rawJson.map((row) => {
-          const materialCode = String(
-            row['Kode Material'] || row['Kode Bahan'] || row['Kode'] || row['materialCode'] || ''
-          ).trim();
+          const rawCode = getRowVal(row, 'Kode Material', 'Kode Bahan', 'Kode', 'materialCode', 'Kode Barang', 'Kode_Material', 'Material Code', 'Kode_Bahan') ?? '';
+          const materialCode = String(rawCode).trim();
 
-          const lotInternalNumber = String(
-            row['No Lot Internal (Kosongkan utk FEFO)'] || row['No Lot Internal'] || row['No Lot'] || row['lotInternalNumber'] || ''
-          ).trim();
+          const rawLot = getRowVal(row, 'No Lot Internal (Kosongkan utk FEFO)', 'No Lot Internal', 'No Lot', 'lotInternalNumber', 'Lot', 'No. Lot');
+          const lotInternalNumber = rawLot ? String(rawLot).trim() : '';
 
-          const deductQuantity = Number(
-            row['Jumlah Potong'] || row['Jumlah Pemakaian'] || row['Kuantitas'] || row['deductQuantity'] || row['Qty'] || 0
-          );
+          const rawDeduct = getRowVal(row, 'Jumlah Potong', 'Jumlah Pemakaian', 'Kuantitas', 'deductQuantity', 'Qty', 'Jumlah', 'Potong');
+          const deductQuantity = parseNumVal(rawDeduct, 0);
 
-          const spkNumber = String(
-            row['No SPK / Work Order'] || row['No SPK'] || row['SPK'] || row['spkNumber'] || 'SPK-EXCEL'
-          ).trim();
+          const rawSpk = getRowVal(row, 'No SPK / Work Order', 'No SPK', 'SPK', 'spkNumber', 'Work Order');
+          const spkNumber = String(rawSpk ?? 'SPK-EXCEL').trim();
 
-          const batchTarget = String(
-            row['Target Batch Produksi'] || row['Target Batch'] || row['batchTarget'] || 'BATCH-PROD'
-          ).trim();
+          const rawBatch = getRowVal(row, 'Target Batch Produksi', 'Target Batch', 'batchTarget', 'Batch Target', 'Batch');
+          const batchTarget = String(rawBatch ?? 'BATCH-PROD').trim();
 
-          const notes = String(
-            row['Catatan Penimbangan'] || row['Catatan'] || row['notes'] || 'Potong stok batch Excel'
-          ).trim();
+          const rawNotes = getRowVal(row, 'Catatan Penimbangan', 'Catatan', 'notes', 'Keterangan', 'Notes');
+          const notes = String(rawNotes ?? 'Potong stok batch Excel').trim();
 
-          const unit = String(row['Satuan'] || row['unit'] || 'kg').trim();
+          const rawUnit = getRowVal(row, 'Satuan', 'unit', 'SATUAN', 'Unit');
+          const unit = String(rawUnit ?? 'kg').trim();
 
           return {
             materialCode,

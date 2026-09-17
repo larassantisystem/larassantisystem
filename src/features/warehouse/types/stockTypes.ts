@@ -94,4 +94,6 @@ export interface StockOpnamePayload {
   unit: string;
   reason: string;
   auditorName: string;
+  isInitialStock?: boolean;
+  initialStockExpiryDate?: string;
 }
