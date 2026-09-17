@@ -181,34 +181,7 @@ export const productService = {
 
         const { data, error } = await supabase
           .from('products')
-          .select(`
-            id,
-            product_code,
-            name,
-            brand,
-            exp_notification_date,
-            created_at,
-            category,
-            description,
-            unit,
-            storage_conditions,
-            bpom_notification_number,
-            qc_parameters,
-            variants:product_variants (
-              id,
-              product_id,
-              variant_name,
-              sku,
-              status,
-              net_volume_grams,
-              bulk_formula_code,
-              packaging_bom,
-              bpom_number,
-              barcode,
-              description,
-              created_at
-            )
-          `)
+          .select('*')
           .order('product_code', { ascending: true })
           .range(from, to);
 
@@ -240,37 +213,61 @@ export const productService = {
         return [];
       }
 
-      const mapped = allRows.map((p: any) => ({
-        id: p.id,
-        code: p.product_code || p.code || '',
-        productCode: p.product_code || p.code || '',
-        name: p.name || '',
-        brand: p.brand || '',
-        category: p.category || '',
-        description: p.description || '',
-        unit: p.unit || 'pcs (Pieces)',
-        storageConditions: p.storage_conditions || '',
-        bpomNotificationNumber: p.bpom_notification_number || '',
-        bpomNotificationExt: p.exp_notification_date || '',
-        expNotificationDate: p.exp_notification_date || '',
-        qcParameters: p.qc_parameters || [],
-        createdAt: p.created_at,
-        variants: (p.variants || []).map((v: any) => ({
-          id: v.id,
-          productId: v.product_id || p.id,
-          variantCode: v.sku || v.variant_code || '',
-          sku: v.sku || v.variant_code || '',
-          variantName: v.variant_name || '',
-          status: v.status || 'active',
-          netVolumeGrams: Number(v.net_volume_grams) || 0,
-          bulkFormulaCode: v.bulk_formula_code || '',
-          packagingBom: v.packaging_bom || [],
-          bpomNumber: v.bpom_number || '',
-          barcode: v.barcode || '',
-          description: v.description || '',
-          createdAt: v.created_at,
-        })),
-      }));
+      // Ambil seluruh varian dari tabel product_variants secara langsung
+      let allVariants: any[] = [];
+      try {
+        const { data: variantsData, error: varErr } = await supabase
+          .from('product_variants')
+          .select('*');
+        if (!varErr && variantsData) {
+          allVariants = variantsData;
+        }
+      } catch (e) {
+        console.warn('[productService] Gagal memuat product_variants:', e);
+      }
+
+      // Kelompokkan varian berdasarkan product_id
+      const variantsByProductId: Record<string, any[]> = {};
+      for (const v of allVariants) {
+        const pid = v.product_id;
+        if (!variantsByProductId[pid]) variantsByProductId[pid] = [];
+        variantsByProductId[pid].push(v);
+      }
+
+      const mapped = allRows.map((p: any) => {
+        const pVariants = variantsByProductId[p.id] || [];
+        return {
+          id: p.id,
+          code: p.product_code || p.code || '',
+          productCode: p.product_code || p.code || '',
+          name: p.name || '',
+          brand: p.brand || '',
+          category: p.category || '',
+          description: p.description || '',
+          unit: p.unit || 'pcs (Pieces)',
+          storageConditions: p.storage_conditions || '',
+          bpomNotificationNumber: p.bpom_notification_number || '',
+          bpomNotificationExt: p.exp_notification_date || '',
+          expNotificationDate: p.exp_notification_date || '',
+          qcParameters: p.qc_parameters || [],
+          createdAt: p.created_at,
+          variants: pVariants.map((v: any) => ({
+            id: v.id,
+            productId: v.product_id || p.id,
+            variantCode: v.sku || v.variant_code || '',
+            sku: v.sku || v.variant_code || '',
+            variantName: v.variant_name || '',
+            status: v.status || 'active',
+            netVolumeGrams: Number(v.net_volume_grams) || 0,
+            bulkFormulaCode: v.bulk_formula_code || '',
+            packagingBom: v.packaging_bom || [],
+            bpomNumber: v.bpom_number || '',
+            barcode: v.barcode || '',
+            description: v.description || '',
+            createdAt: v.created_at,
+          })),
+        };
+      });
 
       inMemoryProducts = mapped;
       return mapped;
