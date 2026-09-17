@@ -121,10 +121,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
   // Track which layer-1 sub-groups are expanded
   const [expandedSubItems, setExpandedSubItems] = useState<Record<string, boolean>>({
-    'quality-incoming': false,
-    'quality-ipc': false,
-    'quality-retained-stability': false,
-    'quality-doc-control': false,
+    'quality-incoming': true,
+    'quality-ipc': true,
+    'quality-retained-stability': true,
+    'quality-doc-control': true,
   });
 
   const toggleAccordion = (deptId: string, e: React.MouseEvent) => {

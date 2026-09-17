@@ -4,7 +4,7 @@ import { Product, ProductVariant, BulkFormulation, PackagingMaterial, QCParamete
 import { useAuth } from '../../core/auth/AuthContext';
 import { canWriteModule } from '../../core/auth/permissionGuard';
 import { authService } from '../../core/auth/authService';
-import { productService } from '../../features/rnd/products/productService';
+import { productService, formatToISODate } from '../../features/rnd/products/productService';
 import {
   PackageCheck,
   Search,
@@ -48,6 +48,7 @@ interface RndProductsTabProps {
   onDeleteProduct: (productId: string) => void;
   onSaveVariant: (productId: string, variant: ProductVariant) => void;
   onDeleteVariant: (productId: string, variantId: string) => void;
+  onClearAllProducts?: () => void;
 }
 
 export const RndProductsTab: React.FC<RndProductsTabProps> = ({
@@ -58,6 +59,7 @@ export const RndProductsTab: React.FC<RndProductsTabProps> = ({
   onDeleteProduct,
   onSaveVariant,
   onDeleteVariant,
+  onClearAllProducts,
 }) => {
   const { user } = useAuth();
   const canWrite = canWriteModule(user, 'rnd');
@@ -135,6 +137,15 @@ export const RndProductsTab: React.FC<RndProductsTabProps> = ({
 
   // Tab Filter EXP NA < 6 Bulan
   const [activeExpFilterTab, setActiveExpFilterTab] = useState<'all' | 'expiring_soon'>('all');
+
+  // Pagination State for Master Produk Jadi (Default 50 per page)
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [itemsPerPage, setItemsPerPage] = useState<number>(50);
+
+  // Auto reset page to 1 when filters or page size change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, activeExpFilterTab, itemsPerPage]);
 
   // Packaging BOM Builder State for Variant Modal
   const [varPackagingBom, setVarPackagingBom] = useState<Array<{
@@ -391,7 +402,16 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
         'Satuan 1',
         'Parameter Uji 2',
         'Syarat 2',
-        'Satuan 2'
+        'Satuan 2',
+        'Parameter Uji 3',
+        'Syarat 3',
+        'Satuan 3',
+        'Parameter Uji 4',
+        'Syarat 4',
+        'Satuan 4',
+        'Parameter Uji 5',
+        'Syarat 5',
+        'Satuan 5'
       ],
       [
         'PJ0001',
@@ -404,11 +424,20 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
         '2028-12-31',
         'Serum pencerah wajah premium dengan Niacinamide.',
         'Pemerian / Organoleptis',
-        'Jernih, cair',
+        'Cairan kental jernih kekuningan, aroma khas floral',
         '',
         'pH',
-        '5.5 - 6.5',
-        ''
+        '5.50 - 6.50',
+        'pH unit',
+        'Viskositas',
+        '1200 - 2500',
+        'cPs',
+        'Bobot Jenis',
+        '1.010 - 1.035',
+        'g/mL',
+        'Cemaran Mikroba (ALT)',
+        '< 100',
+        'CFU/g'
       ]
     ];
     const ws = XLSX.utils.aoa_to_sheet(templateData);
@@ -432,6 +461,64 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
       }
 
       let importedCount = 0;
+      const headerRow: any[] = rows[0] || [];
+
+      // Deteksi dinamis pemetaan kolom parameter QC dari baris header (index >= 9)
+      interface QCColumnMap {
+        nameIdx: number;
+        specIdx: number;
+        unitIdx?: number;
+      }
+      const detectedQcMaps: QCColumnMap[] = [];
+
+      // Cek apakah header memiliki kata kunci penanda parameter
+      let hasParamKeywordsInHeader = false;
+      for (let c = 9; c < headerRow.length; c++) {
+        const hText = String(headerRow[c] || '').toLowerCase();
+        if (hText.includes('parameter') || hText.includes('uji')) {
+          hasParamKeywordsInHeader = true;
+          break;
+        }
+      }
+
+      if (hasParamKeywordsInHeader) {
+        let c = 9;
+        while (c < headerRow.length) {
+          const hName = String(headerRow[c] || '').toLowerCase();
+          if (hName.includes('parameter') || hName.includes('uji') || hName.includes('nama param')) {
+            const nameIdx = c;
+            let specIdx = c + 1;
+            let unitIdx: number | undefined = undefined;
+
+            const nextH = String(headerRow[c + 1] || '').toLowerCase();
+            if (nextH.includes('syarat') || nextH.includes('spek') || nextH.includes('spesifikasi') || nextH.includes('standar')) {
+              specIdx = c + 1;
+              const thirdH = String(headerRow[c + 2] || '').toLowerCase();
+              if (thirdH.includes('satuan') || thirdH.includes('unit')) {
+                unitIdx = c + 2;
+                c += 3;
+              } else {
+                c += 2;
+              }
+            } else {
+              c += 1;
+            }
+            detectedQcMaps.push({ nameIdx, specIdx, unitIdx });
+          } else {
+            c++;
+          }
+        }
+      }
+
+      // Fallback step: periksa apakah kolom 11 berupa satuan atau nama parameter berikutnya
+      let fallbackStep = 3;
+      if (headerRow.length > 11) {
+        const h11 = String(headerRow[11] || '').toLowerCase();
+        if (h11.includes('param') || h11.includes('uji')) {
+          fallbackStep = 2;
+        }
+      }
+
       for (let i = 1; i < rows.length; i++) {
         const row = rows[i];
         if (!row || row.length === 0 || !row[0]) continue;
@@ -443,14 +530,61 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
         const unit = String(row[4] || 'pcs (Pieces)').trim();
         const storageConditions = String(row[5] || 'Suhu Ruang (15-25°C)').trim();
         const bpomNotificationNumber = String(row[6] || '').trim();
-        const bpomNotificationExt = String(row[7] || '').trim();
+        const rawDate = row[7] !== undefined && row[7] !== null ? row[7] : '';
+        const bpomNotificationExt = formatToISODate(rawDate) || '';
         const description = String(row[8] || '').trim();
 
-        const qcParameters: QCParameter[] = [
-          { name: String(row[9] || 'Pemerian / Organoleptis'), specification: String(row[10] || 'Sesuai spesifikasi') },
-        ];
-        if (row[11]) {
-          qcParameters.push({ name: String(row[11]), specification: String(row[12] || '') });
+        // Parsing dinamis seluruh parameter QC (Parameter 1, 2, 3, 4, 5, dst)
+        const qcParameters: QCParameter[] = [];
+
+        if (detectedQcMaps.length > 0) {
+          for (let m = 0; m < detectedQcMaps.length; m++) {
+            const map = detectedQcMaps[m];
+            const pName = row[map.nameIdx] !== undefined && row[map.nameIdx] !== null ? String(row[map.nameIdx]).trim() : '';
+            if (!pName) continue;
+            const pSpec = map.specIdx !== undefined && row[map.specIdx] !== undefined && row[map.specIdx] !== null ? String(row[map.specIdx]).trim() : '';
+            const pUnit = map.unitIdx !== undefined && row[map.unitIdx] !== undefined && row[map.unitIdx] !== null ? String(row[map.unitIdx]).trim() : '';
+
+            qcParameters.push({
+              id: `qc-${Date.now()}-${i}-${m + 1}`,
+              name: pName,
+              parameterName: pName,
+              specification: pSpec,
+              acceptanceCondition: pSpec,
+              unit: pUnit,
+            });
+          }
+        } else {
+          // Loop kolom dinamis kelipatan step (default 3: Nama, Syarat, Satuan)
+          let paramIdx = 0;
+          for (let c = 9; c < row.length; c += fallbackStep) {
+            const pName = row[c] !== undefined && row[c] !== null ? String(row[c]).trim() : '';
+            if (!pName) continue;
+            const pSpec = row[c + 1] !== undefined && row[c + 1] !== null ? String(row[c + 1]).trim() : '';
+            const pUnit = fallbackStep === 3 && row[c + 2] !== undefined && row[c + 2] !== null ? String(row[c + 2]).trim() : '';
+
+            paramIdx++;
+            qcParameters.push({
+              id: `qc-${Date.now()}-${i}-${paramIdx}`,
+              name: pName,
+              parameterName: pName,
+              specification: pSpec,
+              acceptanceCondition: pSpec,
+              unit: pUnit,
+            });
+          }
+        }
+
+        // Jika tidak ada sama sekali parameter yang diisi pada baris tersebut, berikan 1 standar default
+        if (qcParameters.length === 0) {
+          qcParameters.push({
+            id: `qc-${Date.now()}-${i}-1`,
+            name: 'Pemerian / Organoleptis',
+            parameterName: 'Pemerian / Organoleptis',
+            specification: 'Sesuai spesifikasi',
+            acceptanceCondition: 'Sesuai spesifikasi',
+            unit: '',
+          });
         }
 
         const newProd: Product = {
@@ -469,7 +603,7 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
           createdAt: new Date().toISOString(),
         };
 
-        onSaveProduct(newProd);
+        await onSaveProduct(newProd);
         importedCount++;
       }
 
@@ -573,7 +707,7 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
           createdAt: new Date().toISOString(),
         };
 
-        onSaveVariant(parentProd.id, variantData);
+        await onSaveVariant(parentProd.id, variantData);
         importedCount++;
       }
 
@@ -592,7 +726,7 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
     }
   };
 
-  const handleProcessPastedVariants = () => {
+  const handleProcessPastedVariants = async () => {
     if (!pasteText.trim()) {
       alert('Silakan tempel (paste) data teks varian dari spreadsheet terlebih dahulu.');
       return;
@@ -603,13 +737,14 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
     let errorCount = 0;
     const errorDetails: string[] = [];
 
-    lines.forEach((line, idx) => {
+    for (let idx = 0; idx < lines.length; idx++) {
+      const line = lines[idx];
       const parts = line.split('\t').map((p) => p.trim());
-      if (parts.length < 2 || !parts[0]) return;
+      if (parts.length < 2 || !parts[0]) continue;
 
       // Skip header jika ter-copy
       if (idx === 0 && (parts[0].toLowerCase().includes('kode') || parts[0].toLowerCase().includes('parent') || parts[0].toLowerCase().includes('induk'))) {
-        return;
+        continue;
       }
 
       const parentCode = parts[0];
@@ -620,7 +755,7 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
       if (!parentProd) {
         errorCount++;
         errorDetails.push(`Baris ${idx + 1}: Master Produk "${parentCode}" tidak ditemukan.`);
-        return;
+        continue;
       }
 
       const sku = (parts[1] || `${parentProd.code}-V${parentProd.variants.length + 1}`).toUpperCase();
@@ -645,9 +780,9 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
         createdAt: new Date().toISOString(),
       };
 
-      onSaveVariant(parentProd.id, variantData);
+      await onSaveVariant(parentProd.id, variantData);
       importedCount++;
-    });
+    }
 
     if (errorCount > 0) {
       alert(`Hasil Impor Paste:\n• Berhasil: ${importedCount} varian\n• Gagal: ${errorCount} varian\n\n${errorDetails.slice(0, 5).join('\n')}`);
@@ -673,8 +808,8 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
     setProdBpomNo('');
     setProdBpomExt('');
     setProdQcParams([
-      { id: '1', parameterName: 'Pemerian / Organoleptis', acceptanceCondition: 'Sesuai standar spesifikasi pabrikan', unit: '' },
-      { id: '2', parameterName: 'Dimensi & Ukuran Standar', acceptanceCondition: 'Sesuai Technical Drawing', unit: 'mm' }
+      { id: '1', name: 'Pemerian / Organoleptis', parameterName: 'Pemerian / Organoleptis', specification: 'Sesuai standar spesifikasi pabrikan', acceptanceCondition: 'Sesuai standar spesifikasi pabrikan', unit: '' },
+      { id: '2', name: 'Dimensi & Ukuran Standar', parameterName: 'Dimensi & Ukuran Standar', specification: 'Sesuai Technical Drawing', acceptanceCondition: 'Sesuai Technical Drawing', unit: 'mm' }
     ]);
     setShowProductModal(true);
   };
@@ -690,12 +825,30 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
     setProdStorage(prod.storageConditions || 'Suhu Ruang (15-25°C), Kering, Bebas Cahaya Langsung');
     setProdBpomNo(prod.bpomNotificationNumber || '');
     setProdBpomExt(prod.bpomNotificationExt || '');
-    setProdQcParams(prod.qcParameters || []);
+    setProdQcParams(
+      (prod.qcParameters || []).map((p, idx) => ({
+        id: p.id || `qc-${idx}`,
+        name: p.name || p.parameterName || '',
+        parameterName: p.parameterName || p.name || '',
+        specification: p.specification || p.acceptanceCondition || '',
+        acceptanceCondition: p.acceptanceCondition || p.specification || '',
+        unit: p.unit || ''
+      }))
+    );
     setShowProductModal(true);
   };
 
   const handleSaveProductForm = (e: React.FormEvent) => {
     e.preventDefault();
+    const normalizedQcParams = prodQcParams.map((p, idx) => ({
+      id: p.id || `qc-${Date.now()}-${idx}`,
+      name: (p.parameterName || p.name || '').trim(),
+      parameterName: (p.parameterName || p.name || '').trim(),
+      specification: (p.acceptanceCondition || p.specification || '').trim(),
+      acceptanceCondition: (p.acceptanceCondition || p.specification || '').trim(),
+      unit: (p.unit || '').trim()
+    }));
+
     const newOrUpdated: Product = {
       id: editingProduct ? editingProduct.id : `prod-${Date.now()}`,
       code: prodCode.trim().toUpperCase(),
@@ -709,7 +862,7 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
       bpomNotificationNumber: prodBpomNo.trim(),
       bpomNotificationExt: prodBpomExt.trim(),
       expNotificationDate: prodBpomExt.trim(),
-      qcParameters: prodQcParams,
+      qcParameters: normalizedQcParams,
       variants: editingProduct ? editingProduct.variants : [],
       createdAt: editingProduct?.createdAt || new Date().toISOString(),
     };
@@ -817,6 +970,12 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
   });
 
   const totalVariantsCount = products.reduce((sum, p) => sum + p.variants.length, 0);
+
+  // Pagination Calculations (Default 50 per page)
+  const totalPages = Math.ceil(filteredProducts.length / itemsPerPage) || 1;
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage, filteredProducts.length);
+  const paginatedProducts = filteredProducts.slice(startIndex, endIndex);
 
   return (
     <div className="space-y-6 font-sans">
@@ -992,6 +1151,22 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
             >
               <ShieldCheck className="w-3.5 h-3.5" />
             </button>
+
+            {products.length > 0 && onClearAllProducts && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm('PERINGATAN: Apakah Anda yakin ingin MENGOSONGKAN SELURUH DATA PRODUK JADI dan varian di database Supabase? Tindakan ini akan menghapus semua data produk secara permanen.')) {
+                    onClearAllProducts();
+                  }
+                }}
+                className="px-2.5 py-1.5 rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 text-xs font-bold text-red-600 flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs"
+                title="Hapus seluruh data produk jadi dari database Supabase"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Kosongkan Database</span>
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -1033,12 +1208,13 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
-                {filteredProducts.map((prod, pIdx) => {
+                {paginatedProducts.map((prod, relativeIdx) => {
+                  const absoluteNumber = startIndex + relativeIdx + 1;
                   const expInfo = getBpomExpInfo(prod);
                   return (
                     <tr key={prod.id} className="hover:bg-purple-50/20 transition-colors">
                       <td className="py-1.5 px-2.5 text-center font-mono font-bold text-slate-400 text-[11px]">
-                        {pIdx + 1}
+                        {absoluteNumber}
                       </td>
                       <td className="py-1.5 px-3">
                         <button
@@ -1169,6 +1345,80 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
                 })}
               </tbody>
             </table>
+
+            {/* BAR PAGINASI MASTER PRODUK JADI */}
+            <div className="px-4 py-3 border-t border-slate-200 bg-slate-50/70 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">
+              {/* Ukuran Halaman & Counter Data */}
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] font-medium text-slate-500">Tampilkan:</span>
+                  <select
+                    value={itemsPerPage}
+                    onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                    className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 focus:outline-none focus:border-purple-600 cursor-pointer shadow-2xs"
+                  >
+                    <option value={10}>10 per halaman</option>
+                    <option value={25}>25 per halaman</option>
+                    <option value={50}>50 per halaman (Default)</option>
+                    <option value={100}>100 per halaman</option>
+                    <option value={200}>200 per halaman</option>
+                    <option value={500}>500 per halaman</option>
+                  </select>
+                </div>
+                <span className="text-slate-300 font-mono hidden sm:inline">|</span>
+                <span className="text-[11px] font-semibold text-slate-700">
+                  Menampilkan <span className="font-bold text-purple-700">{filteredProducts.length === 0 ? 0 : startIndex + 1}</span> - <span className="font-bold text-purple-700">{endIndex}</span> dari <span className="font-bold text-slate-900">{filteredProducts.length}</span> Master Produk Jadi
+                </span>
+              </div>
+
+              {/* Tombol Kontrol Navigasi Halaman */}
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage(1)}
+                  className="px-2 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold text-slate-700 transition-colors cursor-pointer"
+                  title="Halaman Pertama"
+                >
+                  &laquo;
+                </button>
+
+                <button
+                  type="button"
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                  className="px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold text-slate-700 transition-colors cursor-pointer"
+                  title="Halaman Sebelumnya"
+                >
+                  &lsaquo; Sblm
+                </button>
+
+                {/* Badge Indikator Halaman */}
+                <span className="px-3 py-1 bg-purple-50 border border-purple-200 text-purple-800 rounded-lg text-xs font-bold font-mono">
+                  {currentPage} / {totalPages}
+                </span>
+
+                <button
+                  type="button"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                  className="px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold text-slate-700 transition-colors cursor-pointer"
+                  title="Halaman Berikutnya"
+                >
+                  Slanj &rsaquo;
+                </button>
+
+                <button
+                  type="button"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setCurrentPage(totalPages)}
+                  className="px-2 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold text-slate-700 transition-colors cursor-pointer"
+                  title="Halaman Terakhir"
+                >
+                  &raquo;
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -1338,8 +1588,8 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
                       <div className="flex items-start gap-3">
                         <span className="text-xs font-bold text-slate-400 w-5">{index + 1}.</span>
                         <div>
-                          <div className="text-xs font-bold text-slate-800">{param.parameterName}</div>
-                          <div className="text-[10px] text-teal-700 font-medium">Syarat: {param.acceptanceCondition} {param.unit}</div>
+                          <div className="text-xs font-bold text-slate-800">{param.parameterName || param.name}</div>
+                          <div className="text-[10px] text-teal-700 font-medium">Syarat: {param.acceptanceCondition || param.specification} {param.unit}</div>
                         </div>
                       </div>
                       <button

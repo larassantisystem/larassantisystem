@@ -24,116 +24,10 @@ const purgeLegacyLocalStorageProducts = () => {
 // Jalankan pembersihan saat inisialisasi module
 purgeLegacyLocalStorageProducts();
 
-// Penyimpanan sesi in-memory (BUKAN local storage) jika tabel di Supabase belum diinisialisasi
-const defaultSeedProducts: Product[] = [
-  {
-    id: 'prod-pj0001',
-    code: 'PJ0001',
-    productCode: 'PJ0001',
-    name: 'Larassanti Brightening Glow Serum',
-    category: 'Skincare - Facial Treatment',
-    brand: 'PT. LARASSANTI MAKMUR SEJAHTERA',
-    description: 'Serum pencerah wajah dengan Niacinamide 5% dan Alpha Arbutin.',
-    unit: 'pcs (Pieces)',
-    storageConditions: 'Suhu Ruang (15-25°C), Kering, Bebas Cahaya Langsung',
-    bpomNotificationNumber: 'NA18241900123',
-    bpomNotificationExt: '2028-10-15',
-    expNotificationDate: '2028-10-15',
-    qcParameters: [
-      { id: '1', parameterName: 'Pemerian / Organoleptis', acceptanceCondition: 'Cairan kental agak opalesen, wangi floral' },
-      { id: '2', parameterName: 'pH Sediaan (25°C)', acceptanceCondition: '5.5 - 6.2', unit: 'pH' }
-    ],
-    variants: [
-      {
-        id: 'var-pj0001-20g',
-        productId: 'prod-pj0001',
-        variantCode: 'PJ0001-20G',
-        sku: 'PJ0001-20G',
-        variantName: '20 g',
-        netVolumeGrams: 20,
-        bulkFormulaCode: 'FORM-001',
-        packagingBom: [
-          { packagingCode: 'K0001', quantityPerUnit: 1, type: 'primary' },
-          { packagingCode: 'K0002', quantityPerUnit: 1, type: 'primary' },
-          { packagingCode: 'K0003', quantityPerUnit: 1, type: 'secondary' },
-        ],
-        barcode: '8991234567890',
-        description: 'Kemasan dropper bottle 20g dengan outer folding box.'
-      }
-    ]
-  },
-  {
-    id: 'prod-pj0002',
-    code: 'PJ0002',
-    productCode: 'PJ0002',
-    name: 'Hydrating Daily Barrier Sunscreen SPF 50',
-    category: 'Sun Care - Lotion',
-    brand: 'PT. LARASSANTI MAKMUR SEJAHTERA',
-    description: 'Tabir surya bertekstur ringan dengan Ceramide & Hyaluronic Acid.',
-    unit: 'pcs (Pieces)',
-    storageConditions: 'Suhu Ruang (15-25°C), Kering, Terlindung Cahaya',
-    bpomNotificationNumber: 'NA18231700456',
-    bpomNotificationExt: '2026-11-20', // Kurang dari 6 bulan (jatuh tempo 20 Nov 2026)
-    expNotificationDate: '2026-11-20',
-    qcParameters: [
-      { id: '1', parameterName: 'Organoleptis', acceptanceCondition: 'Lotion putih, lembut, tidak lengket' },
-      { id: '2', parameterName: 'Viskositas', acceptanceCondition: '8000 - 12000', unit: 'cP' }
-    ],
-    variants: [
-      {
-        id: 'var-pj0002-30g',
-        productId: 'prod-pj0002',
-        variantCode: 'PJ0002-30G',
-        sku: 'PJ0002-30G',
-        variantName: '30 g',
-        netVolumeGrams: 30,
-        bulkFormulaCode: 'FORM-002',
-        packagingBom: [
-          { packagingCode: 'K0005', quantityPerUnit: 1, type: 'primary' },
-          { packagingCode: 'K0007', quantityPerUnit: 1, type: 'secondary' }
-        ],
-        barcode: '8999876543210',
-        description: 'Kemasan tube 30g flip-top.'
-      }
-    ]
-  },
-  {
-    id: 'prod-pj0003',
-    code: 'PJ0003',
-    productCode: 'PJ0003',
-    name: 'Gentle Cleansing Facial Wash Gel',
-    category: 'Skincare - Facial Wash',
-    brand: 'PT. LARASSANTI MAKMUR SEJAHTERA',
-    description: 'Pembersih wajah busa lembut pH balanced tanpa SLS.',
-    unit: 'pcs (Pieces)',
-    storageConditions: 'Suhu Ruang (15-25°C)',
-    bpomNotificationNumber: 'NA18211200789',
-    bpomNotificationExt: '2026-07-31', // Sudah expired (lewat tanggal)
-    expNotificationDate: '2026-07-31',
-    qcParameters: [
-      { id: '1', parameterName: 'Pemerian', acceptanceCondition: 'Gel jernih kehijauan' },
-      { id: '2', parameterName: 'pH', acceptanceCondition: '5.0 - 6.0', unit: 'pH' }
-    ],
-    variants: [
-      {
-        id: 'var-pj0003-100ml',
-        productId: 'prod-pj0003',
-        variantCode: 'PJ0003-100ML',
-        sku: 'PJ0003-100ML',
-        variantName: '100 ml',
-        netVolumeGrams: 100,
-        bulkFormulaCode: 'FORM-003',
-        packagingBom: [
-          { packagingCode: 'K0006', quantityPerUnit: 1, type: 'primary' }
-        ],
-        barcode: '8994567890123',
-        description: 'Botol pompa 100ml.'
-      }
-    ]
-  }
-];
+// Penyimpanan sesi in-memory (BUKAN local storage) - default kosong tanpa data demo
+const defaultSeedProducts: Product[] = [];
 
-let inMemoryProducts: Product[] = [...defaultSeedProducts];
+let inMemoryProducts: Product[] = [];
 let tablesInitializedInSupabase: boolean | null = null;
 
 const isTableMissingError = (err: any): boolean => {
@@ -150,7 +44,70 @@ const isTableMissingError = (err: any): boolean => {
   );
 };
 
+/**
+ * Helper konversi tanggal fleksibel (termasuk nomor serial tanggal Excel seperti 46599) ke format ISO YYYY-MM-DD
+ */
+export const formatToISODate = (val: any): string | null => {
+  if (val === null || val === undefined) return null;
+  const str = String(val).trim();
+  if (!str) return null;
+
+  // 1. Jika serial number tanggal Excel (misal: 46599 atau "46599")
+  const num = Number(str);
+  if (!isNaN(num) && num > 25000 && num < 100000) {
+    // Shift Excel 1900 epoch to Unix epoch (25569 days)
+    const jsDate = new Date(Math.round((num - 25569) * 86400 * 1000));
+    if (!isNaN(jsDate.getTime())) {
+      return jsDate.toISOString().split('T')[0];
+    }
+  }
+
+  // 2. Jika sudah format YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    return str;
+  }
+
+  // 3. Jika format DD/MM/YYYY atau DD-MM-YYYY
+  const ddmmyyyy = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (ddmmyyyy) {
+    const day = ddmmyyyy[1].padStart(2, '0');
+    const month = ddmmyyyy[2].padStart(2, '0');
+    const year = ddmmyyyy[3];
+    return `${year}-${month}-${day}`;
+  }
+
+  // 4. Standar JavaScript Date parsing
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) {
+    return parsed.toISOString().split('T')[0];
+  }
+
+  return null;
+};
+
 export const productService = {
+  /**
+   * Helper retry untuk operasi network Supabase jika terjadi 'Failed to fetch'
+   */
+  withNetworkRetry: async <T>(operation: () => Promise<T>, maxRetries = 2): Promise<T> => {
+    let lastError: any;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (err: any) {
+        lastError = err;
+        const msg = err?.message || String(err);
+        if ((msg.includes('Failed to fetch') || msg.includes('NetworkError')) && attempt < maxRetries) {
+          // Wait 300ms before retry
+          await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw lastError;
+  },
+
   /**
    * Cek status ketersediaan tabel products & product_variants di Supabase
    */
@@ -212,53 +169,78 @@ export const productService = {
     }
 
     try {
-      // Query relasi products ke product_variants
-      const { data, error } = await supabase
-        .from('products')
-        .select(`
-          id,
-          product_code,
-          name,
-          brand,
-          exp_notification_date,
-          created_at,
-          category,
-          description,
-          unit,
-          storage_conditions,
-          bpom_notification_number,
-          qc_parameters,
-          variants:product_variants (
-            id,
-            product_id,
-            variant_name,
-            sku,
-            status,
-            net_volume_grams,
-            bulk_formula_code,
-            packaging_bom,
-            bpom_number,
-            barcode,
-            description,
-            created_at
-          )
-        `)
-        .order('product_code', { ascending: true });
+      // Chunk fetching untuk melampaui batas default 1000 baris PostgREST/Supabase
+      let allRows: any[] = [];
+      let page = 0;
+      const pageSize = 1000;
+      let hasMore = true;
 
-      if (error) {
-        if (isTableMissingError(error)) {
-          tablesInitializedInSupabase = false;
-          console.warn('[productService] Notice: Tabel "products" belum dibuat di Supabase schema cache. Menampilkan data sesi aktif.');
-          return inMemoryProducts;
+      while (hasMore) {
+        const from = page * pageSize;
+        const to = from + pageSize - 1;
+
+        const { data, error } = await supabase
+          .from('products')
+          .select(`
+            id,
+            product_code,
+            name,
+            brand,
+            exp_notification_date,
+            created_at,
+            category,
+            description,
+            unit,
+            storage_conditions,
+            bpom_notification_number,
+            qc_parameters,
+            variants:product_variants (
+              id,
+              product_id,
+              variant_name,
+              sku,
+              status,
+              net_volume_grams,
+              bulk_formula_code,
+              packaging_bom,
+              bpom_number,
+              barcode,
+              description,
+              created_at
+            )
+          `)
+          .order('product_code', { ascending: true })
+          .range(from, to);
+
+        if (error) {
+          if (isTableMissingError(error)) {
+            tablesInitializedInSupabase = false;
+            console.warn('[productService] Notice: Tabel "products" belum dibuat di Supabase schema cache. Menampilkan data sesi aktif.');
+            return inMemoryProducts;
+          }
+          console.warn('[productService] Peringatan saat memuat data products dari Supabase:', error.message || error);
+          break;
         }
-        console.warn('[productService] Peringatan saat memuat data products dari Supabase:', error.message || error);
-        return inMemoryProducts;
+
+        if (data && data.length > 0) {
+          allRows = allRows.concat(data);
+          if (data.length < pageSize) {
+            hasMore = false;
+          } else {
+            page++;
+          }
+        } else {
+          hasMore = false;
+        }
       }
 
       tablesInitializedInSupabase = true;
-      if (!data) return inMemoryProducts;
+      if (allRows.length === 0) {
+        inMemoryProducts = [];
+        return [];
+      }
 
-      const mapped = data.map((p: any) => ({
+      const mapped = allRows.map((p: any) => ({
         id: p.id,
         code: p.product_code || p.code || '',
         productCode: p.product_code || p.code || '',
@@ -325,7 +307,7 @@ export const productService = {
         product_code: (prod.productCode || prod.code).trim().toUpperCase(),
         name: prod.name.trim(),
         brand: prod.brand.trim(),
-        exp_notification_date: prod.expNotificationDate || prod.bpomNotificationExt || null,
+        exp_notification_date: formatToISODate(prod.expNotificationDate || prod.bpomNotificationExt),
         category: prod.category || '',
         description: prod.description || '',
         unit: prod.unit || 'pcs (Pieces)',
@@ -335,9 +317,12 @@ export const productService = {
         created_at: prod.createdAt || new Date().toISOString(),
       };
 
-      const { error: prodError } = await supabase
-        .from('products')
-        .upsert(productPayload, { onConflict: 'id' });
+      const res = await productService.withNetworkRetry(async () => {
+        return await supabase
+          .from('products')
+          .upsert(productPayload, { onConflict: 'id' });
+      });
+      const prodError = res.error;
 
       if (prodError) {
         if (isTableMissingError(prodError)) {
@@ -369,9 +354,12 @@ export const productService = {
             created_at: v.createdAt || new Date().toISOString(),
           };
 
-          const { error: varError } = await supabase
-            .from('product_variants')
-            .upsert(variantPayload, { onConflict: 'id' });
+          const varRes = await productService.withNetworkRetry(async () => {
+            return await supabase
+              .from('product_variants')
+              .upsert(variantPayload, { onConflict: 'id' });
+          });
+          const varError = varRes.error;
 
           if (varError) {
             if (isTableMissingError(varError)) {
@@ -429,9 +417,12 @@ export const productService = {
         created_at: variant.createdAt || new Date().toISOString(),
       };
 
-      const { error } = await supabase
-        .from('product_variants')
-        .upsert(variantPayload, { onConflict: 'id' });
+      const res = await productService.withNetworkRetry(async () => {
+        return await supabase
+          .from('product_variants')
+          .upsert(variantPayload, { onConflict: 'id' });
+      });
+      const error = res.error;
 
       if (error) {
         if (isTableMissingError(error)) {
@@ -514,6 +505,28 @@ export const productService = {
   saveProducts: async (products: Product[]): Promise<void> => {
     for (const prod of products) {
       await productService.saveSingleProduct(prod);
+    }
+  },
+
+  /**
+   * Mengosongkan seluruh data Master Produk dan Varian dari Supabase dan memori
+   */
+  clearAllProducts: async (): Promise<{ success: boolean; error?: string }> => {
+    inMemoryProducts = [];
+    if (!isSupabaseConfigured || !supabase) {
+      return { success: true };
+    }
+    try {
+      // 1. Hapus varian
+      await supabase.from('product_variants').delete().neq('id', '___none___');
+      // 2. Hapus products
+      const { error } = await supabase.from('products').delete().neq('id', '___none___');
+      if (error) {
+        return { success: false, error: error.message };
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err?.message || String(err) };
     }
   },
 };

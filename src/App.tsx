@@ -36,7 +36,19 @@ const MainAppContent: React.FC = () => {
   const [activeRndSubTab, setActiveRndSubTab] = useState<'materials' | 'packaging' | 'products' | 'formula' | 'bom-calculator'>('products');
   const [activeAdminSubTab, setActiveAdminSubTab] = useState<'users' | 'audit'>('users');
   const [activeWarehouseSubTab, setActiveWarehouseSubTab] = useState<'inbound' | 'stock-raw' | 'stock-packaging' | 'weighing' | 'finished-goods'>('inbound');
-  const [activeQualitySubTab, setActiveQualitySubTab] = useState<'queue' | 'testing' | 'approval' | 'archive'>('queue');
+  const [activeQualitySubTab, setActiveQualitySubTab] = useState<
+    | 'queue'
+    | 'testing'
+    | 'approval'
+    | 'archive'
+    | 'ipc-bulk'
+    | 'ipc-rework'
+    | 'retained'
+    | 'stability'
+    | 'sop'
+    | 'capa'
+    | 'complaints'
+  >('ipc-bulk');
 
   // Auto-switch to Quality tab if scanned via QR Code with ?coa= param
   React.useEffect(() => {
@@ -75,7 +87,21 @@ const MainAppContent: React.FC = () => {
     } else if (['inbound', 'stock-raw', 'stock-packaging', 'weighing', 'finished-goods'].includes(subTabId)) {
       setActiveWarehouseSubTab(subTabId as any);
       setActiveTab('warehouse');
-    } else if (['queue', 'testing', 'approval', 'archive'].includes(subTabId)) {
+    } else if (
+      [
+        'queue',
+        'testing',
+        'approval',
+        'archive',
+        'ipc-bulk',
+        'ipc-rework',
+        'retained',
+        'stability',
+        'sop',
+        'capa',
+        'complaints',
+      ].includes(subTabId)
+    ) {
       setActiveQualitySubTab(subTabId as any);
       setActiveTab('quality');
     }

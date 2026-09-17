@@ -243,6 +243,11 @@ export const RndModule: React.FC<RndModuleProps> = ({
     await productService.deleteVariant(variantId);
   };
 
+  const handleClearAllProducts = async () => {
+    setProducts([]);
+    await productService.clearAllProducts();
+  };
+
   const totalVariantsCount = products.reduce((sum, p) => sum + p.variants.length, 0);
 
   const handleClearAllMaterials = async () => {
@@ -320,6 +325,7 @@ export const RndModule: React.FC<RndModuleProps> = ({
           onDeleteProduct={handleDeleteProduct}
           onSaveVariant={handleSaveVariant}
           onDeleteVariant={handleDeleteVariant}
+          onClearAllProducts={handleClearAllProducts}
         />
       )}
 
