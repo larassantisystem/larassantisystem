@@ -19,11 +19,29 @@ export const stockService = {
    * Get all active stock lots and synchronize with latest GRNs and QC inspection states
    */
   getStockLots: async (): Promise<StockLotItem[]> => {
-    // Fetch GRNs and QC Reports
-    const [grns, qcReports] = await Promise.all([
+    // Fetch GRNs, QC Reports, and master materials for name resolution
+    const [grns, qcReports, rawMaterials, packMaterials] = await Promise.all([
       warehouseService.getGrnRecords(),
       qualityService.getReports(),
+      materialService.getMaterials().catch(() => []),
+      packagingService.getPackagingMaterials().catch(() => []),
     ]);
+
+    const rawMap = new Map<string, string>();
+    rawMaterials.forEach((r) => {
+      if (r.code && r.name) {
+        rawMap.set(r.code.trim().toUpperCase(), r.name);
+        if (r.id) rawMap.set(r.id.trim().toUpperCase(), r.name);
+      }
+    });
+
+    const packMap = new Map<string, string>();
+    packMaterials.forEach((p) => {
+      if (p.code && p.name) {
+        packMap.set(p.code.trim().toUpperCase(), p.name);
+        if (p.id) packMap.set(p.id.trim().toUpperCase(), p.name);
+      }
+    });
 
     const storedLots: StockLotItem[] = grns.map((grn) => {
       const qcReport = qcReports.find((r) => r.grnId === grn.id || r.grnNumber === grn.grnNumber);
@@ -82,13 +100,24 @@ export const stockService = {
         }
       }
 
+      // Resolve real material name if missing or equal to material code
+      let resolvedMaterialName = grn.materialName;
+      const cleanCode = grn.materialCode?.trim().toUpperCase();
+      if (!resolvedMaterialName || resolvedMaterialName.trim().toUpperCase() === cleanCode) {
+        if (grn.materialType === 'raw' && cleanCode && rawMap.has(cleanCode)) {
+          resolvedMaterialName = rawMap.get(cleanCode)!;
+        } else if (grn.materialType === 'packaging' && cleanCode && packMap.has(cleanCode)) {
+          resolvedMaterialName = packMap.get(cleanCode)!;
+        }
+      }
+
       return {
         id: `lot-${grn.id}`,
         lotInternalNumber: lotInternal,
         grnNumber: grn.grnNumber,
         grnId: grn.id,
         materialCode: grn.materialCode,
-        materialName: grn.materialName,
+        materialName: resolvedMaterialName || grn.materialCode,
         materialType: grn.materialType,
         batchNumberVendor: grn.batchNumber || 'N/A',
         manufacturer: grn.manufacturer,
@@ -377,20 +406,41 @@ export const stockService = {
     const cleanCode = payload.materialCode.trim().toUpperCase();
     const materialType: 'raw' | 'packaging' = cleanCode.startsWith('B') ? 'raw' : 'packaging';
 
-    // Lookup real material name from master list or existing GRNs
-    let materialName = payload.materialCode;
-    try {
-      if (materialType === 'raw') {
-        const rms = await materialService.getMaterials();
-        const found = rms.find((r) => r.code?.trim().toUpperCase() === cleanCode);
-        if (found) materialName = found.name;
-      } else {
-        const pms = await packagingService.getPackagingMaterials();
-        const found = pms.find((p) => p.code?.trim().toUpperCase() === cleanCode);
-        if (found) materialName = found.name;
+    // Lookup real material name from payload, master list, or existing GRNs
+    let materialName = payload.materialName?.trim();
+    if (!materialName || materialName.trim().toUpperCase() === cleanCode) {
+      try {
+        if (materialType === 'raw') {
+          const rms = await materialService.getMaterials();
+          const found = rms.find((r) => 
+            r.code?.trim().toUpperCase() === cleanCode ||
+            r.id?.trim().toUpperCase() === cleanCode
+          );
+          if (found) materialName = found.name;
+        } else {
+          const pms = await packagingService.getPackagingMaterials();
+          const found = pms.find((p) => 
+            p.code?.trim().toUpperCase() === cleanCode ||
+            p.id?.trim().toUpperCase() === cleanCode
+          );
+          if (found) materialName = found.name;
+        }
+      } catch (e) {
+        // Fallback
       }
-    } catch (e) {
-      // Fallback
+    }
+
+    if (!materialName || materialName.trim().toUpperCase() === cleanCode) {
+      const existingWithName = grns.find(
+        (g) => g.materialCode?.trim().toUpperCase() === cleanCode && g.materialName && g.materialName.trim().toUpperCase() !== cleanCode
+      );
+      if (existingWithName) {
+        materialName = existingWithName.materialName;
+      }
+    }
+
+    if (!materialName) {
+      materialName = cleanCode;
     }
 
     let targetLotNumber = payload.lotInternalNumber?.trim();

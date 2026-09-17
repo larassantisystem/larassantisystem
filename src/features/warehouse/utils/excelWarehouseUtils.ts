@@ -97,6 +97,7 @@ const parseNumVal = (val: any, fallback = 0): number => {
 
 export const parseStockOpnameExcel = (file: File): Promise<Array<{
   materialCode: string;
+  materialName?: string;
   actualQuantity: number;
   reason?: string;
   unit?: string;
@@ -119,6 +120,9 @@ export const parseStockOpnameExcel = (file: File): Promise<Array<{
           const rawCode = getRowVal(row, 'Kode Material', 'Kode Bahan', 'Kode', 'materialCode', 'Kode Barang', 'Kode_Material', 'Material Code', 'Kode_Bahan') ?? '';
           const materialCode = String(rawCode).trim();
 
+          const rawName = getRowVal(row, 'Nama Material', 'Nama Bahan', 'Nama Barang', 'Nama', 'materialName', 'Nama_Material', 'Material Name', 'Bahan');
+          const materialName = rawName ? String(rawName).trim() : undefined;
+
           const rawQty = getRowVal(row, 'Saldo Fisik (Aktual)', 'Saldo Fisik', 'Jumlah Fisik', 'actualQuantity', 'Qty', 'Jumlah', 'Saldo Aktual', 'Stock Fisik', 'Saldo', 'Fisik');
           const actualQuantity = parseNumVal(rawQty, 0);
 
@@ -137,7 +141,7 @@ export const parseStockOpnameExcel = (file: File): Promise<Array<{
           const rawED = getRowVal(row, 'Estimasi ED (YYYY-MM-DD)', 'ED', 'Expired Date', 'Estimasi ED');
           const initialStockExpiryDate = rawED ? formatToIsoDateString(rawED) : undefined;
 
-          return { materialCode, actualQuantity, reason, unit, lotInternalNumber, isInitialStock, initialStockExpiryDate };
+          return { materialCode, materialName, actualQuantity, reason, unit, lotInternalNumber, isInitialStock, initialStockExpiryDate };
         }).filter((item) => item.materialCode !== '' && !isNaN(item.actualQuantity));
 
         resolve(parsed);
