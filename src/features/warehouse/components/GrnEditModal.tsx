@@ -220,7 +220,7 @@ export const GrnEditModal: React.FC<GrnEditModalProps> = ({
             </div>
           )}
 
-          {/* Row 1: Produsen & Pemasok */}
+          {/* Row 1: Produsen & Supplier */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block font-bold text-slate-700 mb-1">
@@ -237,7 +237,7 @@ export const GrnEditModal: React.FC<GrnEditModalProps> = ({
             </div>
             <div>
               <label className="block font-bold text-slate-700 mb-1">
-                Pemasok / Distributor <span className="text-red-500">*</span>
+                Supplier <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"

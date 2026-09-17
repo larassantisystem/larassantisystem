@@ -329,7 +329,7 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
                   </div>
 
                   <div className="col-span-2 sm:col-span-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase block">Produsen / Pemasok</span>
+                    <span className="text-[10px] font-extrabold text-slate-400 uppercase block">Produsen / Supplier</span>
                     <span className="font-medium text-slate-900 block mt-0.5 truncate text-[11px]">
                       {report.manufacturer} <span className="text-slate-400 font-normal">({report.distributor || report.supplierName})</span>
                     </span>
@@ -355,9 +355,11 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
                 <div className={`mt-4 pt-3 border-t-2 border-dashed ${theme.borderAccent} flex flex-col sm:flex-row gap-4 items-center justify-between`}>
                   <div className="flex-1 w-full grid grid-cols-2 gap-3">
                     <div className="border border-slate-200 rounded-xl p-2.5 text-center bg-slate-50">
-                      <span className="text-[9px] font-extrabold text-slate-400 uppercase block">Petugas Analis QC</span>
-                      <div className="h-10 flex items-center justify-center font-serif text-slate-700 font-bold italic text-xs">
-                        {report.inspectedBy?.name || 'Staf Analis QC'}
+                      <span className="text-[9px] font-extrabold text-slate-500 uppercase block">
+                        {report.staffSignature?.signerRole || 'Staf Analis QC'}
+                      </span>
+                      <div className="h-10 flex items-center justify-center font-serif text-slate-800 font-bold italic text-xs">
+                        {report.staffSignature?.signerName || report.sampledBy || report.inspectedBy?.name || 'Ayu'}
                       </div>
                       <span className="text-[9px] text-slate-400 block border-t border-slate-200 pt-1">
                         Paraf & Tanggal Uji
@@ -365,12 +367,12 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
                     </div>
 
                     <div className="border border-slate-200 rounded-xl p-2.5 text-center bg-slate-50">
-                      <span className="text-[9px] font-extrabold text-slate-400 uppercase block">Quality Manager (Otorisasi)</span>
+                      <span className="text-[9px] font-extrabold text-slate-500 uppercase block">Quality Manager</span>
                       <div className="h-10 flex items-center justify-center font-serif text-emerald-800 font-bold italic text-xs">
-                        {report.qmSignature?.signerName || 'Quality Manager'}
+                        {report.qmSignature?.signerName || 'Michael'}
                       </div>
                       <span className="text-[9px] text-slate-400 block border-t border-slate-200 pt-1">
-                        Tanda Tangan & Cap Sah
+                        Tanda Tangan & Cap Otorisasi
                       </span>
                     </div>
 

@@ -8,7 +8,8 @@ import {
   Info
 } from 'lucide-react';
 import { QcInspectionReport } from '../types/qcTypes';
-import { normalizeLotNumber } from '../utils/qcNumbering';
+import { normalizeLotNumber, getUserJabatan } from '../utils/qcNumbering';
+import { useAuth } from '../../../core/auth/AuthContext';
 
 interface QcInspectionReportPdfModalProps {
   isOpen: boolean;
@@ -22,8 +23,57 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
   report,
 }) => {
   const printContentRef = useRef<HTMLDivElement>(null);
+  const { user: currentUser } = useAuth();
 
   if (!isOpen || !report) return null;
+
+  // Staf Analis QC: sesuai nama analis yg login dan mengerjakan
+  const analystName =
+    report.staffSignature?.signerName && report.staffSignature.signerName !== 'Staf Analis QC'
+      ? report.staffSignature.signerName
+      : report.sampledBy && report.sampledBy !== 'Staf Analis QC'
+      ? report.sampledBy
+      : currentUser?.department === 'quality' && currentUser?.role === 'staff'
+      ? currentUser.name
+      : 'Ayu';
+
+  const analystNik =
+    report.staffSignature?.signerNik && report.staffSignature.signerNik !== 'NIK-QC-001'
+      ? report.staffSignature.signerNik
+      : analystName === currentUser?.name && currentUser?.nik
+      ? currentUser.nik
+      : analystName === 'Ayu'
+      ? 'LMS20001'
+      : '-';
+
+  // Jabatan Analis: sesuai jabatan user yang mengerjakan/login
+  const analystJabatan =
+    report.staffSignature?.signerRole &&
+    report.staffSignature.signerRole !== 'Quality Control Analyst / Staff'
+      ? report.staffSignature.signerRole
+      : currentUser?.department === 'quality'
+      ? getUserJabatan(currentUser)
+      : 'Staf Analis QC';
+
+  // Quality Manager: sesuai yg memberi otorisasi (hanya Quality Manager saja)
+  const qmName =
+    report.qmSignature?.signerName &&
+    report.qmSignature.signerName !== 'Quality Manager (Apoteker PJ)' &&
+    report.qmSignature.signerName !== 'apt. Quality Manager, S.Farm.' &&
+    report.qmSignature.signerName !== 'Quality Manager'
+      ? report.qmSignature.signerName
+      : currentUser?.department === 'quality' && (currentUser?.role === 'manager' || currentUser?.role === 'supervisor')
+      ? currentUser.name
+      : 'Michael';
+
+  const qmNik =
+    report.qmSignature?.signerNik && report.qmSignature.signerNik !== 'NIK-QM-001'
+      ? report.qmSignature.signerNik
+      : qmName === currentUser?.name && currentUser?.nik
+      ? currentUser.nik
+      : qmName === 'Michael'
+      ? 'LMS20003'
+      : '-';
 
   const handlePrintPdf = () => {
     window.print();
@@ -196,7 +246,7 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
                         <span className="font-semibold text-slate-800">{report.manufacturer || '-'}</span>
                       </div>
                       <div className="grid grid-cols-[130px_10px_1fr] items-baseline">
-                        <span className="text-slate-500 font-medium">Distributor</span>
+                        <span className="text-slate-500 font-medium">Supplier</span>
                         <span className="text-slate-400 font-bold">:</span>
                         <span className="text-slate-800">{report.distributor || '-'}</span>
                       </div>
@@ -253,20 +303,15 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
                     <span className="font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
                       II. Metode & Pengambilan Contoh (Sampling)
                     </span>
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-mono font-bold text-[10px] border border-emerald-300">
-                        {report.samplingInfo?.samplingStandard || 'MIL-STD-105E S-4 AQL 4.0'}
-                      </span>
-                      <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-bold text-[9px] border border-blue-200">
-                        DIGITAL TAG: SAMPLED
-                      </span>
-                    </div>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-slate-700 pt-0.5">
                     <div>
                       <span className="text-slate-500 block text-[10px]">Rencana Sampling (n):</span>
-                      <span className="font-bold text-slate-900">
+                      <span className="font-bold text-slate-900 block">
                         {report.samplingInfo?.sampleSizeQuantity || 1} {report.samplingInfo?.sampleUnit || 'wadah'}
+                      </span>
+                      <span className="inline-block mt-1 px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-mono font-bold text-[10px] border border-emerald-300">
+                        {isRawMaterial ? 'n = 1 + √N' : (report.samplingInfo?.samplingStandard || 'MIL-STD-105E Level II')}
                       </span>
                     </div>
                     <div>
@@ -286,7 +331,7 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
                     <div>
                       <span className="text-slate-500 block text-[10px]">Waktu & Petugas Sampling:</span>
                       <span className="text-slate-800 font-medium">
-                        {report.samplingDateTime ? new Date(report.samplingDateTime).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : (report.receivedDate || '-')} • {report.sampledBy || report.staffSignature?.signerName || 'Analis QC'}
+                        {report.samplingDateTime ? new Date(report.samplingDateTime).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : (report.receivedDate || '-')} • {analystName} ({analystJabatan})
                       </span>
                     </div>
                   </div>
@@ -403,14 +448,15 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
                     {/* Dual Digital Signature */}
                     <div className="border border-slate-300 rounded-xl p-3 grid grid-cols-2 gap-4 text-xs text-slate-800 page-break-inside-avoid">
                       <div className="space-y-1 border-r border-slate-200 pr-3">
-                        <div className="font-bold text-slate-500 uppercase tracking-wider text-[9px]">
-                          Diperiksa & Dianalisa Oleh:
+                        <div className="font-bold text-slate-700 uppercase tracking-wider text-[9px] flex items-center justify-between">
+                          <span>{analystJabatan} :</span>
+                          <span className="text-[8px] text-slate-400 font-normal lowercase">(pemeriksa lab)</span>
                         </div>
                         <div className="h-16 flex flex-col justify-center">
                           <div className="font-mono font-bold text-emerald-800 text-[10px]">
                             DIGITALLY SIGNED ELECTRONICALLY
                           </div>
-                          <div className="text-[9px] font-mono text-slate-500">
+                          <div className="text-[9px] font-mono text-slate-500 truncate">
                             Hash: {report.staffSignature?.signatureHash || 'SIG-STF-VERIFIED'}
                           </div>
                           <div className="text-[9px] text-slate-400">
@@ -419,35 +465,44 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
                         </div>
                         <div className="border-t border-slate-300 pt-1">
                           <div className="font-bold text-slate-900 text-[11px]">
-                            {report.staffSignature?.signerName || 'Staf Analis QC'}
+                            {analystName}
                           </div>
-                          <div className="text-[9px] text-slate-500 font-mono">
-                            NIK: {report.staffSignature?.signerNik || '-'} • QC Analyst
+                          <div className="text-[9px] text-slate-600 font-medium font-mono">
+                            NIK: {analystNik} • {analystJabatan}
                           </div>
                         </div>
                       </div>
 
                       <div className="space-y-1 pl-1">
-                        <div className="font-bold text-slate-500 uppercase tracking-wider text-[9px]">
-                          Disetujui & Diotorisasi Oleh:
+                        <div className="font-bold text-slate-700 uppercase tracking-wider text-[9px] flex items-center justify-between">
+                          <span>Quality Manager :</span>
+                          <span className="text-[8px] text-slate-400 font-normal lowercase">(otorisasi mutu)</span>
                         </div>
                         <div className="h-16 flex flex-col justify-center">
-                          <div className="font-mono font-bold text-blue-900 text-[10px]">
-                            OFFICIALLY AUTHORIZED BY QUALITY MANAGER
-                          </div>
-                          <div className="text-[9px] font-mono text-slate-500">
-                            Hash: {report.qmSignature?.signatureHash || 'SIG-QM-AUTHORIZED'}
-                          </div>
-                          <div className="text-[9px] text-slate-400">
-                            Waktu: {report.qmSignature?.signedAt ? new Date(report.qmSignature.signedAt).toLocaleString('id-ID') : '-'}
-                          </div>
+                          {report.qmSignature?.signatureHash ? (
+                            <>
+                              <div className="font-mono font-bold text-blue-900 text-[10px]">
+                                OFFICIALLY AUTHORIZED BY QUALITY MANAGER
+                              </div>
+                              <div className="text-[9px] font-mono text-slate-500 truncate">
+                                Hash: {report.qmSignature.signatureHash}
+                              </div>
+                              <div className="text-[9px] text-slate-400">
+                                Waktu: {report.qmSignature.signedAt ? new Date(report.qmSignature.signedAt).toLocaleString('id-ID') : '-'}
+                              </div>
+                            </>
+                          ) : (
+                            <div className="text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1 text-[9px] font-medium flex items-center justify-center h-full">
+                              Menunggu Otorisasi Quality Manager
+                            </div>
+                          )}
                         </div>
                         <div className="border-t border-slate-300 pt-1">
                           <div className="font-bold text-slate-900 text-[11px]">
-                            {report.qmSignature?.signerName || 'apt. Quality Manager, S.Farm.'}
+                            {report.qmSignature?.signatureHash ? qmName : (report.status === 'PASSED' || report.status === 'PASSED_WITH_DEVIATION' || report.status === 'REJECTED' ? qmName : 'Belum Diotorisasi')}
                           </div>
-                          <div className="text-[9px] text-slate-600 font-bold tracking-wide">
-                            QUALITY MANAGER
+                          <div className="text-[9px] text-slate-600 font-medium font-mono">
+                            NIK: {qmNik} • Quality Manager
                           </div>
                         </div>
                       </div>
@@ -605,16 +660,17 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
 
                     {/* V. Blok Dual Digital Signature (Staf Analis & Quality Manager) */}
                     <div className="border border-slate-300 rounded-xl p-4 grid grid-cols-2 gap-4 text-xs text-slate-800 page-break-inside-avoid">
-                      {/* Analis QC */}
+                      {/* Analis QC / Jabatan User */}
                       <div className="space-y-1.5 border-r border-slate-200 pr-3">
-                        <div className="font-bold text-slate-500 uppercase tracking-wider text-[10px]">
-                          Diperiksa & Dianalisa Oleh:
+                        <div className="font-bold text-slate-700 uppercase tracking-wider text-[10px] flex items-center justify-between">
+                          <span>{analystJabatan} :</span>
+                          <span className="text-[9px] text-slate-400 font-normal lowercase">(pemeriksa lab)</span>
                         </div>
                         <div className="h-18 flex flex-col justify-center">
                           <div className="font-mono font-bold text-emerald-800 text-[10px]">
                             DIGITALLY SIGNED ELECTRONICALLY
                           </div>
-                          <div className="text-[9px] font-mono text-slate-500">
+                          <div className="text-[9px] font-mono text-slate-500 truncate">
                             Hash: {report.staffSignature?.signatureHash || 'SIG-STF-VERIFIED'}
                           </div>
                           <div className="text-[9px] text-slate-400">
@@ -623,36 +679,45 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
                         </div>
                         <div className="border-t border-slate-300 pt-1">
                           <div className="font-bold text-slate-900 text-[11px]">
-                            {report.staffSignature?.signerName || 'Staf Analis QC'}
+                            {analystName}
                           </div>
-                          <div className="text-[9px] text-slate-500 font-mono">
-                            NIK: {report.staffSignature?.signerNik || '-'} • QC Analyst
+                          <div className="text-[9px] text-slate-600 font-medium font-mono">
+                            NIK: {analystNik} • {analystJabatan}
                           </div>
                         </div>
                       </div>
 
                       {/* Quality Manager */}
                       <div className="space-y-1.5 pl-2">
-                        <div className="font-bold text-slate-500 uppercase tracking-wider text-[10px]">
-                          Disetujui & Diotorisasi Oleh:
+                        <div className="font-bold text-slate-700 uppercase tracking-wider text-[10px] flex items-center justify-between">
+                          <span>Quality Manager :</span>
+                          <span className="text-[9px] text-slate-400 font-normal lowercase">(otorisasi mutu)</span>
                         </div>
                         <div className="h-18 flex flex-col justify-center">
-                          <div className="font-mono font-bold text-blue-900 text-[10px]">
-                            OFFICIALLY AUTHORIZED BY QUALITY MANAGER
-                          </div>
-                          <div className="text-[9px] font-mono text-slate-500">
-                            Hash: {report.qmSignature?.signatureHash || 'SIG-QM-AUTHORIZED'}
-                          </div>
-                          <div className="text-[9px] text-slate-400">
-                            Waktu: {report.qmSignature?.signedAt ? new Date(report.qmSignature.signedAt).toLocaleString('id-ID') : '-'}
-                          </div>
+                          {report.qmSignature?.signatureHash ? (
+                            <>
+                              <div className="font-mono font-bold text-blue-900 text-[10px]">
+                                OFFICIALLY AUTHORIZED BY QUALITY MANAGER
+                              </div>
+                              <div className="text-[9px] font-mono text-slate-500 truncate">
+                                Hash: {report.qmSignature.signatureHash}
+                              </div>
+                              <div className="text-[9px] text-slate-400">
+                                Waktu: {report.qmSignature.signedAt ? new Date(report.qmSignature.signedAt).toLocaleString('id-ID') : '-'}
+                              </div>
+                            </>
+                          ) : (
+                            <div className="text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1 text-[10px] font-medium flex items-center justify-center h-full">
+                              Menunggu Otorisasi Quality Manager
+                            </div>
+                          )}
                         </div>
                         <div className="border-t border-slate-300 pt-1">
                           <div className="font-bold text-slate-900 text-[11px]">
-                            {report.qmSignature?.signerName || 'apt. Quality Manager, S.Farm.'}
+                            {report.qmSignature?.signatureHash ? qmName : (report.status === 'PASSED' || report.status === 'PASSED_WITH_DEVIATION' || report.status === 'REJECTED' ? qmName : 'Belum Diotorisasi')}
                           </div>
-                          <div className="text-[9px] text-slate-600 font-bold tracking-wide">
-                            QUALITY MANAGER
+                          <div className="text-[9px] text-slate-600 font-medium font-mono">
+                            NIK: {qmNik} • Quality Manager
                           </div>
                         </div>
                       </div>

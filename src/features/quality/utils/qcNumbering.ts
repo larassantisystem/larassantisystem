@@ -205,3 +205,35 @@ export const calculateAutoRetestDate = (
   return '';
 };
 
+/**
+ * Mendapatkan jabatan/posisi formal user berdasarkan role dan departemennya
+ */
+export const getUserJabatan = (
+  user?: { role?: string; department?: string; name?: string; [key: string]: any } | null
+): string => {
+  if (!user) return 'Staf Analis QC';
+  if (user.jabatan) return user.jabatan;
+  if (user.position) return user.position;
+  if (user.jobTitle) return user.jobTitle;
+
+  const role = (user.role || '').toLowerCase();
+  const dept = (user.department || '').toLowerCase();
+
+  if (role === 'staff') {
+    return dept === 'quality' || !dept ? 'Staf Analis QC' : `Staf ${user.department?.toUpperCase() || ''}`;
+  }
+  if (role === 'supervisor' || role === 'spv') {
+    return dept === 'quality' || !dept ? 'Supervisor QC' : `Supervisor ${user.department?.toUpperCase() || ''}`;
+  }
+  if (role === 'manager') {
+    return dept === 'quality' || !dept ? 'Quality Manager' : `Manager ${user.department?.toUpperCase() || ''}`;
+  }
+  if (role === 'admin') {
+    return 'Admin QC';
+  }
+  if (role === 'operator') {
+    return 'Operator QC';
+  }
+  return role ? role.toUpperCase() : 'Staf Analis QC';
+};
+

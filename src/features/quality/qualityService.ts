@@ -9,7 +9,7 @@ import { warehouseService } from '../warehouse/warehouseService';
 import { packagingService } from '../rnd/materials/packagingService';
 import { materialService } from '../rnd/materials/materialService';
 import { calculateSamplingPlan } from './utils/milStd105e';
-import { generateLotInternalNumber, generateDigitalSignatureHash, normalizeLotNumber, calculateAutoRetestDate } from './utils/qcNumbering';
+import { generateLotInternalNumber, generateDigitalSignatureHash, normalizeLotNumber, calculateAutoRetestDate, getUserJabatan } from './utils/qcNumbering';
 import { analyzeLabResults, analyzeQueuePriorities } from './utils/qcAiAssistant';
 import { authService } from '../../core/auth/authService';
 import { isQualityManager } from '../../core/auth/permissionGuard';
@@ -22,20 +22,56 @@ const QC_REPORTS_STORAGE_KEY = 'lsm_qc_reports_v2';
 const QC_NOTIFICATIONS_STORAGE_KEY = 'lsm_qc_notifications_v2';
 
 let memoryNotifications: QcNotification[] = [];
+let memoryReports: QcInspectionReport[] = [];
+
+/**
+ * Robust helper to match a QC Inspection Report by any identifier (id, grnId, grnNumber, lotInternalNumber, reportNumber)
+ */
+function findMatchingQcReport(reports: QcInspectionReport[], targetId?: string | null): QcInspectionReport | undefined {
+  if (!targetId) return undefined;
+  const clean = targetId.trim();
+  const withoutPrefix = clean.startsWith('qc-rep-') ? clean.replace(/^qc-rep-/, '') : clean;
+
+  return reports.find((r) =>
+    r.id === clean ||
+    r.grnId === clean ||
+    r.grnNumber === clean ||
+    r.lotInternalNumber === clean ||
+    r.reportNumber === clean ||
+    r.id === `qc-rep-${clean}` ||
+    r.grnId === withoutPrefix ||
+    r.grnNumber === withoutPrefix ||
+    (r.id && r.id.includes(withoutPrefix)) ||
+    (r.grnNumber && r.grnNumber.toLowerCase() === clean.toLowerCase()) ||
+    (r.lotInternalNumber && r.lotInternalNumber.toLowerCase() === clean.toLowerCase())
+  );
+}
 
 export const qualityService = {
   /**
    * Read cached QC inspection reports synchronously for instant (0ms) render
    */
   getLocalReports: (): QcInspectionReport[] => {
-    return [];
+    return memoryReports;
+  },
+
+  /**
+   * Get a single QC Inspection Report by ID, GRN Number, or Internal Lot Number
+   */
+  getReportById: async (reportId: string): Promise<QcInspectionReport | null> => {
+    let report = findMatchingQcReport(memoryReports, reportId);
+    if (report) return report;
+
+    const allReports = await qualityService.getReports();
+    report = findMatchingQcReport(allReports, reportId);
+    return report || null;
   },
 
   /**
    * Get all QC inspection reports, synchronizing with latest warehouse GRN records and Master Data (Bagian B)
    */
   getReports: async (): Promise<QcInspectionReport[]> => {
-    let storedReports: QcInspectionReport[] = qualityService.getLocalReports();
+    let storedReports: QcInspectionReport[] = [...memoryReports];
 
     // Fast resolution: Use local master data first (0ms) to avoid downloading thousands of rows on every queue load
     let packagingMaterials = packagingService.getLocalPackagingMaterials();
@@ -73,7 +109,8 @@ export const qualityService = {
 
     // Synchronize GRN records into QC Reports
     grnRecords.forEach((grn) => {
-      const existingReport = storedReports.find((r) => r.grnId === grn.id || r.grnNumber === grn.grnNumber);
+      const stableId = grn.id ? (grn.id.startsWith('qc-rep-') ? grn.id : `qc-rep-${grn.id}`) : `qc-rep-${grn.grnNumber.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+      const existingReport = storedReports.find((r) => r.id === stableId || r.grnId === grn.id || r.grnNumber === grn.grnNumber);
 
       // Resolve dynamic QC parameters registered in Master Data (Bagian B)
       let resolvedParams: Array<{ name: string; spec: string }> = [];
@@ -148,7 +185,9 @@ export const qualityService = {
           retestDate = grn.retestDate || calculateAutoRetestDate('raw', grn.expiryDate, grn.receivedDate);
         }
 
-        const effectiveStatus = (grn.qcStatus as QcInspectionStatus) || 'QUARANTINE';
+        const effectiveStatus: QcInspectionStatus = (grn.qcPayload?.status as QcInspectionStatus) ||
+          (grn.qcStatus as QcInspectionStatus) ||
+          'QUARANTINE';
         const isOfficialDone = ['PASSED', 'PASSED_WITH_DEVIATION', 'REJECTED'].includes(effectiveStatus);
 
         let rawLot = grn.internalLotNumber || grn.qcPayload?.lotInternalNumber;
@@ -160,20 +199,20 @@ export const qualityService = {
         if (isOfficialDone) {
           if (!staffSignature) {
             staffSignature = {
-              signerName: grn.sampledBy || 'Staf Analis QC',
-              signerNik: 'NIK-QC-001',
-              signerRole: 'Quality Control Analyst / Staff',
+              signerName: grn.sampledBy || 'Ayu',
+              signerNik: 'LMS20001',
+              signerRole: 'Staf Analis QC',
               signedAt: grn.createdAt || new Date().toISOString(),
-              signatureHash: generateDigitalSignatureHash('NIK-QC-001', 'Staf Analis QC', effectiveStatus === 'REJECTED' ? 'REJECT' : 'RELEASE', lotInternalNumber || grn.grnNumber),
+              signatureHash: generateDigitalSignatureHash('LMS20001', grn.sampledBy || 'Ayu', effectiveStatus === 'REJECTED' ? 'REJECT' : 'RELEASE', lotInternalNumber || grn.grnNumber),
             };
           }
           if (!qmSignature) {
             qmSignature = {
-              signerName: 'Quality Manager (Apoteker PJ)',
-              signerNik: 'NIK-QM-001',
-              signerRole: 'Quality Manager / Apoteker Penanggung Jawab Mutu',
+              signerName: 'Michael',
+              signerNik: 'LMS20003',
+              signerRole: 'Quality Manager',
               signedAt: grn.createdAt || new Date().toISOString(),
-              signatureHash: generateDigitalSignatureHash('NIK-QM-001', 'Quality Manager', effectiveStatus === 'REJECTED' ? 'REJECT' : 'RELEASE', lotInternalNumber || grn.grnNumber),
+              signatureHash: generateDigitalSignatureHash('LMS20003', 'Michael', effectiveStatus === 'REJECTED' ? 'REJECT' : 'RELEASE', lotInternalNumber || grn.grnNumber),
             };
           }
           if (!qmDecision) {
@@ -182,7 +221,7 @@ export const qualityService = {
         }
 
         const newReport: QcInspectionReport = {
-          id: `qc-rep-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+          id: stableId,
           grnId: grn.id,
           grnNumber: grn.grnNumber,
           lotInternalNumber: lotInternalNumber || undefined,
@@ -227,14 +266,24 @@ export const qualityService = {
         storedReports.push(newReport);
         isModified = true;
       } else {
+        // Ensure ID is stable
+        if (existingReport.id !== stableId) {
+          existingReport.id = stableId;
+        }
         // Sync basic warehouse edits if reverted or updated
         let needsUpdate = false;
-        
-        // Synchronize remote qcStatus into existingReport if Supabase has latest status
-        if (grn.qcStatus && existingReport.status !== grn.qcStatus) {
-          existingReport.status = grn.qcStatus as QcInspectionStatus;
-          existingReport.updatedAt = new Date().toISOString();
-          needsUpdate = true;
+
+        // Synchronize remote status into existingReport if Supabase has latest status
+        const resolvedRemoteStatus = (grn.qcPayload?.status as QcInspectionStatus) || (grn.qcStatus as QcInspectionStatus);
+        if (resolvedRemoteStatus && existingReport.status !== resolvedRemoteStatus) {
+          // Guard: Do not downgrade a local active status (e.g. AWAITING_QM_AUTHORIZATION, QUALITY_CONTROL_PROCESS)
+          // back to default 'QUARANTINE' if remote column was simply un-updated while local/payload is ahead
+          const isDowngradeToQuarantine = resolvedRemoteStatus === 'QUARANTINE' && existingReport.status !== 'QUARANTINE';
+          if (!isDowngradeToQuarantine) {
+            existingReport.status = resolvedRemoteStatus;
+            existingReport.updatedAt = new Date().toISOString();
+            needsUpdate = true;
+          }
         }
 
         if (grn.internalLotNumber && (!existingReport.lotInternalNumber || existingReport.lotInternalNumber !== grn.internalLotNumber)) {
@@ -245,40 +294,49 @@ export const qualityService = {
 
         // Merge remote QC payload if local report is missing parameters, notes, or signatures
         if (grn.qcPayload) {
-          if (grn.qcPayload.staffSignature && !existingReport.staffSignature) {
+          if (grn.qcPayload.status && existingReport.status !== grn.qcPayload.status) {
+            existingReport.status = grn.qcPayload.status;
+            needsUpdate = true;
+          }
+          if (grn.qcPayload.staffSignature) {
             existingReport.staffSignature = grn.qcPayload.staffSignature;
             needsUpdate = true;
           }
-          if (grn.qcPayload.qmSignature && !existingReport.qmSignature) {
+          if (grn.qcPayload.qmSignature) {
             existingReport.qmSignature = grn.qcPayload.qmSignature;
             needsUpdate = true;
           }
-          if (grn.qcPayload.qmDecision && !existingReport.qmDecision) {
+          if (grn.qcPayload.qmDecision) {
             existingReport.qmDecision = grn.qcPayload.qmDecision;
             needsUpdate = true;
           }
-          if (grn.qcPayload.staffDecision && !existingReport.staffDecision) {
+          if (grn.qcPayload.staffDecision) {
             existingReport.staffDecision = grn.qcPayload.staffDecision;
             needsUpdate = true;
           }
-          if (grn.qcPayload.staffNotes && !existingReport.staffNotes) {
+          if (grn.qcPayload.staffNotes !== undefined && grn.qcPayload.staffNotes !== '') {
             existingReport.staffNotes = grn.qcPayload.staffNotes;
             needsUpdate = true;
           }
-          if (grn.qcPayload.qmNotes && !existingReport.qmNotes) {
+          if (grn.qcPayload.qmNotes !== undefined && grn.qcPayload.qmNotes !== '') {
             existingReport.qmNotes = grn.qcPayload.qmNotes;
             needsUpdate = true;
           }
-          if (grn.qcPayload.qmDeviationNumber && !existingReport.qmDeviationNumber) {
+          if (grn.qcPayload.qmDeviationNumber !== undefined && grn.qcPayload.qmDeviationNumber !== '') {
             existingReport.qmDeviationNumber = grn.qcPayload.qmDeviationNumber;
             needsUpdate = true;
           }
-          if (grn.qcPayload.parameters && (!existingReport.parameters || existingReport.parameters.every((p) => !p.resultValue))) {
+          if (grn.qcPayload.parameters && Array.isArray(grn.qcPayload.parameters) && grn.qcPayload.parameters.length > 0) {
             existingReport.parameters = grn.qcPayload.parameters;
             needsUpdate = true;
           }
           if (grn.qcPayload.aiAssessment && !existingReport.aiAssessment) {
             existingReport.aiAssessment = grn.qcPayload.aiAssessment;
+            needsUpdate = true;
+          }
+          if (grn.qcPayload.lotInternalNumber && (!existingReport.lotInternalNumber || existingReport.lotInternalNumber !== grn.qcPayload.lotInternalNumber)) {
+            existingReport.lotInternalNumber = grn.qcPayload.lotInternalNumber;
+            existingReport.reportNumber = grn.qcPayload.lotInternalNumber;
             needsUpdate = true;
           }
           const targetRetest = grn.qcPayload.retestDate || grn.retestDate || (existingReport.materialType === 'raw' ? calculateAutoRetestDate('raw', existingReport.expiryDate, existingReport.receivedDate) : undefined);
@@ -300,23 +358,23 @@ export const qualityService = {
             existingReport.reportNumber = normalized;
             needsUpdate = true;
           }
-          if (!existingReport.staffSignature) {
+          if (!existingReport.staffSignature || existingReport.staffSignature.signerName === 'Staf Analis QC') {
             existingReport.staffSignature = {
-              signerName: existingReport.sampledBy || 'Staf Analis QC',
-              signerNik: 'NIK-QC-001',
-              signerRole: 'Quality Control Analyst / Staff',
+              signerName: existingReport.sampledBy || 'Ayu',
+              signerNik: 'LMS20001',
+              signerRole: 'Staf Analis QC',
               signedAt: grn.createdAt || existingReport.createdAt || new Date().toISOString(),
-              signatureHash: generateDigitalSignatureHash('NIK-QC-001', 'Staf Analis QC', existingReport.status === 'REJECTED' ? 'REJECT' : 'RELEASE', existingReport.lotInternalNumber || existingReport.grnNumber),
+              signatureHash: generateDigitalSignatureHash('LMS20001', existingReport.sampledBy || 'Ayu', existingReport.status === 'REJECTED' ? 'REJECT' : 'RELEASE', existingReport.lotInternalNumber || existingReport.grnNumber),
             };
             needsUpdate = true;
           }
-          if (!existingReport.qmSignature) {
+          if (!existingReport.qmSignature || existingReport.qmSignature.signerName === 'Quality Manager (Apoteker PJ)' || existingReport.qmSignature.signerName === 'Quality Manager') {
             existingReport.qmSignature = {
-              signerName: 'Quality Manager (Apoteker PJ)',
-              signerNik: 'NIK-QM-001',
-              signerRole: 'Quality Manager / Apoteker Penanggung Jawab Mutu',
+              signerName: 'Michael',
+              signerNik: 'LMS20003',
+              signerRole: 'Quality Manager',
               signedAt: grn.createdAt || existingReport.createdAt || new Date().toISOString(),
-              signatureHash: generateDigitalSignatureHash('NIK-QM-001', 'Quality Manager', existingReport.status === 'REJECTED' ? 'REJECT' : 'RELEASE', existingReport.lotInternalNumber || existingReport.grnNumber),
+              signatureHash: generateDigitalSignatureHash('LMS20003', 'Michael', existingReport.status === 'REJECTED' ? 'REJECT' : 'RELEASE', existingReport.lotInternalNumber || existingReport.grnNumber),
             };
             needsUpdate = true;
           }
@@ -428,6 +486,7 @@ export const qualityService = {
       }
     });
 
+    memoryReports = storedReports;
     return storedReports;
   },
 
@@ -435,11 +494,23 @@ export const qualityService = {
    * Start QC inspection process (Transitions QUARANTINE -> QUALITY_CONTROL_PROCESS)
    */
   startInspectionProcess: async (reportId: string, user: UserProfile): Promise<QcInspectionReport> => {
-    const reports = await qualityService.getReports();
-    const report = reports.find((r) => r.id === reportId);
+    let reports = await qualityService.getReports();
+    let report = findMatchingQcReport(reports, reportId);
+
+    if (!report) {
+      // Fallback: check warehouse records
+      const grnRecords = await warehouseService.getGrnRecords();
+      const matchedGrn = grnRecords.find((g) => g.id === reportId || g.grnNumber === reportId);
+      if (matchedGrn) {
+        reports = await qualityService.getReports();
+        report = findMatchingQcReport(reports, matchedGrn.grnNumber) || findMatchingQcReport(reports, matchedGrn.id);
+      }
+    }
+
     if (!report) throw new Error('Laporan QC tidak ditemukan');
 
     report.status = 'QUALITY_CONTROL_PROCESS';
+    report.sampledBy = user.name;
     report.updatedAt = new Date().toISOString();
 
     // Update GRN status in warehouse
@@ -485,8 +556,16 @@ export const qualityService = {
       throw new Error('Alasan revert wajib diisi dengan jelas (minimal 5 karakter).');
     }
 
-    const reports = await qualityService.getReports();
-    const report = reports.find((r) => r.id === reportId);
+    let reports = await qualityService.getReports();
+    let report = findMatchingQcReport(reports, reportId);
+    if (!report) {
+      const grnRecords = await warehouseService.getGrnRecords();
+      const matchedGrn = grnRecords.find((g) => g.id === reportId || g.grnNumber === reportId);
+      if (matchedGrn) {
+        reports = await qualityService.getReports();
+        report = findMatchingQcReport(reports, matchedGrn.grnNumber) || findMatchingQcReport(reports, matchedGrn.id);
+      }
+    }
     if (!report) throw new Error('Laporan QC tidak ditemukan');
 
     report.status = 'REVERTED_TO_WAREHOUSE';
@@ -549,8 +628,16 @@ export const qualityService = {
       throw new Error('Instruksi/alasan revisi uji lab wajib diisi dengan jelas (minimal 5 karakter).');
     }
 
-    const reports = await qualityService.getReports();
-    const report = reports.find((r) => r.id === reportId);
+    let reports = await qualityService.getReports();
+    let report = findMatchingQcReport(reports, reportId);
+    if (!report) {
+      const grnRecords = await warehouseService.getGrnRecords();
+      const matchedGrn = grnRecords.find((g) => g.id === reportId || g.grnNumber === reportId);
+      if (matchedGrn) {
+        reports = await qualityService.getReports();
+        report = findMatchingQcReport(reports, matchedGrn.grnNumber) || findMatchingQcReport(reports, matchedGrn.id);
+      }
+    }
     if (!report) throw new Error('Laporan QC tidak ditemukan');
 
     const now = new Date().toISOString();
@@ -610,8 +697,16 @@ export const qualityService = {
       throw new Error(verifyRes.error || 'Kata sandi staf tidak valid. Otorisasi tanda tangan digital ditolak.');
     }
 
-    const reports = await qualityService.getReports();
-    const report = reports.find((r) => r.id === reportId);
+    let reports = await qualityService.getReports();
+    let report = findMatchingQcReport(reports, reportId);
+    if (!report) {
+      const grnRecords = await warehouseService.getGrnRecords();
+      const matchedGrn = grnRecords.find((g) => g.id === reportId || g.grnNumber === reportId);
+      if (matchedGrn) {
+        reports = await qualityService.getReports();
+        report = findMatchingQcReport(reports, matchedGrn.grnNumber) || findMatchingQcReport(reports, matchedGrn.id);
+      }
+    }
     if (!report) throw new Error('Laporan QC tidak ditemukan');
 
     // 2. Generate or preserve Internal Lot / Report Number (LBB... / LBK...)
@@ -652,7 +747,7 @@ export const qualityService = {
     report.staffSignature = {
       signerName: staffUser.name,
       signerNik: staffUser.nik,
-      signerRole: `${staffUser.department.toUpperCase()} Analyst / Staff`,
+      signerRole: getUserJabatan(staffUser),
       signedAt: new Date().toISOString(),
       signatureHash,
       notes: staffNotes,
@@ -725,8 +820,16 @@ export const qualityService = {
       throw new Error('Nomor Form Deviasi / Kajian Risiko wajib dicantumkan untuk pelepasan berdeviasi.');
     }
 
-    const reports = await qualityService.getReports();
-    const report = reports.find((r) => r.id === reportId);
+    let reports = await qualityService.getReports();
+    let report = findMatchingQcReport(reports, reportId);
+    if (!report) {
+      const grnRecords = await warehouseService.getGrnRecords();
+      const matchedGrn = grnRecords.find((g) => g.id === reportId || g.grnNumber === reportId);
+      if (matchedGrn) {
+        reports = await qualityService.getReports();
+        report = findMatchingQcReport(reports, matchedGrn.grnNumber) || findMatchingQcReport(reports, matchedGrn.id);
+      }
+    }
     if (!report) throw new Error('Laporan QC tidak ditemukan');
 
     // 2. Generate Manager Digital Signature
@@ -743,7 +846,7 @@ export const qualityService = {
     report.qmSignature = {
       signerName: qmUser.name,
       signerNik: qmUser.nik,
-      signerRole: 'Quality Manager / Apoteker Penanggung Jawab Mutu',
+      signerRole: 'Quality Manager',
       signedAt: new Date().toISOString(),
       signatureHash,
       notes: qmNotes,
@@ -945,6 +1048,9 @@ export const qualityService = {
       if (target) {
         const opts = typeof options === 'string' ? { notes: options } : (options || {});
         target.qcStatus = newStatus as any;
+        if (target.qcPayload) {
+          target.qcPayload.status = newStatus as any;
+        }
         if (opts.notes) target.notes = opts.notes;
         if (opts.revertReason !== undefined) target.revertReason = opts.revertReason;
         if (opts.revertedBy !== undefined) target.revertedBy = opts.revertedBy;
@@ -959,6 +1065,7 @@ export const qualityService = {
         await warehouseService.updateGrnRecord(target.id, {
           qcStatus: newStatus as any,
           notes: opts.notes || target.notes,
+          qcPayload: target.qcPayload ? { ...target.qcPayload, status: newStatus as any } : undefined,
           revertReason: opts.revertReason !== undefined ? opts.revertReason : target.revertReason,
           revertedBy: opts.revertedBy !== undefined ? opts.revertedBy : target.revertedBy,
           revertedAt: opts.revertedAt !== undefined ? opts.revertedAt : target.revertedAt,

@@ -230,7 +230,7 @@ export const LotDetailModal: React.FC<LotDetailModalProps> = ({
 
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-100 text-xs">
                       <div>
-                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Produsen / Pemasok</span>
+                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Produsen / Supplier</span>
                         <span className="font-semibold text-slate-800 truncate block">{lot.manufacturer}</span>
                       </div>
 

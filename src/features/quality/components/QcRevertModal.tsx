@@ -94,7 +94,7 @@ export const QcRevertModal: React.FC<QcRevertModalProps> = ({
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Pemasok / Produsen:</span>
+              <span className="text-slate-500">Supplier / Produsen:</span>
               <span>{report.distributor || report.manufacturer}</span>
             </div>
             <div className="flex justify-between">

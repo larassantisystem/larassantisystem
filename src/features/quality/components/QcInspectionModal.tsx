@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { QcInspectionReport, QcParameterResult } from '../types/qcTypes';
 import { analyzeLabResults } from '../utils/qcAiAssistant';
-import { calculateAutoRetestDate } from '../utils/qcNumbering';
+import { calculateAutoRetestDate, getUserJabatan } from '../utils/qcNumbering';
 import { useAuth } from '../../../core/auth/AuthContext';
 import { warehouseService } from '../../warehouse/warehouseService';
 import { CoaViewerModal } from '../../warehouse/components/CoaViewerModal';
@@ -307,7 +307,7 @@ export const QcInspectionModal: React.FC<QcInspectionModalProps> = ({
                   <span className="font-bold text-slate-800 text-sm">{report.materialName}</span>
                 </div>
                 <div>
-                  <span className="text-slate-500 block">Produsen / Pemasok:</span>
+                  <span className="text-slate-500 block">Produsen / Supplier:</span>
                   <span className="font-semibold text-slate-700">{report.distributor || report.manufacturer}</span>
                 </div>
                 <div>
@@ -788,12 +788,12 @@ export const QcInspectionModal: React.FC<QcInspectionModalProps> = ({
             <form onSubmit={handleFinalSubmitWithSignature} className="p-6 space-y-4">
               <div className="bg-teal-50 border border-teal-200 rounded-xl p-3.5 space-y-2 text-xs text-slate-700">
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Staf Analis:</span>
-                  <span className="font-bold text-teal-900">{user?.name || 'Staf Analis QC'}</span>
+                  <span className="text-slate-500">{user?.role ? getUserJabatan(user) : 'Staf Analis QC'}:</span>
+                  <span className="font-bold text-teal-900">{user?.name || 'Ayu'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">NIK:</span>
-                  <span className="font-mono text-slate-800">{user?.nik || 'N/A'}</span>
+                  <span className="font-mono text-slate-800">{user?.nik || 'LMS20001'}</span>
                 </div>
                 <div className="flex justify-between border-t border-teal-200/60 pt-1.5">
                   <span className="text-slate-500">Rekomendasi Staf:</span>

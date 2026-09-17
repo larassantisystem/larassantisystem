@@ -227,7 +227,7 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
       return;
     }
     if (!distributor.trim()) {
-      setFormError('Nama pemasok / distributor wajib diisi.');
+      setFormError('Nama supplier wajib diisi.');
       return;
     }
     if (!quantityReceived || Number(quantityReceived) <= 0) {
@@ -504,7 +504,7 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
                 }`}
               />
               <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                2. IDENTITAS PRODUSEN, PEMASOK & PENGIRIMAN
+                2. IDENTITAS PRODUSEN, SUPPLIER & PENGIRIMAN
               </h3>
             </div>
 
@@ -521,7 +521,7 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
                   ) : (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200 text-[10px] font-extrabold">
                       <Lock className="w-3 h-3" />
-                      Sama dengan Pemasok
+                      Sama dengan Supplier
                     </span>
                   )}
                 </div>
@@ -535,7 +535,7 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
                         ? selectedMaterial?.manufacturer || 'Pilih bahan terlebih dahulu'
                         : distributor
                         ? distributor
-                        : 'Otomatis mengikuti Nama Pemasok'
+                        : 'Otomatis mengikuti Nama Supplier'
                     }
                     className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-600 cursor-not-allowed"
                   />
@@ -544,14 +544,14 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
                 <p className="text-[11px] text-slate-400 mt-1">
                   {materialType === 'raw'
                     ? 'Nama pabrik produsen otomatis diambil dari Master Data Bahan Baku.'
-                    : 'Untuk kemasan, nama produsen terkunci sama dengan nama pemasok/distributor.'}
+                    : 'Untuk kemasan, nama produsen terkunci sama dengan nama supplier.'}
                 </p>
               </div>
 
-              {/* Distributor / Pemasok */}
+              {/* Supplier */}
               <div>
                 <label className="text-xs font-bold text-slate-700 block mb-1.5">
-                  Nama Pemasok / Distributor <span className="text-rose-500">*</span>
+                  Supplier <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -559,14 +559,14 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
                   onChange={(e) => setDistributor(e.target.value)}
                   placeholder={
                     materialType === 'raw'
-                      ? 'Contoh: PT Kimia Farma Trading / PT BASF Distribusi'
+                      ? 'Contoh: PT Kimia Farma Trading / PT BASF Supplier'
                       : 'Contoh: PT Mulia Packaging / PT Multi Plastik'
                   }
                   className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
                   required
                 />
                 <p className="text-[11px] text-slate-400 mt-1">
-                  Pihak distributor/supplier yang mengirimkan barang ke gudang.
+                  Pihak supplier yang mengirimkan barang ke gudang.
                 </p>
               </div>
             </div>
@@ -1123,7 +1123,7 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
                 Jumlah: {Number(quantityReceived).toLocaleString()} {unit} ({containerCount} {containerType})
               </p>
               <p className="text-[11px] text-slate-600">
-                Pemasok: {distributor}
+                Supplier: {distributor}
               </p>
             </div>
 

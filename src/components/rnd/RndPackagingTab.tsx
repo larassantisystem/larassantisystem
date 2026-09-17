@@ -148,7 +148,7 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
 
   // Filtered PM
   const filteredPM = packagingMaterials.filter((pm) => {

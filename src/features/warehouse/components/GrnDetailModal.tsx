@@ -219,10 +219,10 @@ export const GrnDetailModal: React.FC<GrnDetailModalProps> = ({
               </p>
             </div>
 
-            {/* 2. Pemasok & Dokumen Pengiriman */}
+            {/* 2. Supplier & Dokumen Pengiriman */}
             <div className="p-3.5 rounded-2xl border border-slate-200/80 bg-white shadow-2xs space-y-1">
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                <Building2 className="w-3 h-3 text-slate-400" /> Pemasok & Pengiriman
+                <Building2 className="w-3 h-3 text-slate-400" /> Supplier & Pengiriman
               </span>
               <p className="font-bold text-slate-900 text-xs">{record.distributor || '-'}</p>
               <p className="text-xs text-slate-500">

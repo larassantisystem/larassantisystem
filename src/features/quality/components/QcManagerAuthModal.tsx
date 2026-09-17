@@ -177,7 +177,7 @@ export const QcManagerAuthModal: React.FC<QcManagerAuthModalProps> = ({
                 <span className="font-mono font-semibold">{report.batchNumberVendor}</span>
               </div>
               <div>
-                <span className="text-slate-400 block">Pemasok / Distributor:</span>
+                <span className="text-slate-400 block">Supplier:</span>
                 <span className="font-semibold text-slate-800 truncate block">{report.distributor}</span>
               </div>
               <div>
@@ -193,9 +193,9 @@ export const QcManagerAuthModal: React.FC<QcManagerAuthModalProps> = ({
                 </span>
               </div>
               <div>
-                <span className="text-slate-400 block">Dianalisa Oleh (Staf):</span>
+                <span className="text-slate-400 block">{report.staffSignature?.signerRole || 'Staf Analis QC'}:</span>
                 <span className="font-semibold text-slate-800">
-                  {report.staffSignature?.signerName || 'Staf Analis QC'}
+                  {report.staffSignature?.signerName || report.sampledBy || 'Ayu'}
                 </span>
               </div>
             </div>
@@ -207,7 +207,7 @@ export const QcManagerAuthModal: React.FC<QcManagerAuthModalProps> = ({
               <div className="flex items-center gap-2">
                 <FileText className="w-4 h-4 text-slate-700" />
                 <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                  Hasil Analisa Pengujian Laboratorium (Staf Analis QC)
+                  Hasil Analisa Pengujian Laboratorium ({report.staffSignature?.signerRole || 'Staf Analis QC'})
                 </h4>
               </div>
               <span className="text-[11px] font-semibold text-slate-500">
@@ -533,7 +533,7 @@ export const QcManagerAuthModal: React.FC<QcManagerAuthModalProps> = ({
                   Verifikasi Kata Sandi Digital Signature Manager <span className="text-red-500">*</span>
                 </label>
                 <span className="text-[11px] font-semibold text-blue-800">
-                  {user?.name} ({user?.role.toUpperCase()})
+                  {user?.name} (Quality Manager)
                 </span>
               </div>
               <input

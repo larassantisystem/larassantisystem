@@ -754,7 +754,7 @@ export const DepartmentWorkspaceDashboard: React.FC<DepartmentWorkspaceDashboard
                         </span>
                       </div>
                       <p className="text-[11px] text-orange-900/80">
-                        Input Surat Jalan, No PO, CoA Pemasok, dan verifikasi kondisi fisik segel kemasan drum/zak.
+                        Input Surat Jalan, No PO, CoA Supplier, dan verifikasi kondisi fisik segel kemasan drum/zak.
                       </p>
                     </div>
                     <button

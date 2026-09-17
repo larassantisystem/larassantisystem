@@ -43,7 +43,7 @@ export const StockRawMaterialPage: React.FC<StockRawMaterialPageProps> = ({
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
 
   // Modal States
   const [selectedMaterialForLots, setSelectedMaterialForLots] = useState<MaterialStockSummary | null>(null);
@@ -136,27 +136,6 @@ export const StockRawMaterialPage: React.FC<StockRawMaterialPageProps> = ({
             </div>
           </div>
 
-          {/* Category Switcher Tabs (Bahan Baku vs Bahan Kemas) */}
-          <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200/80">
-            <button
-              type="button"
-              className="px-3.5 py-1.5 rounded-xl bg-white text-teal-900 font-black text-xs shadow-xs border border-teal-200/80 flex items-center gap-1.5 cursor-default"
-            >
-              <FlaskConical className="w-3.5 h-3.5 text-teal-700" />
-              <span>Bahan Baku ({materials.length})</span>
-            </button>
-
-            {onSwitchToPackaging && (
-              <button
-                type="button"
-                onClick={onSwitchToPackaging}
-                className="px-3.5 py-1.5 rounded-xl text-slate-600 hover:text-purple-900 font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer"
-              >
-                <Layers className="w-3.5 h-3.5 text-slate-400" />
-                <span>Bahan Kemas ({packagingCount})</span>
-              </button>
-            )}
-          </div>
         </div>
 
         {/* Action Toolbar & Summary Bar */}

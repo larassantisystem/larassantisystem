@@ -210,7 +210,7 @@ export const QcContainerSamplingQrModal: React.FC<QcContainerSamplingQrModalProp
                 Pilih Nomor Wadah / Kemasan ({totalContainers} {report.containerType}):
               </label>
               <span className="text-[11px] text-slate-500 font-medium">
-                Standar Sampling: <b className="text-teal-900">{report.samplingInfo?.samplingStandard || 'MIL-STD-105E'}</b>
+                Standar Sampling: <b className="text-teal-900">{report.materialType === 'raw' ? 'n = 1 + √N' : (report.samplingInfo?.samplingStandard || 'MIL-STD-105E')}</b>
               </span>
             </div>
 
@@ -328,9 +328,9 @@ export const QcContainerSamplingQrModal: React.FC<QcContainerSamplingQrModalProp
                     </div>
                   )}
                   <div>
-                    <span className="text-slate-400 text-[11px] block">Petugas Sampling QC:</span>
+                    <span className="text-slate-400 text-[11px] block">{report.staffSignature?.signerRole || 'Staf Analis QC'}:</span>
                     <span className="text-slate-200 font-medium">
-                      {report.sampledBy || report.staffSignature?.signerName || 'Staf Analis QC'}
+                      {report.staffSignature?.signerName || report.sampledBy || 'Ayu'}
                     </span>
                   </div>
                   <div>

@@ -25,6 +25,9 @@ export interface SerializedQcPayload {
   sampledBy?: string;
   samplingDateTime?: string;
   retestDate?: string;
+  revertReason?: string;
+  revertedBy?: string;
+  revertedAt?: string;
   updatedAt?: string;
 }
 
@@ -59,6 +62,9 @@ export function packGrnNotes(userNotes?: string | null, qcReport?: Partial<QcIns
     sampledBy: qcReport.sampledBy,
     samplingDateTime: qcReport.samplingDateTime,
     retestDate: qcReport.retestDate || (qcReport.materialType === 'raw' ? calculateAutoRetestDate('raw', qcReport.expiryDate, qcReport.receivedDate) : undefined),
+    revertReason: qcReport.revertReason,
+    revertedBy: qcReport.revertedBy,
+    revertedAt: qcReport.revertedAt,
     updatedAt: qcReport.updatedAt || new Date().toISOString(),
   };
 
@@ -131,9 +137,11 @@ export async function syncQcReportToSupabase(
       updated_at: new Date().toISOString(),
     };
 
-    const effectiveRetest = report.retestDate || (report.materialType === 'raw' ? calculateAutoRetestDate('raw', report.expiryDate, report.receivedDate) : undefined);
-    if (effectiveRetest) {
-      updatePayload.retest_date = effectiveRetest;
+    if (report.actualSampleSize !== undefined && report.actualSampleSize !== null) {
+      updatePayload.actual_sample_size = Number(report.actualSampleSize);
+    }
+    if (report.actualSampleUnit) {
+      updatePayload.actual_sample_unit = report.actualSampleUnit;
     }
     if (report.sampledContainers) {
       updatePayload.sampled_containers = report.sampledContainers;
@@ -144,22 +152,34 @@ export async function syncQcReportToSupabase(
     if (report.samplingDateTime) {
       updatePayload.sampling_date_time = report.samplingDateTime;
     }
-    if (report.actualSampleSize !== undefined && report.actualSampleSize !== null) {
-      updatePayload.actual_sample_size = report.actualSampleSize;
-    }
-    if (report.actualSampleUnit) {
-      updatePayload.actual_sample_unit = report.actualSampleUnit;
+
+    const effectiveRetest = report.retestDate || (report.materialType === 'raw' ? calculateAutoRetestDate('raw', report.expiryDate, report.receivedDate) : undefined);
+    if (effectiveRetest) {
+      updatePayload.retest_date = effectiveRetest;
     }
 
     const targetId = remoteRow?.id;
-    let updateQuery;
-    if (targetId && isUuid(targetId)) {
-      updateQuery = supabase.from('warehouse_grn').update(updatePayload).eq('id', targetId);
-    } else {
-      updateQuery = supabase.from('warehouse_grn').update(updatePayload).eq('grn_number', report.grnNumber);
-    }
+    const runUpdate = async (payloadToSync: Record<string, any>) => {
+      if (targetId && isUuid(targetId)) {
+        return await supabase.from('warehouse_grn').update(payloadToSync).eq('id', targetId);
+      } else {
+        return await supabase.from('warehouse_grn').update(payloadToSync).eq('grn_number', report.grnNumber);
+      }
+    };
 
-    const { error: updateErr } = await updateQuery;
+    let { error: updateErr } = await runUpdate(updatePayload);
+
+    // If there is any column mismatch error, fallback to the minimal guaranteed fields
+    if (updateErr && (updateErr.code === 'PGRST204' || updateErr.code === '42703')) {
+      console.warn('[syncQcReportToSupabase] Retrying with minimal core fields due to schema mismatch:', updateErr.message);
+      const fallbackPayload: Record<string, any> = {
+        qc_status: report.status,
+        notes: packedNotes,
+        updated_at: new Date().toISOString(),
+      };
+      const retryResult = await runUpdate(fallbackPayload);
+      updateErr = retryResult.error;
+    }
 
     if (updateErr) {
       console.warn('[syncQcReportToSupabase] Update Supabase error:', updateErr);

@@ -1001,7 +1001,7 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
 
                   <div className="col-span-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
                     <div>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase block">Produsen / Pemasok</span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase block">Produsen / Supplier</span>
                       <span className="font-medium text-slate-900 text-xs block mt-0.5">
                         {scannedResult.mfg || matchedReport?.manufacturer || '-'}
                       </span>

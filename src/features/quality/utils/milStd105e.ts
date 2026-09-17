@@ -75,10 +75,10 @@ export const calculateSamplingPlan = (
       totalContainers: containerCount,
       unit,
       containerType,
-      samplingStandard: 'CPKB Standar BPOM (Pola n = 1 + √N)',
+      samplingStandard: 'n = 1 + √N',
       sampleSizeQuantity: sampleContainers,
       sampleUnit: 'wadah/drum',
-      samplingDescription: `Berdasarkan pedoman CPKB untuk ${N} wadah yang diterima, dilakukan pengambilan contoh pada ${sampleContainers} wadah acak di Ruang Sampling Bahan Baku.`,
+      samplingDescription: `Berdasarkan pedoman CPKB (n = 1 + √N) untuk ${N} wadah yang diterima, dilakukan pengambilan contoh pada ${sampleContainers} wadah acak di Ruang Sampling Bahan Baku.`,
     };
   }
 };

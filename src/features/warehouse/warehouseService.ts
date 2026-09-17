@@ -8,6 +8,8 @@ const WAREHOUSE_GRN_STORAGE_KEY = 'lsm_warehouse_grn_v1';
 
 const defaultGrnRecords: GrnRecord[] = [];
 
+const knownMissingColumns = new Set<string>();
+
 /**
  * Builds standard Supabase payload conforming to the primary warehouse_grn schema
  * with snake_case column names (supplier_batch_number, purchase_order_number, expiration_date).
@@ -61,20 +63,24 @@ function buildPrimarySupabasePayload(record: GrnRecord): Record<string, any> {
       ? record.packagingCondition
       : 'clean',
     coa_attachment: record.coaAttachment || null,
-    coa_drive_file_id: record.coaDriveFileId || null,
-    coa_drive_view_link: record.coaDriveViewLink || null,
     received_by: record.receivedBy || 'Staf Gudang',
     received_by_nik: (record as any).receivedByNik || 'NIK-WH-001',
     notes: packGrnNotes(record.notes, record.qcPayload) || null,
-    revert_reason: record.revertReason || null,
-    reverted_by: record.revertedBy || null,
-    reverted_at: record.revertedAt || null,
-    actual_sample_size: record.actualSampleSize !== undefined && record.actualSampleSize !== null ? Number(record.actualSampleSize) : null,
-    actual_sample_unit: record.actualSampleUnit || null,
-    sampled_containers: record.sampledContainers || null,
-    sampled_by: record.sampledBy || null,
-    sampling_date_time: record.samplingDateTime || null,
   };
+
+  // Conditionally include optional physical columns if they have values and are not known to be absent
+  if (record.revertReason && !knownMissingColumns.has('revert_reason')) payload.revert_reason = record.revertReason;
+  if (record.revertedBy && !knownMissingColumns.has('reverted_by')) payload.reverted_by = record.revertedBy;
+  if (record.revertedAt && !knownMissingColumns.has('reverted_at')) payload.reverted_at = record.revertedAt;
+  if (record.actualSampleSize !== undefined && record.actualSampleSize !== null && !knownMissingColumns.has('actual_sample_size')) {
+    payload.actual_sample_size = Number(record.actualSampleSize);
+  }
+  if (record.actualSampleUnit && !knownMissingColumns.has('actual_sample_unit')) payload.actual_sample_unit = record.actualSampleUnit;
+  if (record.sampledContainers && !knownMissingColumns.has('sampled_containers')) payload.sampled_containers = record.sampledContainers;
+  if (record.sampledBy && !knownMissingColumns.has('sampled_by')) payload.sampled_by = record.sampledBy;
+  if (record.samplingDateTime && !knownMissingColumns.has('sampling_date_time')) payload.sampling_date_time = record.samplingDateTime;
+  if (record.coaDriveFileId && !knownMissingColumns.has('coa_drive_file_id')) payload.coa_drive_file_id = record.coaDriveFileId;
+  if (record.coaDriveViewLink && !knownMissingColumns.has('coa_drive_view_link')) payload.coa_drive_view_link = record.coaDriveViewLink;
 
   return payload;
 }
@@ -82,7 +88,7 @@ function buildPrimarySupabasePayload(record: GrnRecord): Record<string, any> {
 /**
  * Adaptive execution helper that catches PostgREST schema cache errors (PGRST204)
  * or Postgres column mismatch errors (42703), strips the non-existent column,
- * swaps column aliases when needed, and retries automatically up to 8 times.
+ * swaps column aliases when needed, and retries automatically.
  */
 async function executeWithSchemaAdaptiveRetry(
   tableName: string,
@@ -91,8 +97,13 @@ async function executeWithSchemaAdaptiveRetry(
   mode: 'insert' | 'upsert'
 ): Promise<{ data: any; error: any }> {
   const payload = { ...initialPayload };
+  // Remove any previously identified missing columns
+  for (const col of knownMissingColumns) {
+    delete payload[col];
+  }
+
   let attempts = 0;
-  const maxAttempts = 8;
+  const maxAttempts = 20;
 
   while (attempts < maxAttempts) {
     attempts++;
@@ -129,21 +140,22 @@ async function executeWithSchemaAdaptiveRetry(
 
     if (match && match[1]) {
       const missingCol = match[1];
+      knownMissingColumns.add(missingCol);
       console.warn(`[warehouseService] Column '${missingCol}' not in Supabase schema. Adjusting payload (Attempt ${attempts})...`);
       delete payload[missingCol];
 
       // Handle common column alias swaps
-      if (missingCol === 'supplier_batch_number' && !payload.batch_number) {
+      if (missingCol === 'supplier_batch_number' && !payload.batch_number && !knownMissingColumns.has('batch_number')) {
         payload.batch_number = record.batchNumber || '-';
-      } else if (missingCol === 'purchase_order_number' && !payload.po_number) {
+      } else if (missingCol === 'purchase_order_number' && !payload.po_number && !knownMissingColumns.has('po_number')) {
         payload.po_number = record.poNumber || '-';
-      } else if (missingCol === 'expiration_date' && !payload.expiry_date) {
+      } else if (missingCol === 'expiration_date' && !payload.expiry_date && !knownMissingColumns.has('expiry_date')) {
         payload.expiry_date = record.expiryDate || record.receivedDate;
-      } else if (missingCol === 'batch_number' && !payload.supplier_batch_number) {
+      } else if (missingCol === 'batch_number' && !payload.supplier_batch_number && !knownMissingColumns.has('supplier_batch_number')) {
         payload.supplier_batch_number = record.batchNumber || '-';
-      } else if (missingCol === 'po_number' && !payload.purchase_order_number) {
+      } else if (missingCol === 'po_number' && !payload.purchase_order_number && !knownMissingColumns.has('purchase_order_number')) {
         payload.purchase_order_number = record.poNumber || '-';
-      } else if (missingCol === 'expiry_date' && !payload.expiration_date) {
+      } else if (missingCol === 'expiry_date' && !payload.expiration_date && !knownMissingColumns.has('expiration_date')) {
         payload.expiration_date = record.expiryDate || record.receivedDate;
       }
     } else {
@@ -151,11 +163,23 @@ async function executeWithSchemaAdaptiveRetry(
     }
   }
 
-  // Final attempt
+  // Final fallback attempt with basic essential payload
+  const fallbackPayload: Record<string, any> = {
+    grn_number: record.grnNumber,
+    material_type: record.materialType === 'packaging' ? 'packaging' : 'raw',
+    material_code: record.materialCode,
+    material_name: record.materialName,
+    received_date: record.receivedDate || new Date().toISOString().slice(0, 10),
+    quantity_received: Number(record.quantityReceived) || 0,
+    unit: record.unit || 'kg',
+    qc_status: record.qcStatus || 'QUARANTINE',
+    notes: packGrnNotes(record.notes, record.qcPayload) || null,
+  };
+
   if (mode === 'insert') {
-    return await supabase!.from(tableName).insert(payload).select().single();
+    return await supabase!.from(tableName).insert(fallbackPayload).select().single();
   } else {
-    return await supabase!.from(tableName).upsert(payload, { onConflict: 'grn_number' }).select().single();
+    return await supabase!.from(tableName).upsert(fallbackPayload, { onConflict: 'grn_number' }).select().single();
   }
 }
 
@@ -314,6 +338,10 @@ export const warehouseService = {
                 });
             }
 
+            const resolvedQcStatus = (qcPayload?.status && qcPayload.status !== 'QUARANTINE')
+              ? qcPayload.status
+              : (d.qc_status || d.qcStatus || qcPayload?.status || 'QUARANTINE');
+
             mapped.push({
               id: d.id,
               grnNumber: d.grn_number || d.grnNumber,
@@ -342,20 +370,22 @@ export const warehouseService = {
               containerType: d.container_type || d.containerType || 'Drum / Zak',
               storageLocation: d.storage_location || d.storageLocation || 'Gudang Karantina',
               storageConditions: d.storage_conditions || d.storageConditions,
-              qcStatus: (d.qc_status || d.qcStatus || 'QUARANTINE') as any,
+              qcStatus: resolvedQcStatus as any,
               qcParametersCount: Number(d.qc_parameters_count || d.qcParametersCount || 0),
               receivedBy: d.received_by || d.receivedBy || 'Staf Gudang',
               createdAt: d.created_at || d.createdAt || new Date().toISOString(),
               notes: userNotes,
               qcPayload: qcPayload || undefined,
-              revertReason: d.revert_reason || d.revertReason,
-              revertedBy: d.reverted_by || d.revertedBy,
-              revertedAt: d.reverted_at || d.revertedAt,
-              actualSampleSize: d.actual_sample_size !== undefined && d.actual_sample_size !== null ? Number(d.actual_sample_size) : d.actualSampleSize,
-              actualSampleUnit: d.actual_sample_unit || d.actualSampleUnit,
-              sampledContainers: d.sampled_containers || d.sampledContainers,
-              sampledBy: d.sampled_by || d.sampledBy,
-              samplingDateTime: d.sampling_date_time || d.samplingDateTime,
+              revertReason: d.revert_reason || d.revertReason || qcPayload?.revertReason,
+              revertedBy: d.reverted_by || d.revertedBy || qcPayload?.revertedBy,
+              revertedAt: d.reverted_at || d.revertedAt || qcPayload?.revertedAt,
+              actualSampleSize: d.actual_sample_size !== undefined && d.actual_sample_size !== null
+                ? Number(d.actual_sample_size)
+                : (qcPayload?.actualSampleSize !== undefined ? qcPayload.actualSampleSize : d.actualSampleSize),
+              actualSampleUnit: d.actual_sample_unit || qcPayload?.actualSampleUnit || d.actualSampleUnit,
+              sampledContainers: d.sampled_containers || qcPayload?.sampledContainers || d.sampledContainers,
+              sampledBy: d.sampled_by || qcPayload?.sampledBy || d.sampledBy,
+              samplingDateTime: d.sampling_date_time || qcPayload?.samplingDateTime || d.samplingDateTime,
               sealCondition: d.seal_condition,
               packagingCondition: d.packaging_condition,
               coaAttachment: d.coa_attachment || d.coaAttachment,
@@ -453,22 +483,40 @@ export const warehouseService = {
     updatedData: Partial<GrnRecord>
   ): Promise<GrnRecord> => {
     const existing = await warehouseService.getGrnRecords();
-    const index = existing.findIndex((item) => item.id === id);
+    let index = existing.findIndex(
+      (item) =>
+        item.id === id ||
+        item.grnNumber === id ||
+        (item.internalLotNumber && item.internalLotNumber === id) ||
+        id === `qc-rep-${item.id}` ||
+        (item.id && id.endsWith(item.id)) ||
+        (updatedData.grnNumber && item.grnNumber === updatedData.grnNumber)
+    );
+
     if (index === -1) {
-      throw new Error('Catatan GRN tidak ditemukan');
+      console.warn('[warehouseService] Catatan GRN tidak ditemukan secara langsung dengan ID:', id);
+      if (updatedData.grnNumber) {
+        index = existing.findIndex((item) => item.grnNumber === updatedData.grnNumber);
+      }
     }
+
+    if (index === -1) {
+      throw new Error(`Catatan GRN (${id}) tidak ditemukan.`);
+    }
+
+    const matchedItem = existing[index];
 
     // Protect against concurrency: retrieve current remote row to preserve remote payload
     let remotePayload: any = null;
     if (isSupabaseConfigured && supabase) {
       try {
-        const isUuid = Boolean(id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
+        const isUuid = Boolean(matchedItem.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(matchedItem.id));
         const query = supabase
           .from('warehouse_grn')
           .select('notes, internal_lot_number, qc_status');
         const { data: remoteRow } = isUuid
-          ? await query.eq('id', id).maybeSingle()
-          : await query.eq('grn_number', existing[index].grnNumber).maybeSingle();
+          ? await query.eq('id', matchedItem.id).maybeSingle()
+          : await query.eq('grn_number', matchedItem.grnNumber).maybeSingle();
 
         if (remoteRow?.notes) {
           const { userNotes, qcPayload } = unpackGrnNotes(remoteRow.notes);
@@ -476,7 +524,7 @@ export const warehouseService = {
             remotePayload = qcPayload;
           }
           if (userNotes && updatedData.notes === undefined) {
-            existing[index].notes = userNotes;
+            matchedItem.notes = userNotes;
           }
         }
       } catch (e) {
@@ -485,9 +533,9 @@ export const warehouseService = {
     }
 
     const updatedRecord: GrnRecord = {
-      ...existing[index],
+      ...matchedItem,
       ...updatedData,
-      qcPayload: updatedData.qcPayload !== undefined ? updatedData.qcPayload : (existing[index].qcPayload || remotePayload),
+      qcPayload: updatedData.qcPayload !== undefined ? updatedData.qcPayload : (matchedItem.qcPayload || remotePayload),
     };
 
     if (isSupabaseConfigured && supabase) {

@@ -43,6 +43,7 @@ import { QcContainerSamplingQrModal } from './QcContainerSamplingQrModal';
 import { warehouseService } from '../../warehouse/warehouseService';
 import { GrnDetailModal } from '../../warehouse/components/GrnDetailModal';
 import { GrnRecord } from '../../warehouse/types/grnTypes';
+import { Pagination } from '../../../core/ui-components/Pagination';
 import { useAuth } from '../../../core/auth/AuthContext';
 import { isQualityManager } from '../../../core/auth/permissionGuard';
 import {
@@ -82,6 +83,23 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
   const [activeMaterialType, setActiveMaterialType] = useState<'all' | 'raw' | 'packaging'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const isCompactMode = true;
+
+  // Dedicated Category & Pagination States (Default 50 items/page, 2 Separate Tabs: Bahan Baku vs Bahan Kemas)
+  const [queueCategory, setQueueCategory] = useState<'raw' | 'packaging'>('raw');
+  const [queuePage, setQueuePage] = useState<number>(1);
+  const [queueItemsPerPage, setQueueItemsPerPage] = useState<number>(50);
+
+  const [testingCategory, setTestingCategory] = useState<'raw' | 'packaging'>('raw');
+  const [testingPage, setTestingPage] = useState<number>(1);
+  const [testingItemsPerPage, setTestingItemsPerPage] = useState<number>(50);
+
+  const [approvalCategory, setApprovalCategory] = useState<'raw' | 'packaging'>('raw');
+  const [approvalPage, setApprovalPage] = useState<number>(1);
+  const [approvalItemsPerPage, setApprovalItemsPerPage] = useState<number>(50);
+
+  const [archiveCategory, setArchiveCategory] = useState<'raw' | 'packaging'>('raw');
+  const [archivePage, setArchivePage] = useState<number>(1);
+  const [archiveItemsPerPage, setArchiveItemsPerPage] = useState<number>(50);
 
   // Extended Quality states
   const [ipcBulkTests, setIpcBulkTests] = useState<IpcBulkTest[]>(initialIpcBulkTests);
@@ -452,7 +470,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
   );
 
   // Table 1: Antrean Karantina Table
-  const renderQueueTable = (items: QcInspectionReport[], emptyText: string) => (
+  const renderQueueTable = (items: QcInspectionReport[], emptyText: string, startIndex: number = 0) => (
     <table className={`w-full text-left border-collapse ${isCompactMode ? 'text-[11px]' : 'text-xs'}`}>
       <thead>
         <tr className={`border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider bg-slate-50/50 ${isCompactMode ? 'text-[10px]' : 'text-[11px]'}`}>
@@ -475,7 +493,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
         ) : (
           items.map((item, idx) => (
             <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-              <td className={`${isCompactMode ? 'p-1.5' : 'p-3'} text-center font-mono text-slate-400`}>{idx + 1}</td>
+              <td className={`${isCompactMode ? 'p-1.5' : 'p-3'} text-center font-mono text-slate-400`}>{startIndex + idx + 1}</td>
               <td className={isCompactMode ? 'p-1.5' : 'p-3'}>
                 <button
                   type="button"
@@ -571,7 +589,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
   );
 
   // Table 2: Proses Uji Lab Table
-  const renderTestingTable = (items: QcInspectionReport[], emptyText: string) => (
+  const renderTestingTable = (items: QcInspectionReport[], emptyText: string, startIndex: number = 0) => (
     <table className={`w-full text-left border-collapse ${isCompactMode ? 'text-[11px]' : 'text-xs'}`}>
       <thead>
         <tr className={`border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider bg-slate-50/50 ${isCompactMode ? 'text-[10px]' : 'text-[11px]'}`}>
@@ -594,7 +612,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
         ) : (
           items.map((item, idx) => (
             <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-              <td className={`${isCompactMode ? 'p-1.5' : 'p-3'} text-center font-mono text-slate-400`}>{idx + 1}</td>
+              <td className={`${isCompactMode ? 'p-1.5' : 'p-3'} text-center font-mono text-slate-400`}>{startIndex + idx + 1}</td>
               <td className={isCompactMode ? 'p-1.5' : 'p-3'}>
                 <button
                   type="button"
@@ -692,7 +710,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
   );
 
   // Table 3: Menunggu Otorisasi Manager Table
-  const renderApprovalTable = (items: QcInspectionReport[], emptyText: string) => (
+  const renderApprovalTable = (items: QcInspectionReport[], emptyText: string, startIndex: number = 0) => (
     <table className={`w-full text-left border-collapse ${isCompactMode ? 'text-[11px]' : 'text-xs'}`}>
       <thead>
         <tr className={`border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider bg-slate-50/50 ${isCompactMode ? 'text-[10px]' : 'text-[11px]'}`}>
@@ -715,7 +733,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
         ) : (
           items.map((item, idx) => (
             <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-              <td className={`${isCompactMode ? 'p-1.5' : 'p-3'} text-center font-mono text-slate-400`}>{idx + 1}</td>
+              <td className={`${isCompactMode ? 'p-1.5' : 'p-3'} text-center font-mono text-slate-400`}>{startIndex + idx + 1}</td>
               <td className={isCompactMode ? 'p-1.5' : 'p-3'}>
                 <div className={`font-mono font-bold text-indigo-900 ${isCompactMode ? 'text-xs' : 'text-sm'}`}>
                   {item.lotInternalNumber || 'Laporan Terbit'}
@@ -813,7 +831,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
   );
 
   // Table 4: Arsip Laporan & Lot Terbit Table
-  const renderArchiveTable = (items: QcInspectionReport[], emptyText: string) => (
+  const renderArchiveTable = (items: QcInspectionReport[], emptyText: string, startIndex: number = 0) => (
     <table className={`w-full text-left border-collapse ${isCompactMode ? 'text-[11px]' : 'text-xs'}`}>
       <thead>
         <tr className={`border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider bg-slate-50/50 ${isCompactMode ? 'text-[10px]' : 'text-[11px]'}`}>
@@ -836,7 +854,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
         ) : (
           items.map((item, idx) => (
             <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-              <td className={`${isCompactMode ? 'p-1.5' : 'p-3'} text-center font-mono text-slate-400`}>{idx + 1}</td>
+              <td className={`${isCompactMode ? 'p-1.5' : 'p-3'} text-center font-mono text-slate-400`}>{startIndex + idx + 1}</td>
               <td className={isCompactMode ? 'p-1.5' : 'p-3'}>
                 <div className={`font-mono font-bold text-slate-900 ${isCompactMode ? 'text-xs' : 'text-sm'}`}>
                   {item.lotInternalNumber || item.grnNumber}
@@ -934,26 +952,26 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
   return (
     <div className="space-y-6">
       {/* Top Banner Header */}
-      <div className="bg-gradient-to-r from-teal-800 via-teal-900 to-slate-900 rounded-2xl p-6 text-white shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="bg-gradient-to-r from-teal-800 via-teal-900 to-slate-900 rounded-2xl p-4 sm:p-6 text-white shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="space-y-1.5">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-teal-500/20 rounded-xl border border-teal-400/30">
-              <FlaskConical className="w-6 h-6 text-teal-300" />
+            <div className="p-2 bg-teal-500/20 rounded-xl border border-teal-400/30 shrink-0">
+              <FlaskConical className="w-5 h-5 sm:w-6 sm:h-6 text-teal-300" />
             </div>
-            <h2 className="text-xl font-black tracking-tight">
+            <h2 className="text-lg sm:text-xl font-black tracking-tight leading-snug">
               Quality Assurance & Laboratorium Pengawasan Mutu (QC)
             </h2>
           </div>
           <p className="text-xs text-teal-100/80 font-normal">
-            PT. LARASSANTI MAKMUR SEJAHTERA • Standar CPKB (Bahan Baku $\sqrt{'{N}'}+1$) & MIL-STD-105E Level II (Bahan Kemas)
+            PT. LARASSANTI MAKMUR SEJAHTERA • Standar CPKB (Bahan Baku n = 1 + √N) & MIL-STD-105E Level II (Bahan Kemas)
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
           <button
             type="button"
             onClick={() => setShowDiagnosticAudit(true)}
-            className="px-3.5 py-2 rounded-xl bg-teal-700/80 hover:bg-teal-600 text-white text-xs font-bold border border-teal-400/40 flex items-center gap-1.5 transition-all shadow-sm"
+            className="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-teal-700/80 hover:bg-teal-600 text-white text-xs font-bold border border-teal-400/40 flex items-center justify-center gap-1.5 transition-all shadow-sm cursor-pointer"
             title="Audit Komparasi Kriteria Master Kemasan (15) vs Checklist Lab (5)"
           >
             <Database className="w-4 h-4 text-teal-200" />
@@ -964,7 +982,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
       </div>
 
       {/* KPI Stats Bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-4">
         <div
           onClick={() => setCurrentTab('queue')}
           className={`p-4 rounded-xl border transition-all cursor-pointer ${
@@ -1223,256 +1241,415 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
               </div>
             )}
 
-            {renderMaterialFilterTabs(stats.quarantineRaw, stats.quarantinePkg, stats.totalQuarantine)}
+            {/* Category Tabs: 2 Tab Terpisah Antrean Karantina (Bahan Baku vs Bahan Kemas) Tanpa Opsi Semua */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQueueCategory('raw');
+                    setQueuePage(1);
+                  }}
+                  className={`w-full sm:w-auto justify-center sm:justify-start px-4 py-2.5 rounded-xl font-black text-xs transition-all flex items-center gap-2 cursor-pointer ${
+                    queueCategory === 'raw'
+                      ? 'bg-teal-700 text-white shadow-md shadow-teal-700/20'
+                      : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <FlaskConical className="w-4 h-4 shrink-0" />
+                  <span>🧪 Antrean Bahan Baku (BB)</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                      queueCategory === 'raw'
+                        ? 'bg-teal-900 text-white'
+                        : 'bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    {stats.quarantineRaw} Lot
+                  </span>
+                </button>
 
-            {activeMaterialType === 'all' ? (
-              <div className="space-y-6">
-                {/* 1. Bahan Baku Section */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="p-1.5 bg-teal-100 text-teal-800 rounded-lg">
-                        <Package className="w-4 h-4" />
-                      </div>
-                      <h4 className="font-bold text-slate-800 text-sm">
-                        Antrean Bahan Baku (BB)
-                      </h4>
-                      <span className="text-xs text-teal-700 font-semibold bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
-                        Formula CPKB: $n = 1 + \sqrt{'{N}'}$ wadah
-                      </span>
-                    </div>
-                    <span className="text-xs text-slate-500 font-semibold">
-                      {queueRawList.length} Bahan Menunggu
-                    </span>
-                  </div>
-                  <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
-                    {renderQueueTable(queueRawList, 'Tidak ada antrean Bahan Baku di karantina.')}
-                  </div>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQueueCategory('packaging');
+                    setQueuePage(1);
+                  }}
+                  className={`w-full sm:w-auto justify-center sm:justify-start px-4 py-2.5 rounded-xl font-black text-xs transition-all flex items-center gap-2 cursor-pointer ${
+                    queueCategory === 'packaging'
+                      ? 'bg-purple-700 text-white shadow-md shadow-purple-700/20'
+                      : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <Boxes className="w-4 h-4 shrink-0" />
+                  <span>📦 Antrean Bahan Kemas (BK)</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                      queueCategory === 'packaging'
+                        ? 'bg-purple-900 text-white'
+                        : 'bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    {stats.quarantinePkg} Lot
+                  </span>
+                </button>
+              </div>
 
-                {/* 2. Bahan Kemas Section */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="p-1.5 bg-purple-100 text-purple-800 rounded-lg">
-                        <Boxes className="w-4 h-4" />
-                      </div>
-                      <h4 className="font-bold text-slate-800 text-sm">
-                        Antrean Bahan Kemas (BK)
-                      </h4>
-                      <span className="text-xs text-purple-700 font-semibold bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200">
-                        MIL-STD-105E Level II (Single Sampling Normal)
-                      </span>
-                    </div>
-                    <span className="text-xs text-slate-500 font-semibold">
-                      {queuePackagingList.length} Bahan Menunggu
-                    </span>
-                  </div>
-                  <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
-                    {renderQueueTable(queuePackagingList, 'Tidak ada antrean Bahan Kemas di karantina.')}
-                  </div>
+              {/* Info Urutan */}
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 border border-slate-200/80 px-3 py-1.5 rounded-xl w-full sm:w-auto justify-center">
+                  <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                  <span>Urutan: <strong>Terlama ke Baru (FIFO QC)</strong></span>
                 </div>
               </div>
-            ) : (
-              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
-                {renderQueueTable(
-                  queueList,
-                  `Tidak ada antrean ${activeMaterialType === 'raw' ? 'Bahan Baku (BB)' : 'Bahan Kemas (BK)'} di karantina.`
-                )}
-              </div>
-            )}
+            </div>
+
+            {/* Content Table with Pagination (Default 50 items/page) */}
+            {(() => {
+              const currentQueueList = queueCategory === 'raw' ? queueRawList : queuePackagingList;
+              const totalItems = currentQueueList.length;
+              const startIndex = (queuePage - 1) * queueItemsPerPage;
+              const paginatedItems = currentQueueList.slice(startIndex, startIndex + queueItemsPerPage);
+
+              return (
+                <div className="space-y-2">
+                  <div className="border border-slate-200 rounded-xl overflow-x-auto shadow-xs w-full">
+                    {renderQueueTable(
+                      paginatedItems,
+                      queueCategory === 'raw'
+                        ? 'Tidak ada antrean Bahan Baku di karantina.'
+                        : 'Tidak ada antrean Bahan Kemas di karantina.',
+                      startIndex
+                    )}
+                  </div>
+
+                  {totalItems > 0 && (
+                    <Pagination
+                      currentPage={queuePage}
+                      totalItems={totalItems}
+                      itemsPerPage={queueItemsPerPage}
+                      onPageChange={(page) => setQueuePage(page)}
+                      onItemsPerPageChange={(size) => {
+                        setQueueItemsPerPage(size);
+                        setQueuePage(1);
+                      }}
+                    />
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
 
         {/* TAB 2: Proses Uji Lab */}
         {currentTab === 'testing' && (
           <div className="p-4 space-y-4">
-            {renderMaterialFilterTabs(stats.testingRaw, stats.testingPkg, stats.inTesting)}
+            {/* Category Tabs: 2 Tab Terpisah Uji Lab (Bahan Baku vs Bahan Kemas) Tanpa Opsi Semua */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTestingCategory('raw');
+                    setTestingPage(1);
+                  }}
+                  className={`w-full sm:w-auto justify-center sm:justify-start px-4 py-2.5 rounded-xl font-black text-xs transition-all flex items-center gap-2 cursor-pointer ${
+                    testingCategory === 'raw'
+                      ? 'bg-teal-700 text-white shadow-md shadow-teal-700/20'
+                      : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <FlaskConical className="w-4 h-4 shrink-0" />
+                  <span>🧪 Uji Lab Bahan Baku (BB)</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                      testingCategory === 'raw'
+                        ? 'bg-teal-900 text-white'
+                        : 'bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    {stats.testingRaw} Sedang Diuji
+                  </span>
+                </button>
 
-            {activeMaterialType === 'all' ? (
-              <div className="space-y-6">
-                {/* 1. Bahan Baku Section */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="p-1.5 bg-teal-100 text-teal-800 rounded-lg">
-                        <Package className="w-4 h-4" />
-                      </div>
-                      <h4 className="font-bold text-slate-800 text-sm">
-                        Uji Lab Bahan Baku (BB)
-                      </h4>
-                      <span className="text-xs text-teal-700 font-semibold bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
-                        Pemeriksaan Kimia, Fisika & Organoleptik
-                      </span>
-                    </div>
-                    <span className="text-xs text-slate-500 font-semibold">
-                      {testingRawList.length} Bahan Sedang Diuji
-                    </span>
-                  </div>
-                  <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
-                    {renderTestingTable(testingRawList, 'Tidak ada pengujian laboratorium Bahan Baku yang sedang berjalan.')}
-                  </div>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTestingCategory('packaging');
+                    setTestingPage(1);
+                  }}
+                  className={`w-full sm:w-auto justify-center sm:justify-start px-4 py-2.5 rounded-xl font-black text-xs transition-all flex items-center gap-2 cursor-pointer ${
+                    testingCategory === 'packaging'
+                      ? 'bg-purple-700 text-white shadow-md shadow-purple-700/20'
+                      : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <Boxes className="w-4 h-4 shrink-0" />
+                  <span>📦 Uji Lab Bahan Kemas (BK)</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                      testingCategory === 'packaging'
+                        ? 'bg-purple-900 text-white'
+                        : 'bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    {stats.testingPkg} Sedang Diuji
+                  </span>
+                </button>
+              </div>
 
-                {/* 2. Bahan Kemas Section */}
+              {/* Info Lingkup Uji */}
+              <div className="flex items-center gap-2">
+                <span className="hidden sm:inline-block text-[11px] font-semibold text-slate-600 bg-slate-50 border border-slate-200/80 px-2.5 py-1.5 rounded-lg">
+                  {testingCategory === 'raw'
+                    ? 'Pemeriksaan Kimia, Fisika & Organoleptik'
+                    : 'Dimensi, Kebocoran, Teks & Kesesuaian Fisik'}
+                </span>
+              </div>
+            </div>
+
+            {/* Content Table with Pagination (Default 50 items/page) */}
+            {(() => {
+              const currentTestingList = testingCategory === 'raw' ? testingRawList : testingPackagingList;
+              const totalItems = currentTestingList.length;
+              const startIndex = (testingPage - 1) * testingItemsPerPage;
+              const paginatedItems = currentTestingList.slice(startIndex, startIndex + testingItemsPerPage);
+
+              return (
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="p-1.5 bg-purple-100 text-purple-800 rounded-lg">
-                        <Boxes className="w-4 h-4" />
-                      </div>
-                      <h4 className="font-bold text-slate-800 text-sm">
-                        Uji Lab Bahan Kemas (BK)
-                      </h4>
-                      <span className="text-xs text-purple-700 font-semibold bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200">
-                        Dimensi, Kebocoran, Teks & Kesesuaian Fisik
-                      </span>
-                    </div>
-                    <span className="text-xs text-slate-500 font-semibold">
-                      {testingPackagingList.length} Bahan Sedang Diuji
-                    </span>
+                  <div className="border border-slate-200 rounded-xl overflow-x-auto shadow-xs w-full">
+                    {renderTestingTable(
+                      paginatedItems,
+                      testingCategory === 'raw'
+                        ? 'Tidak ada pengujian laboratorium Bahan Baku yang sedang berjalan.'
+                        : 'Tidak ada pengujian laboratorium Bahan Kemas yang sedang berjalan.',
+                      startIndex
+                    )}
                   </div>
-                  <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
-                    {renderTestingTable(testingPackagingList, 'Tidak ada pengujian laboratorium Bahan Kemas yang sedang berjalan.')}
-                  </div>
+
+                  {totalItems > 0 && (
+                    <Pagination
+                      currentPage={testingPage}
+                      totalItems={totalItems}
+                      itemsPerPage={testingItemsPerPage}
+                      onPageChange={(page) => setTestingPage(page)}
+                      onItemsPerPageChange={(size) => {
+                        setTestingItemsPerPage(size);
+                        setTestingPage(1);
+                      }}
+                    />
+                  )}
                 </div>
-              </div>
-            ) : (
-              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
-                {renderTestingTable(
-                  testingList,
-                  `Tidak ada pengujian laboratorium ${activeMaterialType === 'raw' ? 'Bahan Baku (BB)' : 'Bahan Kemas (BK)'} yang sedang berjalan.`
-                )}
-              </div>
-            )}
+              );
+            })()}
           </div>
         )}
 
         {/* TAB 3: Menunggu Otorisasi Manager */}
         {currentTab === 'approval' && (
           <div className="p-4 space-y-4">
-            {renderMaterialFilterTabs(stats.approvalRaw, stats.approvalPkg, stats.awaitingApproval)}
+            {/* Category Tabs: 2 Tab Terpisah Otorisasi QM (Bahan Baku vs Bahan Kemas) Tanpa Opsi Semua */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setApprovalCategory('raw');
+                    setApprovalPage(1);
+                  }}
+                  className={`w-full sm:w-auto justify-center sm:justify-start px-4 py-2.5 rounded-xl font-black text-xs transition-all flex items-center gap-2 cursor-pointer ${
+                    approvalCategory === 'raw'
+                      ? 'bg-teal-700 text-white shadow-md shadow-teal-700/20'
+                      : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <FlaskConical className="w-4 h-4 shrink-0" />
+                  <span>🧪 Otorisasi QM Bahan Baku (BB)</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                      approvalCategory === 'raw'
+                        ? 'bg-teal-900 text-white'
+                        : 'bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    {stats.approvalRaw} Menunggu
+                  </span>
+                </button>
 
-            {activeMaterialType === 'all' ? (
-              <div className="space-y-6">
-                {/* 1. Bahan Baku Section */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="p-1.5 bg-teal-100 text-teal-800 rounded-lg">
-                        <Package className="w-4 h-4" />
-                      </div>
-                      <h4 className="font-bold text-slate-800 text-sm">
-                        Otorisasi QM: Bahan Baku (BB)
-                      </h4>
-                      <span className="text-xs text-teal-700 font-semibold bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
-                        Penerbitan No. Lot LBB
-                      </span>
-                    </div>
-                    <span className="text-xs text-slate-500 font-semibold">
-                      {approvalRawList.length} Lot Menunggu
-                    </span>
-                  </div>
-                  <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
-                    {renderApprovalTable(approvalRawList, 'Tidak ada lot Bahan Baku yang sedang menunggu otorisasi Quality Manager.')}
-                  </div>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setApprovalCategory('packaging');
+                    setApprovalPage(1);
+                  }}
+                  className={`w-full sm:w-auto justify-center sm:justify-start px-4 py-2.5 rounded-xl font-black text-xs transition-all flex items-center gap-2 cursor-pointer ${
+                    approvalCategory === 'packaging'
+                      ? 'bg-purple-700 text-white shadow-md shadow-purple-700/20'
+                      : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <Boxes className="w-4 h-4 shrink-0" />
+                  <span>📦 Otorisasi QM Bahan Kemas (BK)</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                      approvalCategory === 'packaging'
+                        ? 'bg-purple-900 text-white'
+                        : 'bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    {stats.approvalPkg} Menunggu
+                  </span>
+                </button>
+              </div>
 
-                {/* 2. Bahan Kemas Section */}
+              {/* Info Format Lot */}
+              <div className="flex items-center gap-2">
+                <span className="hidden sm:inline-block text-[11px] font-semibold text-slate-600 bg-slate-50 border border-slate-200/80 px-2.5 py-1.5 rounded-lg">
+                  {approvalCategory === 'raw'
+                    ? 'Penerbitan No. Lot LBB (Bahan Baku)'
+                    : 'Penerbitan No. Lot LBK (Bahan Kemas)'}
+                </span>
+              </div>
+            </div>
+
+            {/* Content Table with Pagination (Default 50 items/page) */}
+            {(() => {
+              const currentApprovalList = approvalCategory === 'raw' ? approvalRawList : approvalPackagingList;
+              const totalItems = currentApprovalList.length;
+              const startIndex = (approvalPage - 1) * approvalItemsPerPage;
+              const paginatedItems = currentApprovalList.slice(startIndex, startIndex + approvalItemsPerPage);
+
+              return (
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="p-1.5 bg-purple-100 text-purple-800 rounded-lg">
-                        <Boxes className="w-4 h-4" />
-                      </div>
-                      <h4 className="font-bold text-slate-800 text-sm">
-                        Otorisasi QM: Bahan Kemas (BK)
-                      </h4>
-                      <span className="text-xs text-purple-700 font-semibold bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200">
-                        Penerbitan No. Lot LBK
-                      </span>
-                    </div>
-                    <span className="text-xs text-slate-500 font-semibold">
-                      {approvalPackagingList.length} Lot Menunggu
-                    </span>
+                  <div className="border border-slate-200 rounded-xl overflow-x-auto shadow-xs w-full">
+                    {renderApprovalTable(
+                      paginatedItems,
+                      approvalCategory === 'raw'
+                        ? 'Tidak ada lot Bahan Baku yang sedang menunggu otorisasi Quality Manager.'
+                        : 'Tidak ada lot Bahan Kemas yang sedang menunggu otorisasi Quality Manager.',
+                      startIndex
+                    )}
                   </div>
-                  <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
-                    {renderApprovalTable(approvalPackagingList, 'Tidak ada lot Bahan Kemas yang sedang menunggu otorisasi Quality Manager.')}
-                  </div>
+
+                  {totalItems > 0 && (
+                    <Pagination
+                      currentPage={approvalPage}
+                      totalItems={totalItems}
+                      itemsPerPage={approvalItemsPerPage}
+                      onPageChange={(page) => setApprovalPage(page)}
+                      onItemsPerPageChange={(size) => {
+                        setApprovalItemsPerPage(size);
+                        setApprovalPage(1);
+                      }}
+                    />
+                  )}
                 </div>
-              </div>
-            ) : (
-              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
-                {renderApprovalTable(
-                  approvalList,
-                  `Tidak ada lot ${activeMaterialType === 'raw' ? 'Bahan Baku (BB)' : 'Bahan Kemas (BK)'} yang sedang menunggu otorisasi Quality Manager.`
-                )}
-              </div>
-            )}
+              );
+            })()}
           </div>
         )}
 
         {/* TAB 4: Arsip Laporan Pemeriksaan & Lot Terbit */}
         {currentTab === 'archive' && (
           <div className="p-4 space-y-4">
-            {renderMaterialFilterTabs(stats.archiveRaw, stats.archivePkg, stats.archiveTotal)}
+            {/* Category Tabs: 2 Tab Terpisah Arsip & Laporan (Bahan Baku vs Bahan Kemas) Tanpa Opsi Semua */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setArchiveCategory('raw');
+                    setArchivePage(1);
+                  }}
+                  className={`w-full sm:w-auto justify-center sm:justify-start px-4 py-2.5 rounded-xl font-black text-xs transition-all flex items-center gap-2 cursor-pointer ${
+                    archiveCategory === 'raw'
+                      ? 'bg-teal-700 text-white shadow-md shadow-teal-700/20'
+                      : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <FlaskConical className="w-4 h-4 shrink-0" />
+                  <span>🧪 Arsip Laporan Bahan Baku (LBB)</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                      archiveCategory === 'raw'
+                        ? 'bg-teal-900 text-white'
+                        : 'bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    {stats.archiveRaw} Selesai
+                  </span>
+                </button>
 
-            {activeMaterialType === 'all' ? (
-              <div className="space-y-6">
-                {/* 1. Bahan Baku Section */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="p-1.5 bg-teal-100 text-teal-800 rounded-lg">
-                        <Package className="w-4 h-4" />
-                      </div>
-                      <h4 className="font-bold text-slate-800 text-sm">
-                        Laporan Resmi Bahan Baku (LBB)
-                      </h4>
-                      <span className="text-xs text-teal-700 font-semibold bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
-                        Format LBBYYMMxxx
-                      </span>
-                    </div>
-                    <span className="text-xs text-slate-500 font-semibold">
-                      {archiveRawList.length} Laporan Selesai
-                    </span>
-                  </div>
-                  <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
-                    {renderArchiveTable(archiveRawList, 'Belum ada arsip laporan pemeriksaan Bahan Baku yang selesai.')}
-                  </div>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setArchiveCategory('packaging');
+                    setArchivePage(1);
+                  }}
+                  className={`w-full sm:w-auto justify-center sm:justify-start px-4 py-2.5 rounded-xl font-black text-xs transition-all flex items-center gap-2 cursor-pointer ${
+                    archiveCategory === 'packaging'
+                      ? 'bg-purple-700 text-white shadow-md shadow-purple-700/20'
+                      : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <Boxes className="w-4 h-4 shrink-0" />
+                  <span>📦 Arsip Laporan Bahan Kemas (LBK)</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                      archiveCategory === 'packaging'
+                        ? 'bg-purple-900 text-white'
+                        : 'bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    {stats.archivePkg} Selesai
+                  </span>
+                </button>
+              </div>
 
-                {/* 2. Bahan Kemas Section */}
+              {/* Info Format Dokumen */}
+              <div className="flex items-center gap-2">
+                <span className="hidden sm:inline-block text-[11px] font-semibold text-slate-600 bg-slate-50 border border-slate-200/80 px-2.5 py-1.5 rounded-lg">
+                  {archiveCategory === 'raw'
+                    ? 'Format Penomoran: LBBYYMMxxx'
+                    : 'Format Penomoran: LBKYYMMxxx'}
+                </span>
+              </div>
+            </div>
+
+            {/* Content Table with Pagination (Default 50 items/page) */}
+            {(() => {
+              const currentArchiveList = archiveCategory === 'raw' ? archiveRawList : archivePackagingList;
+              const totalItems = currentArchiveList.length;
+              const startIndex = (archivePage - 1) * archiveItemsPerPage;
+              const paginatedItems = currentArchiveList.slice(startIndex, startIndex + archiveItemsPerPage);
+
+              return (
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="p-1.5 bg-purple-100 text-purple-800 rounded-lg">
-                        <Boxes className="w-4 h-4" />
-                      </div>
-                      <h4 className="font-bold text-slate-800 text-sm">
-                        Laporan Resmi Bahan Kemas (LBK)
-                      </h4>
-                      <span className="text-xs text-purple-700 font-semibold bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200">
-                        Format LBKYYMMxxx
-                      </span>
-                    </div>
-                    <span className="text-xs text-slate-500 font-semibold">
-                      {archivePackagingList.length} Laporan Selesai
-                    </span>
+                  <div className="border border-slate-200 rounded-xl overflow-x-auto shadow-xs w-full">
+                    {renderArchiveTable(
+                      paginatedItems,
+                      archiveCategory === 'raw'
+                        ? 'Belum ada arsip laporan pemeriksaan Bahan Baku yang selesai.'
+                        : 'Belum ada arsip laporan pemeriksaan Bahan Kemas yang selesai.',
+                      startIndex
+                    )}
                   </div>
-                  <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
-                    {renderArchiveTable(archivePackagingList, 'Belum ada arsip laporan pemeriksaan Bahan Kemas yang selesai.')}
-                  </div>
+
+                  {totalItems > 0 && (
+                    <Pagination
+                      currentPage={archivePage}
+                      totalItems={totalItems}
+                      itemsPerPage={archiveItemsPerPage}
+                      onPageChange={(page) => setArchivePage(page)}
+                      onItemsPerPageChange={(size) => {
+                        setArchiveItemsPerPage(size);
+                        setArchivePage(1);
+                      }}
+                    />
+                  )}
                 </div>
-              </div>
-            ) : (
-              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
-                {renderArchiveTable(
-                  archiveList,
-                  `Belum ada arsip laporan pemeriksaan ${activeMaterialType === 'raw' ? 'Bahan Baku (BB)' : 'Bahan Kemas (BK)'} yang selesai.`
-                )}
-              </div>
-            )}
+              );
+            })()}
           </div>
         )}
 

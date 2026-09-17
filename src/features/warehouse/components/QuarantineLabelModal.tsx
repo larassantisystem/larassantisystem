@@ -240,7 +240,7 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
                   </div>
 
                   <div className="col-span-2 sm:col-span-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase block">Produsen / Pemasok</span>
+                    <span className="text-[10px] font-extrabold text-slate-400 uppercase block">Produsen / Supplier</span>
                     <span className="font-medium text-slate-900 block mt-0.5 truncate text-[11px]">
                       {record.manufacturer} <span className="text-slate-400 font-normal">({record.distributor})</span>
                     </span>
