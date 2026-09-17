@@ -37,6 +37,9 @@ export const materialService = {
   },
 
   getLocalMaterials: (): RawMaterial[] => {
+    if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+      return [];
+    }
     const saved = localStorage.getItem(RAW_MATERIALS_STORAGE_KEY);
     if (saved) {
       try {
@@ -105,7 +108,9 @@ export const materialService = {
             lastModifiedBy: m.last_modified_by || m.lastModifiedBy,
             lastModifiedAt: m.last_modified_at || m.lastModifiedAt,
           }));
-          localStorage.setItem(RAW_MATERIALS_STORAGE_KEY, JSON.stringify(mapped));
+          if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+            localStorage.setItem(RAW_MATERIALS_STORAGE_KEY, JSON.stringify(mapped));
+          }
           return mapped;
         }
       } catch (err) {
@@ -113,12 +118,14 @@ export const materialService = {
       }
     }
 
-    const saved = localStorage.getItem(RAW_MATERIALS_STORAGE_KEY);
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error('Error parsing local raw materials', e);
+    if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+      const saved = localStorage.getItem(RAW_MATERIALS_STORAGE_KEY);
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {
+          console.error('Error parsing local raw materials', e);
+        }
       }
     }
     return [];

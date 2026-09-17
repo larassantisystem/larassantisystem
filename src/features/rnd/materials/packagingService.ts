@@ -37,6 +37,9 @@ export const packagingService = {
   },
 
   getLocalPackagingMaterials: (): PackagingMaterial[] => {
+    if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+      return [];
+    }
     const saved = localStorage.getItem(PACKAGING_STORAGE_KEY);
     if (saved) {
       try {
@@ -101,7 +104,9 @@ export const packagingService = {
             lastModifiedBy: p.last_modified_by || p.lastModifiedBy,
             lastModifiedAt: p.last_modified_at || p.lastModifiedAt,
           }));
-          localStorage.setItem(PACKAGING_STORAGE_KEY, JSON.stringify(mapped));
+          if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+            localStorage.setItem(PACKAGING_STORAGE_KEY, JSON.stringify(mapped));
+          }
           return mapped;
         }
       } catch (err) {
@@ -109,12 +114,14 @@ export const packagingService = {
       }
     }
 
-    const saved = localStorage.getItem(PACKAGING_STORAGE_KEY);
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error('Error parsing local packaging materials', e);
+    if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+      const saved = localStorage.getItem(PACKAGING_STORAGE_KEY);
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {
+          console.error('Error parsing local packaging materials', e);
+        }
       }
     }
     return [];

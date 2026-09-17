@@ -462,21 +462,23 @@ export const authService = {
     }
 
     // 3. Check custom registered users in localStorage
-    const customUsersRaw = localStorage.getItem('cosmo_ddmp_registered_users');
-    if (customUsersRaw) {
-      try {
-        const list = JSON.parse(customUsersRaw);
-        const match = list.find((u: any) => u.nik?.toLowerCase() === cleanNik.toLowerCase());
-        if (match) {
-          if (match.password && match.password === passwordInput) {
-            return { valid: true };
+    if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+      const customUsersRaw = localStorage.getItem('cosmo_ddmp_registered_users');
+      if (customUsersRaw) {
+        try {
+          const list = JSON.parse(customUsersRaw);
+          const match = list.find((u: any) => u.nik?.toLowerCase() === cleanNik.toLowerCase());
+          if (match) {
+            if (match.password && match.password === passwordInput) {
+              return { valid: true };
+            }
+            if (!match.password && (passwordInput === 'laras123' || passwordInput === 'admin' || passwordInput === 'password123')) {
+              return { valid: true };
+            }
           }
-          if (!match.password && (passwordInput === 'laras123' || passwordInput === 'admin' || passwordInput === 'password123')) {
-            return { valid: true };
-          }
+        } catch (e) {
+          console.error('Error parsing custom users for verifyPassword', e);
         }
-      } catch (e) {
-        console.error('Error parsing custom users for verifyPassword', e);
       }
     }
 

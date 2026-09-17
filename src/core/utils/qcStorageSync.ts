@@ -130,8 +130,20 @@ export async function syncQcReportToSupabase(
     const { userNotes } = unpackGrnNotes(currentNotes);
     const packedNotes = packGrnNotes(userNotes, report);
 
+    // Map application QC status to valid database qc_status enum values (QUARANTINE, RELEASED, REJECTED)
+    const mapDbQcStatus = (appStatus: string): string => {
+      const upper = (appStatus || '').toUpperCase();
+      if (upper === 'RELEASED' || upper === 'RELEASE' || upper === 'PASSED' || upper === 'APPROVED') {
+        return 'RELEASED';
+      }
+      if (upper === 'REJECTED' || upper === 'REJECT' || upper === 'FAILED' || upper === 'REJECTED_BY_QM') {
+        return 'REJECTED';
+      }
+      return 'QUARANTINE';
+    };
+
     const updatePayload: Record<string, any> = {
-      qc_status: report.status,
+      qc_status: mapDbQcStatus(report.status),
       internal_lot_number: normalizeLotNumber(report.lotInternalNumber || remoteRow?.internal_lot_number) || null,
       notes: packedNotes,
       updated_at: new Date().toISOString(),
@@ -173,7 +185,7 @@ export async function syncQcReportToSupabase(
     if (updateErr && (updateErr.code === 'PGRST204' || updateErr.code === '42703')) {
       console.warn('[syncQcReportToSupabase] Retrying with minimal core fields due to schema mismatch:', updateErr.message);
       const fallbackPayload: Record<string, any> = {
-        qc_status: report.status,
+        qc_status: mapDbQcStatus(report.status),
         notes: packedNotes,
         updated_at: new Date().toISOString(),
       };

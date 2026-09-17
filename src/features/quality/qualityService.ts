@@ -16,7 +16,7 @@ import { isQualityManager } from '../../core/auth/permissionGuard';
 import { UserProfile } from '../../types';
 import { soundService } from '../../core/utils/soundService';
 import { toggleContainerSampled } from './utils/samplingUtils';
-import { syncQcReportToSupabase } from '../../core/utils/qcStorageSync';
+import { syncQcReportToSupabase, packGrnNotes, unpackGrnNotes } from '../../core/utils/qcStorageSync';
 
 const QC_REPORTS_STORAGE_KEY = 'lsm_qc_reports_v2';
 const QC_NOTIFICATIONS_STORAGE_KEY = 'lsm_qc_notifications_v2';
@@ -331,7 +331,20 @@ export const qualityService = {
             needsUpdate = true;
           }
           if (grn.qcPayload.parameters && Array.isArray(grn.qcPayload.parameters) && grn.qcPayload.parameters.length > 0) {
-            existingReport.parameters = grn.qcPayload.parameters;
+            existingReport.parameters = grn.qcPayload.parameters.map((remoteP: any) => {
+              const localP = existingReport.parameters?.find(
+                (lp) => lp.parameterName === remoteP.parameterName || lp.id === remoteP.id
+              );
+              const remoteVal = typeof remoteP.resultValue === 'string' ? remoteP.resultValue.trim() : '';
+              const localVal = localP && typeof localP.resultValue === 'string' ? localP.resultValue.trim() : '';
+              const finalVal = remoteVal !== '' ? remoteP.resultValue : (localVal !== '' ? localP.resultValue : '');
+
+              return {
+                ...remoteP,
+                resultValue: finalVal,
+                isCompliant: remoteP.isCompliant !== undefined ? remoteP.isCompliant : (localP?.isCompliant ?? true),
+              };
+            });
             needsUpdate = true;
           }
           if (grn.qcPayload.aiAssessment && !existingReport.aiAssessment) {
@@ -696,7 +709,8 @@ export const qualityService = {
     samplingDateTime?: string
   ): Promise<QcInspectionReport> => {
     // 1. Verify staff password
-    const verifyRes = await authService.verifyPassword(staffUser.nik, passwordInput);
+    const effectiveNik = staffUser.nik || (staffUser as any).email || (staffUser as any).id || 'LMS20001';
+    const verifyRes = await authService.verifyPassword(effectiveNik, passwordInput);
     if (!verifyRes.valid) {
       throw new Error(verifyRes.error || 'Kata sandi staf tidak valid. Otorisasi tanda tangan digital ditolak.');
     }
@@ -770,12 +784,22 @@ export const qualityService = {
     report.status = 'AWAITING_QM_AUTHORIZATION';
     report.updatedAt = new Date().toISOString();
 
-    // Sync to warehouse
+    // 1. Sync complete QC report payload (with filled parameters) directly to Supabase FIRST
+    await syncQcReportToSupabase(report);
+
+    // 2. Keep local memory cache updated immediately
+    const memIdx = memoryReports.findIndex((m) => m.id === report.id || m.grnNumber === report.grnNumber);
+    if (memIdx !== -1) {
+      memoryReports[memIdx] = { ...report };
+    } else {
+      memoryReports.push({ ...report });
+    }
+
+    // 3. Sync GRN status to warehouse
     await qualityService.syncGrnStatus(report.grnId, 'AWAITING_QM_AUTHORIZATION', {
       actualSampleSize: report.actualSampleSize,
       actualSampleUnit: report.actualSampleUnit,
     });
-    await syncQcReportToSupabase(report);
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('qc_reports_updated', { detail: { id: report.id, report } }));
@@ -1055,7 +1079,14 @@ export const qualityService = {
         if (target.qcPayload) {
           target.qcPayload.status = newStatus as any;
         }
-        if (opts.notes) target.notes = opts.notes;
+        const matchingReport = memoryReports.find((r) => r.grnId === target.id || r.grnNumber === target.grnNumber || r.id === target.id);
+        if (matchingReport) {
+          matchingReport.status = newStatus as QcInspectionStatus;
+          const { userNotes } = unpackGrnNotes(opts.notes || target.notes);
+          target.notes = packGrnNotes(userNotes, matchingReport);
+        } else if (opts.notes) {
+          target.notes = opts.notes;
+        }
         if (opts.revertReason !== undefined) target.revertReason = opts.revertReason;
         if (opts.revertedBy !== undefined) target.revertedBy = opts.revertedBy;
         if (opts.revertedAt !== undefined) target.revertedAt = opts.revertedAt;
