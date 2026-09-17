@@ -25,7 +25,7 @@ let memoryNotifications: QcNotification[] = [];
 let memoryReports: QcInspectionReport[] = [];
 
 /**
- * Robust helper to match a QC Inspection Report by any identifier (id, grnId, grnNumber, lotInternalNumber, reportNumber)
+ * Robust helper to match a QC Inspection Report by exact identifiers (id, grnId, grnNumber)
  */
 function findMatchingQcReport(reports: QcInspectionReport[], targetId?: string | null): QcInspectionReport | undefined {
   if (!targetId) return undefined;
@@ -36,14 +36,10 @@ function findMatchingQcReport(reports: QcInspectionReport[], targetId?: string |
     r.id === clean ||
     r.grnId === clean ||
     r.grnNumber === clean ||
-    r.lotInternalNumber === clean ||
-    r.reportNumber === clean ||
     r.id === `qc-rep-${clean}` ||
     r.grnId === withoutPrefix ||
     r.grnNumber === withoutPrefix ||
-    (r.id && r.id.includes(withoutPrefix)) ||
-    (r.grnNumber && r.grnNumber.toLowerCase() === clean.toLowerCase()) ||
-    (r.lotInternalNumber && r.lotInternalNumber.toLowerCase() === clean.toLowerCase())
+    (r.grnNumber && r.grnNumber.toLowerCase() === clean.toLowerCase())
   );
 }
 
@@ -276,13 +272,21 @@ export const qualityService = {
         // Synchronize remote status into existingReport if Supabase has latest status
         const resolvedRemoteStatus = (grn.qcPayload?.status as QcInspectionStatus) || (grn.qcStatus as QcInspectionStatus);
         if (resolvedRemoteStatus && existingReport.status !== resolvedRemoteStatus) {
-          // Guard: Do not downgrade a local active status (e.g. AWAITING_QM_AUTHORIZATION, QUALITY_CONTROL_PROCESS)
-          // back to default 'QUARANTINE' if remote column was simply un-updated while local/payload is ahead
-          const isDowngradeToQuarantine = resolvedRemoteStatus === 'QUARANTINE' && existingReport.status !== 'QUARANTINE';
-          if (!isDowngradeToQuarantine) {
-            existingReport.status = resolvedRemoteStatus;
+          const hasQmAuth = Boolean(existingReport.qmSignature || grn.qcPayload?.qmSignature);
+          // If QM has NOT authorized release/rejection and GRN status is QUARANTINE, force QUARANTINE
+          if (resolvedRemoteStatus === 'QUARANTINE' && !hasQmAuth) {
+            existingReport.status = 'QUARANTINE';
             existingReport.updatedAt = new Date().toISOString();
             needsUpdate = true;
+          } else {
+            // Guard: Do not downgrade an active testing/approval status (e.g. AWAITING_QM_AUTHORIZATION, QUALITY_CONTROL_PROCESS)
+            // back to default 'QUARANTINE' if remote column was simply un-updated while local testing is ahead
+            const isDowngradeToQuarantine = resolvedRemoteStatus === 'QUARANTINE' && existingReport.status !== 'QUARANTINE';
+            if (!isDowngradeToQuarantine) {
+              existingReport.status = resolvedRemoteStatus;
+              existingReport.updatedAt = new Date().toISOString();
+              needsUpdate = true;
+            }
           }
         }
 
