@@ -62,12 +62,18 @@ export const IpcAnalysisModal: React.FC<IpcAnalysisModalProps> = ({
     if (batch) {
       // Fetch product specification from productService
       productService.getProducts().then((products) => {
-        const found = products.find(
-          (p) =>
-            p.productCode === batch.productCode ||
-            p.code === batch.productCode ||
-            p.name.toLowerCase() === batch.productName.toLowerCase()
-        );
+        const batchCode = (batch.productCode || '').trim().toLowerCase();
+        const batchName = (batch.productName || '').trim().toLowerCase();
+
+        const found = products.find((p) => {
+          const pCode = (p.productCode || p.code || '').trim().toLowerCase();
+          const pName = (p.name || '').trim().toLowerCase();
+          return (
+            (batchCode && pCode === batchCode) ||
+            (batchName && pName === batchName) ||
+            (batchName && (pName.includes(batchName) || batchName.includes(pName)))
+          );
+        });
 
         if (found) {
           setProductSpec(found);
@@ -75,46 +81,65 @@ export const IpcAnalysisModal: React.FC<IpcAnalysisModalProps> = ({
           setProductSpec(null);
         }
 
-        // Build default IPC parameter set based on product spec or standard CPKB
-        const defaultParams: IpcParameterRow[] = [
-          {
-            id: 'p1',
-            parameterName: 'Pemerian / Organoleptis',
-            specification: found?.qcParameters?.find(q => q.parameterName.toLowerCase().includes('pemerian') || q.parameterName.toLowerCase().includes('organoleptis'))?.acceptanceCondition || 'Emulsi/Gel Homogen, Warna & Fragrance Sesuai Standard CPKB',
-            resultValue: batch.appearance || 'Homogen, Sesuai Spek',
-            isCompliant: true,
-          },
-          {
-            id: 'p2',
-            parameterName: 'Derajat Keasaman (pH 25°C)',
-            specification: found?.qcParameters?.find(q => q.parameterName.toLowerCase().includes('ph'))?.acceptanceCondition || '5.0 - 7.5',
-            resultValue: String(batch.pH || 6.0),
-            isCompliant: Number(batch.pH) >= 5.0 && Number(batch.pH) <= 7.5,
-          },
-          {
-            id: 'p3',
-            parameterName: 'Viskositas Sediaan (cPs)',
-            specification: found?.qcParameters?.find(q => q.parameterName.toLowerCase().includes('viskositas'))?.acceptanceCondition || '3,000 - 18,000 cPs',
-            resultValue: String(batch.viscosity || 4500),
-            isCompliant: Number(batch.viscosity) >= 1500 && Number(batch.viscosity) <= 20000,
-          },
-          {
-            id: 'p4',
-            parameterName: 'Bobot Jenis (g/ml)',
-            specification: '0.980 - 1.050 g/ml',
-            resultValue: String(batch.gravity || 1.0),
-            isCompliant: true,
-          },
-          {
-            id: 'p5',
-            parameterName: 'Cemaran Mikrobiologi',
-            specification: 'Bebas Pseudomonas aeruginosa, S. aureus, C. albicans (< 100 CFU/g)',
-            resultValue: 'Bebas Cemaran (ALT < 10 CFU/g)',
-            isCompliant: true,
-          },
-        ];
+        // DYNAMIC PARAMETERS: Directly map from Supabase Product qc_parameters
+        if (found && found.qcParameters && found.qcParameters.length > 0) {
+          const dynamicParams: IpcParameterRow[] = found.qcParameters.map((param, idx) => {
+            const paramName = param.parameterName || param.name || `Parameter ${idx + 1}`;
+            const specCondition = param.acceptanceCondition || param.specification || '-';
+            const unitSuffix = param.unit ? ` (${param.unit})` : '';
+            const lowerName = paramName.toLowerCase();
 
-        setParameters(defaultParams);
+            // Smart prefill from batch if available
+            let initialValue = '';
+            let initialCompliant = true;
+
+            if (lowerName.includes('ph')) {
+              initialValue = batch.pH !== undefined && batch.pH !== null ? String(batch.pH) : '';
+            } else if (lowerName.includes('viskos') || lowerName.includes('viscosity')) {
+              initialValue = batch.viscosity !== undefined && batch.viscosity !== null ? String(batch.viscosity) : '';
+            } else if (lowerName.includes('bobot jenis') || lowerName.includes('density') || lowerName.includes('berat jenis') || lowerName.includes('bj')) {
+              initialValue = batch.gravity !== undefined && batch.gravity !== null ? String(batch.gravity) : '';
+            } else if (lowerName.includes('bentuk') || lowerName.includes('warna') || lowerName.includes('bau') || lowerName.includes('organo') || lowerName.includes('pemerian')) {
+              initialValue = batch.appearance || specCondition;
+            }
+
+            return {
+              id: param.id || `param-${idx + 1}`,
+              parameterName: `${paramName}${unitSuffix}`,
+              specification: specCondition,
+              resultValue: initialValue,
+              isCompliant: initialCompliant,
+            };
+          });
+
+          setParameters(dynamicParams);
+        } else {
+          // Fallback only if product has not configured qc_parameters in Supabase
+          const fallbackParams: IpcParameterRow[] = [
+            {
+              id: 'p1',
+              parameterName: 'Pemerian / Organoleptis',
+              specification: 'Sesuai Standar Mutu Fisik',
+              resultValue: batch.appearance || 'Sesuai Standar',
+              isCompliant: true,
+            },
+            {
+              id: 'p2',
+              parameterName: 'pH Sediaan',
+              specification: '4.5 - 7.5',
+              resultValue: String(batch.pH || 6.0),
+              isCompliant: true,
+            },
+            {
+              id: 'p3',
+              parameterName: 'Viskositas',
+              specification: 'Sesuai Standar',
+              resultValue: String(batch.viscosity || 4000),
+              isCompliant: true,
+            },
+          ];
+          setParameters(fallbackParams);
+        }
       });
 
       setStaffNotes('');
@@ -178,11 +203,22 @@ export const IpcAnalysisModal: React.FC<IpcAnalysisModalProps> = ({
       setIsSubmitting(true);
       setErrorMessage('');
 
-      // Extract numeric values for backward compatibility
+      // Extract values dynamically for database columns
       const phRow = parameters.find((p) => p.parameterName.toLowerCase().includes('ph'));
-      const viscRow = parameters.find((p) => p.parameterName.toLowerCase().includes('viskositas'));
-      const gravRow = parameters.find((p) => p.parameterName.toLowerCase().includes('bobot jenis'));
-      const appRow = parameters.find((p) => p.parameterName.toLowerCase().includes('pemerian'));
+      const viscRow = parameters.find((p) => p.parameterName.toLowerCase().includes('viskos'));
+      const gravRow = parameters.find((p) => 
+        p.parameterName.toLowerCase().includes('bobot jenis') || 
+        p.parameterName.toLowerCase().includes('density') || 
+        p.parameterName.toLowerCase().includes('berat jenis') ||
+        p.parameterName.toLowerCase().includes('bj')
+      );
+      const appRow = parameters.find((p) => 
+        p.parameterName.toLowerCase().includes('bentuk') ||
+        p.parameterName.toLowerCase().includes('warna') ||
+        p.parameterName.toLowerCase().includes('bau') ||
+        p.parameterName.toLowerCase().includes('pemerian') ||
+        p.parameterName.toLowerCase().includes('organo')
+      );
 
       const newStatus =
         actionType === 'SUBMIT_ANALYST'
@@ -193,12 +229,14 @@ export const IpcAnalysisModal: React.FC<IpcAnalysisModalProps> = ({
 
       const updatedBatchItem: IpcBulkTest = {
         ...batch,
-        pH: phRow ? parseFloat(phRow.resultValue) || batch.pH : batch.pH,
-        viscosity: viscRow ? parseFloat(viscRow.resultValue) || batch.viscosity : batch.viscosity,
-        gravity: gravRow ? parseFloat(gravRow.resultValue) || batch.gravity : batch.gravity,
-        appearance: appRow ? appRow.resultValue : batch.appearance,
+        productCode: batch.productCode || productSpec?.productCode || productSpec?.code,
+        pH: phRow && phRow.resultValue ? parseFloat(phRow.resultValue.replace(',', '.')) || batch.pH : batch.pH,
+        viscosity: viscRow && viscRow.resultValue ? parseFloat(viscRow.resultValue.replace(',', '.')) || batch.viscosity : batch.viscosity,
+        gravity: gravRow && gravRow.resultValue ? parseFloat(gravRow.resultValue.replace(',', '.')) || batch.gravity : batch.gravity,
+        appearance: appRow && appRow.resultValue ? appRow.resultValue : batch.appearance,
         status: newStatus,
         analyst: user?.name || batch.analyst || 'Staf QC Lab (IPC)',
+        labParameters: parameters,
       };
 
       const updatedList = await ipcBulkService.updateSingleBatch(updatedBatchItem);

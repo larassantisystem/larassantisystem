@@ -5,6 +5,7 @@ import { useAuth } from '../../core/auth/AuthContext';
 import { canWriteModule } from '../../core/auth/permissionGuard';
 import { authService } from '../../core/auth/authService';
 import { productService, formatToISODate } from '../../features/rnd/products/productService';
+import { auditLogger } from '../../core/utils/auditLogger';
 import {
   PackageCheck,
   Search,
@@ -342,23 +343,14 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
       }
 
       // Record Audit Trail Log
-      try {
-        const rawAudit = localStorage.getItem('cosmo_ddmp_audit_logs');
-        const auditList = rawAudit ? JSON.parse(rawAudit) : [];
-        const newAuditLog = {
-          id: `aud-${Date.now()}`,
-          timestamp: new Date().toISOString(),
-          actorNik: actorNik,
-          actorName: user?.name || user?.username || 'ADMIN',
-          module: 'rnd',
-          action: itemToDelete.type === 'product' ? 'PRODUCT_DELETE' : 'VARIANT_DELETE',
-          targetNik: itemToDelete.code,
-          details: `Penghapusan ${itemToDelete.type === 'product' ? 'Master Produk Jadi' : 'Varian Produk'} ${itemToDelete.code} (${itemToDelete.name}) dengan otorisasi kata sandi pengguna aktif.`,
-        };
-        localStorage.setItem('cosmo_ddmp_audit_logs', JSON.stringify([newAuditLog, ...auditList]));
-      } catch (auditErr) {
-        console.warn('Audit trail write failed:', auditErr);
-      }
+      auditLogger.logAction({
+        actorNik: actorNik,
+        actorName: user?.name || user?.username || 'ADMIN',
+        module: 'rnd',
+        action: itemToDelete.type === 'product' ? 'PRODUCT_DELETE' : 'VARIANT_DELETE',
+        targetNik: itemToDelete.code,
+        details: `Penghapusan ${itemToDelete.type === 'product' ? 'Master Produk Jadi' : 'Varian Produk'} ${itemToDelete.code} (${itemToDelete.name}) dengan otorisasi kata sandi pengguna aktif.`,
+      });
 
       setIsVerifyingDeletePassword(false);
       setItemToDelete(null);

@@ -69,7 +69,7 @@ export const EmployeeManagementModule: React.FC<EmployeeManagementModuleProps> =
   // Delete Confirmation State
   const [deletingEmployee, setDeletingEmployee] = useState<UserProfile | null>(null);
 
-  // Audit Logs (Simulated CPKB Event Logs) loaded from localStorage or seeded defaults
+  // Audit Logs (CPKB Event Logs) loaded from in-memory auditLogger
   const [auditLogs, setAuditLogs] = useState<Array<{
     id: string;
     timestamp: string;
@@ -79,14 +79,6 @@ export const EmployeeManagementModule: React.FC<EmployeeManagementModuleProps> =
     targetNik: string;
     details: string;
   }>>(() => {
-    const raw = localStorage.getItem('cosmo_ddmp_audit_logs');
-    if (raw) {
-      try {
-        return JSON.parse(raw);
-      } catch (e) {
-        console.error('Failed to parse audit logs:', e);
-      }
-    }
     return [
       {
         id: 'aud-1',
@@ -95,7 +87,7 @@ export const EmployeeManagementModule: React.FC<EmployeeManagementModuleProps> =
         actorName: 'ADMIN',
         action: 'SYSTEM_SYNC',
         targetNik: 'ALL',
-        details: 'Sinkronisasi 20 Karyawan Master ke Supabase Auth & PostgreSQL Profiles.',
+        details: 'Sinkronisasi Karyawan Master ke Supabase Auth & PostgreSQL Profiles.',
       },
       {
         id: 'aud-2',
@@ -152,11 +144,6 @@ export const EmployeeManagementModule: React.FC<EmployeeManagementModuleProps> =
   const [auditEndDate, setAuditEndDate] = useState<string>('');
   const [auditPage, setAuditPage] = useState<number>(1);
   const [auditPageSize, setAuditPageSize] = useState<number>(25); // high density compact default
-
-  // Auto-save audit logs to localStorage
-  useEffect(() => {
-    localStorage.setItem('cosmo_ddmp_audit_logs', JSON.stringify(auditLogs));
-  }, [auditLogs]);
 
   // Helper to determine module of log for clean filtering & badge
   const getLogModule = (log: any): string => {

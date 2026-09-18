@@ -28,5 +28,28 @@ export const isSupabaseConfigured = Boolean(
 );
 
 export const supabase: SupabaseClient | null = isSupabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey)
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+      global: {
+        fetch: async (url, options = {}) => {
+          const maxRetries = 2;
+          let lastErr: any;
+          for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+              return await fetch(url, options);
+            } catch (err: any) {
+              lastErr = err;
+              if (attempt < maxRetries) {
+                await new Promise((res) => setTimeout(res, 250 * (attempt + 1)));
+                continue;
+              }
+            }
+          }
+          throw lastErr;
+        },
+      },
+    })
   : null;

@@ -28,22 +28,14 @@ export interface DepartmentNotificationCounts {
   admin: number;
 }
 
-const READ_NOTIFICATIONS_STORAGE_KEY = 'lsm_read_notifications_v1';
+let inMemoryReadNotificationIds: string[] = [];
 
 export const departmentNotificationService = {
   /**
    * Fetch all active notifications based on current system state
    */
   getNotifications: async (): Promise<DepartmentNotificationItem[]> => {
-    let readIds: string[] = [];
-    const savedRead = localStorage.getItem(READ_NOTIFICATIONS_STORAGE_KEY);
-    if (savedRead) {
-      try {
-        readIds = JSON.parse(savedRead);
-      } catch (e) {
-        console.error('Failed to parse read notification IDs:', e);
-      }
-    }
+    const readIds = [...inMemoryReadNotificationIds];
 
     const items: DepartmentNotificationItem[] = [];
 
@@ -367,16 +359,10 @@ export const departmentNotificationService = {
    * Mark all or specific notification as read
    */
   markAsRead: (id?: string) => {
-    let readIds: string[] = [];
-    const saved = localStorage.getItem(READ_NOTIFICATIONS_STORAGE_KEY);
-    if (saved) {
-      try {
-        readIds = JSON.parse(saved);
-      } catch (e) {}
-    }
-
     if (id) {
-      if (!readIds.includes(id)) readIds.push(id);
+      if (!inMemoryReadNotificationIds.includes(id)) {
+        inMemoryReadNotificationIds.push(id);
+      }
       // If it's a qc-event, also mark in qualityService
       if (id.startsWith('qc-event-')) {
         const rawId = id.replace('qc-event-', '');
@@ -385,16 +371,12 @@ export const departmentNotificationService = {
     } else {
       // Mark all current
       departmentNotificationService.getNotifications().then((all) => {
-        readIds = all.map((n) => n.id);
-        localStorage.setItem(READ_NOTIFICATIONS_STORAGE_KEY, JSON.stringify(readIds));
+        inMemoryReadNotificationIds = all.map((n) => n.id);
         // Also mark all in QC
         const qcList = qualityService.getNotifications();
         qcList.forEach((q) => qualityService.markNotificationAsRead(q.id));
       });
-      return;
     }
-
-    localStorage.setItem(READ_NOTIFICATIONS_STORAGE_KEY, JSON.stringify(readIds));
   },
 };
 

@@ -4,6 +4,7 @@ import { useAuth } from '../../core/auth/AuthContext';
 import { canWriteModule } from '../../core/auth/permissionGuard';
 import { authService } from '../../core/auth/authService';
 import { ensureUUID, generateUUID } from '../../utils/uuid';
+import { auditLogger } from '../../core/utils/auditLogger';
 import * as XLSX from 'xlsx';
 import {
   Layers,
@@ -290,23 +291,14 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
       onSavePM(newOrUpdatedPM);
 
       // Audit log
-      try {
-        const rawAudit = localStorage.getItem('cosmo_ddmp_audit_logs');
-        const auditList = rawAudit ? JSON.parse(rawAudit) : [];
-        const newAuditLog = {
-          id: `aud-${Date.now()}`,
-          timestamp: new Date().toISOString(),
-          actorNik: actorNik,
-          actorName: user?.name || 'ADMIN',
-          module: 'rnd',
-          action: editingPM ? 'PM_MASTER_UPDATE' : 'PM_MASTER_CREATE',
-          targetNik: newOrUpdatedPM.code,
-          details: `${editingPM ? 'Pembaruan' : 'Pendaftaran'} Master Bahan Kemas ${newOrUpdatedPM.code} (${newOrUpdatedPM.name}), tipe ${newOrUpdatedPM.type}, satuan ${newOrUpdatedPM.unit}, supplier ${newOrUpdatedPM.supplier}.`,
-        };
-        localStorage.setItem('cosmo_ddmp_audit_logs', JSON.stringify([newAuditLog, ...auditList]));
-      } catch (auditErr) {
-        console.warn('Audit trail write failed:', auditErr);
-      }
+      auditLogger.logAction({
+        actorNik: actorNik,
+        actorName: user?.name || 'ADMIN',
+        module: 'rnd',
+        action: editingPM ? 'PM_MASTER_UPDATE' : 'PM_MASTER_CREATE',
+        targetNik: newOrUpdatedPM.code,
+        details: `${editingPM ? 'Pembaruan' : 'Pendaftaran'} Master Bahan Kemas ${newOrUpdatedPM.code} (${newOrUpdatedPM.name}), tipe ${newOrUpdatedPM.type}, satuan ${newOrUpdatedPM.unit}, supplier ${newOrUpdatedPM.supplier}.`,
+      });
 
       setIsVerifyingPassword(false);
       setShowLiveViewModal(false);
@@ -344,23 +336,14 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
       onDeletePM(pmToDelete.id);
 
       // Record Audit Trail Log
-      try {
-        const rawAudit = localStorage.getItem('cosmo_ddmp_audit_logs');
-        const auditList = rawAudit ? JSON.parse(rawAudit) : [];
-        const newAuditLog = {
-          id: `aud-${Date.now()}`,
-          timestamp: new Date().toISOString(),
-          actorNik: actorNik,
-          actorName: user?.name || user?.username || 'ADMIN',
-          module: 'rnd',
-          action: 'PM_MASTER_DELETE',
-          targetNik: pmToDelete.code,
-          details: `Penghapusan Master Bahan Kemas ${pmToDelete.code} (${pmToDelete.name}) dengan otorisasi kata sandi pengguna aktif.`,
-        };
-        localStorage.setItem('cosmo_ddmp_audit_logs', JSON.stringify([newAuditLog, ...auditList]));
-      } catch (auditErr) {
-        console.warn('Audit trail write failed:', auditErr);
-      }
+      auditLogger.logAction({
+        actorNik: actorNik,
+        actorName: user?.name || user?.username || 'ADMIN',
+        module: 'rnd',
+        action: 'PM_MASTER_DELETE',
+        targetNik: pmToDelete.code,
+        details: `Penghapusan Master Bahan Kemas ${pmToDelete.code} (${pmToDelete.name}) dengan otorisasi kata sandi pengguna aktif.`,
+      });
 
       setIsVerifyingDeletePassword(false);
       setSuccessToast(`Bahan kemas "${pmToDelete.code} - ${pmToDelete.name}" berhasil dihapus.`);
@@ -652,23 +635,14 @@ export const RndPackagingTab: React.FC<RndPackagingTabProps> = ({
       }
 
       // Record Audit Trail Log
-      try {
-        const rawAudit = localStorage.getItem('cosmo_ddmp_audit_logs');
-        const auditList = rawAudit ? JSON.parse(rawAudit) : [];
-        const newAuditLog = {
-          id: `aud-${Date.now()}`,
-          timestamp: new Date().toISOString(),
-          actorNik: actorNik,
-          actorName: user?.name || 'ADMIN',
-          module: 'rnd',
-          action: 'PM_EXCEL_IMPORT',
-          targetNik: `${importCount}_ITEMS`,
-          details: `Import massal ${importCount} data Master Bahan Kemas via ${importMode === 'paste' ? 'Copy-Paste Excel' : 'Drop File Excel'}.`,
-        };
-        localStorage.setItem('cosmo_ddmp_audit_logs', JSON.stringify([newAuditLog, ...auditList]));
-      } catch (auditErr) {
-        console.warn('Audit trail write failed:', auditErr);
-      }
+      auditLogger.logAction({
+        actorNik: actorNik,
+        actorName: user?.name || 'ADMIN',
+        module: 'rnd',
+        action: 'PM_EXCEL_IMPORT',
+        targetNik: `${importCount}_ITEMS`,
+        details: `Import massal ${importCount} data Master Bahan Kemas via ${importMode === 'paste' ? 'Copy-Paste Excel' : 'Drop File Excel'}.`,
+      });
 
       setShowImportModal(false);
       setImportPreview([]);

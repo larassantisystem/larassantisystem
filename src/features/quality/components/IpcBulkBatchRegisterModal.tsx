@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   FileSpreadsheet,
@@ -17,6 +17,8 @@ import {
 import * as XLSX from 'xlsx';
 import { ipcBulkService, IpcBulkBatchInput, IpcAuditResult } from '../services/ipcBulkService';
 import { IpcBulkTest } from '../utils/qcExtData';
+import { productService } from '../../rnd/products/productService';
+import { Product } from '../../../types';
 
 interface IpcBulkBatchRegisterModalProps {
   isOpen: boolean;
@@ -51,6 +53,58 @@ export const IpcBulkBatchRegisterModal: React.FC<IpcBulkBatchRegisterModalProps>
     notes: '',
   });
 
+  // Registered products from Supabase
+  const [registeredProducts, setRegisteredProducts] = useState<Product[]>([]);
+
+  useEffect(() => {
+    if (isOpen) {
+      productService.getProducts().then((res) => {
+        setRegisteredProducts(res || []);
+      }).catch((err) => {
+        console.warn('Could not load products for IPC register modal:', err);
+      });
+    }
+  }, [isOpen]);
+
+  // Helper to match product code and name from registered Supabase products
+  const matchProductFromCatalog = (rawCode?: string, rawName?: string): { code?: string; name?: string } => {
+    if (!registeredProducts || registeredProducts.length === 0) {
+      return { code: rawCode, name: rawName };
+    }
+    const cleanCode = (rawCode || '').trim().toLowerCase();
+    const cleanName = (rawName || '').trim().toLowerCase();
+
+    // 1. Match by code exactly
+    if (cleanCode) {
+      const byCode = registeredProducts.find(
+        (p) =>
+          (p.productCode && p.productCode.toLowerCase() === cleanCode) ||
+          (p.code && p.code.toLowerCase() === cleanCode)
+      );
+      if (byCode) {
+        return {
+          code: byCode.productCode || byCode.code,
+          name: byCode.name || rawName,
+        };
+      }
+    }
+
+    // 2. Match by name
+    if (cleanName) {
+      const byName = registeredProducts.find(
+        (p) => p.name.toLowerCase() === cleanName || p.name.toLowerCase().includes(cleanName) || cleanName.includes(p.name.toLowerCase())
+      );
+      if (byName) {
+        return {
+          code: byName.productCode || byName.code,
+          name: byName.name,
+        };
+      }
+    }
+
+    return { code: rawCode, name: rawName };
+  };
+
   if (!isOpen) return null;
 
   // Handle Excel File Upload
@@ -82,11 +136,52 @@ export const IpcBulkBatchRegisterModal: React.FC<IpcBulkBatchRegisterModalProps>
           return headerRow.findIndex((col) => keywords.some((kw) => col.includes(kw)));
         };
 
+        // Prioritas utama: Ambil tanggal dari kolom 'Tanggal Analisa' sesuai instruksi
+        const analysisDateIdx = findColIndex(['tanggal analisa', 'tgl analisa', 'analisa', 'analisis', 'analysis date', 'analysis', 'tgl_analisa', 'tanggal_analisa']);
+        const generalDateIdx = findColIndex(['tanggal', 'date', 'tgl', 'mixing_date', 'mixing']);
+        const dateIdx = analysisDateIdx !== -1 ? analysisDateIdx : generalDateIdx;
+
         const batchIdx = findColIndex(['bets', 'batch', 'no_bets', 'no.bets', 'nobets', 'lot']);
         const codeIdx = findColIndex(['kode', 'code', 'product_code', 'kd']);
         const nameIdx = findColIndex(['nama', 'product', 'produk', 'product_name']);
         const qtyIdx = findColIndex(['qty', 'jumlah', 'mixing', 'kuantitas', 'kg', 'liter']);
-        const dateIdx = findColIndex(['tanggal', 'date', 'tgl', 'mixing_date']);
+
+        // Helper untuk parse format tanggal Excel (serial number, dd/mm/yyyy, atau yyyy-mm-dd)
+        const parseExcelDate = (val: any): string => {
+          if (!val) return new Date().toISOString().split('T')[0];
+          if (val instanceof Date) {
+            return val.toISOString().split('T')[0];
+          }
+          if (typeof val === 'number') {
+            // Excel serial date (days since 1899-12-30)
+            const date = new Date(Math.round((val - 25569) * 86400 * 1000));
+            if (!isNaN(date.getTime())) {
+              return date.toISOString().split('T')[0];
+            }
+          }
+          const str = String(val).trim();
+          // Cek format DD/MM/YYYY atau DD-MM-YYYY
+          const ddmmyyyy = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+          if (ddmmyyyy) {
+            const day = ddmmyyyy[1].padStart(2, '0');
+            const month = ddmmyyyy[2].padStart(2, '0');
+            const year = ddmmyyyy[3];
+            return `${year}-${month}-${day}`;
+          }
+          // Cek format YYYY-MM-DD
+          const yyyymmdd = str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+          if (yyyymmdd) {
+            const year = yyyymmdd[1];
+            const month = yyyymmdd[2].padStart(2, '0');
+            const day = yyyymmdd[3].padStart(2, '0');
+            return `${year}-${month}-${day}`;
+          }
+          const d = new Date(str);
+          if (!isNaN(d.getTime())) {
+            return d.toISOString().split('T')[0];
+          }
+          return str;
+        };
 
         const parsed: IpcBulkBatchInput[] = [];
 
@@ -99,12 +194,17 @@ export const IpcBulkBatchRegisterModal: React.FC<IpcBulkBatchRegisterModalProps>
 
           if (!batchNoVal) continue; // Skip completely empty rows
 
+          const rawDateVal = dateIdx !== -1 ? row[dateIdx] : null;
+
+          const rawProductCode = codeIdx !== -1 && row[codeIdx] ? String(row[codeIdx]).trim() : '';
+          const matched = matchProductFromCatalog(rawProductCode, nameVal);
+
           parsed.push({
             batchNo: batchNoVal.toUpperCase(),
-            productCode: codeIdx !== -1 && row[codeIdx] ? String(row[codeIdx]).trim() : '',
-            productName: nameVal,
+            productCode: matched.code || rawProductCode,
+            productName: matched.name || nameVal,
             mixingQtyKg: qtyIdx !== -1 && row[qtyIdx] ? Number(row[qtyIdx]) || 100 : 100,
-            mixingDate: dateIdx !== -1 && row[dateIdx] ? String(row[dateIdx]).trim() : new Date().toISOString().split('T')[0],
+            mixingDate: parseExcelDate(rawDateVal),
             analyst: 'Staf QC Lab (IPC)',
             origin: 'EXCEL_IMPORT',
           });
@@ -175,10 +275,12 @@ export const IpcBulkBatchRegisterModal: React.FC<IpcBulkBatchRegisterModalProps>
           productName = cleaned[1] || 'Produk Ruahan';
         }
 
+        const matched = matchProductFromCatalog(productCode, productName);
+
         parsed.push({
           batchNo: batchNoVal.toUpperCase(),
-          productCode,
-          productName,
+          productCode: matched.code || productCode,
+          productName: matched.name || productName,
           mixingQtyKg,
           mixingDate,
           analyst: 'Staf QC Lab (IPC)',
@@ -417,15 +519,58 @@ export const IpcBulkBatchRegisterModal: React.FC<IpcBulkBatchRegisterModalProps>
               </div>
 
               <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-extrabold text-slate-700 block">
+                    Pilih Dari Master Produk (Supabase)
+                  </label>
+                  <span className="text-[10px] text-purple-700 font-semibold">
+                    {registeredProducts.length} Produk Terdaftar
+                  </span>
+                </div>
+                <select
+                  value={manualForm.productCode || ''}
+                  onChange={(e) => {
+                    const selectedCode = e.target.value;
+                    const prod = registeredProducts.find(
+                      (p) => (p.productCode || p.code) === selectedCode
+                    );
+                    if (prod) {
+                      setManualForm({
+                        ...manualForm,
+                        productCode: prod.productCode || prod.code,
+                        productName: prod.name,
+                      });
+                    } else {
+                      setManualForm({
+                        ...manualForm,
+                        productCode: selectedCode,
+                      });
+                    }
+                  }}
+                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:ring-2 focus:ring-purple-500"
+                >
+                  <option value="">-- Pilih Kode / Nama Produk --</option>
+                  {registeredProducts.map((p) => {
+                    const code = p.productCode || p.code;
+                    return (
+                      <option key={p.id || code} value={code}>
+                        {code} - {p.name}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              <div className="space-y-1">
                 <label className="text-[11px] font-extrabold text-slate-700 block">
                   Kode Produk (RnD)
                 </label>
                 <input
                   type="text"
-                  placeholder="Contoh: PJ-SERUM-001"
+                  placeholder="Contoh: PJ0001"
                   value={manualForm.productCode}
                   onChange={(e) => setManualForm({ ...manualForm, productCode: e.target.value })}
-                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:ring-2 focus:ring-purple-500"
+                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:ring-2 focus:ring-purple-500 font-mono"
                 />
               </div>
 
@@ -436,7 +581,7 @@ export const IpcBulkBatchRegisterModal: React.FC<IpcBulkBatchRegisterModalProps>
                 <input
                   type="text"
                   required
-                  placeholder="Contoh: Larassanti Brightening Glow Serum"
+                  placeholder="Contoh: Larassanti Chocolate FaceMask"
                   value={manualForm.productName}
                   onChange={(e) => setManualForm({ ...manualForm, productName: e.target.value })}
                   className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:ring-2 focus:ring-purple-500"
@@ -458,7 +603,7 @@ export const IpcBulkBatchRegisterModal: React.FC<IpcBulkBatchRegisterModalProps>
 
               <div className="space-y-1">
                 <label className="text-[11px] font-extrabold text-slate-700 block">
-                  Tanggal Pembuatan Mixing
+                  Tanggal Analisa
                 </label>
                 <input
                   type="date"
@@ -519,7 +664,7 @@ export const IpcBulkBatchRegisterModal: React.FC<IpcBulkBatchRegisterModalProps>
                       <th className="p-2.5">Kode Produk</th>
                       <th className="p-2.5">Nama Produk</th>
                       <th className="p-2.5 text-right">Qty Mixing</th>
-                      <th className="p-2.5">Tgl Mixing</th>
+                      <th className="p-2.5">Tgl Analisa</th>
                       <th className="p-2.5 text-center">Metode</th>
                       <th className="p-2.5 text-center">Aksi</th>
                     </tr>

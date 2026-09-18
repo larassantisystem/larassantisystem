@@ -4,6 +4,7 @@ import { useAuth } from '../../core/auth/AuthContext';
 import { canWriteModule } from '../../core/auth/permissionGuard';
 import { authService } from '../../core/auth/authService';
 import { formulaService } from '../../features/rnd/formula/formulaService';
+import { auditLogger } from '../../core/utils/auditLogger';
 import {
   Plus,
   Trash2,
@@ -715,23 +716,14 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
         onSaveFormula(pendingSavePayload);
 
         // Catat ke Jejak Rekam Audit Trail
-        try {
-          const rawAudit = localStorage.getItem('cosmo_ddmp_audit_logs');
-          const auditList = rawAudit ? JSON.parse(rawAudit) : [];
-          const newAuditLog = {
-            id: `aud-${Date.now()}`,
-            timestamp: new Date().toISOString(),
-            actorNik: actorNik,
-            actorName: actorName,
-            module: 'rnd',
-            action: editingFormulaId ? 'FORMULA_UPDATE' : 'FORMULA_CREATE',
-            targetNik: pendingSavePayload.code,
-            details: `Penyimpanan Master BOM Formula Ruahan ${pendingSavePayload.code} (Produk: ${pendingSavePayload.productName} - ${pendingSavePayload.productCode}, Versi: ${pendingSavePayload.version}, Basis: ${pendingSavePayload.bulkQuantityKg} kg, ${pendingSavePayload.ingredients.length} bahan baku) dengan otorisasi tanda tangan elektronik.`,
-          };
-          localStorage.setItem('cosmo_ddmp_audit_logs', JSON.stringify([newAuditLog, ...auditList]));
-        } catch (auditErr) {
-          console.warn('Gagal mencatat audit log formulasi:', auditErr);
-        }
+        auditLogger.logAction({
+          actorNik: actorNik,
+          actorName: actorName,
+          module: 'rnd',
+          action: editingFormulaId ? 'FORMULA_UPDATE' : 'FORMULA_CREATE',
+          targetNik: pendingSavePayload.code,
+          details: `Penyimpanan Master BOM Formula Ruahan ${pendingSavePayload.code} (Produk: ${pendingSavePayload.productName} - ${pendingSavePayload.productCode}, Versi: ${pendingSavePayload.version}, Basis: ${pendingSavePayload.bulkQuantityKg} kg, ${pendingSavePayload.ingredients.length} bahan baku) dengan otorisasi tanda tangan elektronik.`,
+        });
 
         setIsPasswordModalOpen(false);
         setIsFormModalOpen(false);
@@ -744,23 +736,14 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
         }
 
         // Catat ke Jejak Rekam Audit Trail
-        try {
-          const rawAudit = localStorage.getItem('cosmo_ddmp_audit_logs');
-          const auditList = rawAudit ? JSON.parse(rawAudit) : [];
-          const newAuditLog = {
-            id: `aud-${Date.now()}`,
-            timestamp: new Date().toISOString(),
-            actorNik: actorNik,
-            actorName: actorName,
-            module: 'rnd',
-            action: 'FORMULA_DELETE',
-            targetNik: pendingDeleteFormula.code,
-            details: `Penghapusan Master BOM Formula Ruahan ${pendingDeleteFormula.code} (Produk: ${pendingDeleteFormula.productName} - ${pendingDeleteFormula.productCode}, Versi: ${pendingDeleteFormula.version}) dengan otorisasi tanda tangan elektronik.`,
-          };
-          localStorage.setItem('cosmo_ddmp_audit_logs', JSON.stringify([newAuditLog, ...auditList]));
-        } catch (auditErr) {
-          console.warn('Gagal mencatat audit log penghapusan formulasi:', auditErr);
-        }
+        auditLogger.logAction({
+          actorNik: actorNik,
+          actorName: actorName,
+          module: 'rnd',
+          action: 'FORMULA_DELETE',
+          targetNik: pendingDeleteFormula.code,
+          details: `Penghapusan Master BOM Formula Ruahan ${pendingDeleteFormula.code} (Produk: ${pendingDeleteFormula.productName} - ${pendingDeleteFormula.productCode}, Versi: ${pendingDeleteFormula.version}) dengan otorisasi tanda tangan elektronik.`,
+        });
 
         setIsPasswordModalOpen(false);
         setPendingDeleteFormula(null);
@@ -932,16 +915,14 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
     });
 
     // Test 4: Otorisasi Password & Perekaman Audit Trail
-    const rawAudit = localStorage.getItem('cosmo_ddmp_audit_logs');
-    const hasAuditArray = rawAudit ? Array.isArray(JSON.parse(rawAudit)) : true;
-    const isTest4Passed = hasAuditArray && typeof authService.verifyPassword === 'function';
+    const isTest4Passed = typeof authService.verifyPassword === 'function' && typeof auditLogger.logAction === 'function';
 
     tests.push({
       id: 'QA-AUD-04',
       name: 'Verifikasi Otorisasi Kata Sandi & Perekaman Jejak Audit Trail CPKB',
       status: isTest4Passed ? 'PASS' : 'FAIL',
       note: isTest4Passed
-        ? 'Lolos. Modul otorisasi kata sandi aktif dan tabel penyimpanan jejak audit trail (cosmo_ddmp_audit_logs) siap merekam aktivitas formulasi.'
+        ? 'Lolos. Modul otorisasi kata sandi aktif dan sistem jejak audit trail (auditLogger) siap merekam aktivitas formulasi.'
         : 'Gagal memverifikasi modul otorisasi audit trail.',
     });
 

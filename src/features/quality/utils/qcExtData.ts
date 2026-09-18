@@ -3,14 +3,22 @@ import { Department } from '../../../types';
 export interface IpcBulkTest {
   id: string;
   batchNo: string;
+  productCode?: string;
   productName: string;
   mixingDate: string;
   pH: number;
   viscosity: number; // cPs
   appearance: string; // e.g. "Homogen, Putih Mengkilap"
   gravity: number; // g/ml
-  status: 'PASSED' | 'REJECTED' | 'TESTING';
+  status: 'PASSED' | 'REJECTED' | 'TESTING' | 'AWAITING_QM' | 'RELEASED';
   analyst: string;
+  labParameters?: Array<{
+    id: string;
+    parameterName: string;
+    specification: string;
+    resultValue: string;
+    isCompliant: boolean;
+  }>;
 }
 
 export interface IpcReworkTest {

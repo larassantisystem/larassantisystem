@@ -32,20 +32,7 @@ export interface IpcAuditResult {
   statusMessage: string;
 }
 
-let inMemoryIpcBatches: IpcBulkTest[] = [
-  {
-    id: 'IPC-20260917-001',
-    batchNo: 'BCH-20260917-A1',
-    productName: 'Larassanti Brightening Serum 30ml',
-    mixingDate: new Date().toISOString().split('T')[0],
-    pH: 6.2,
-    viscosity: 4500,
-    appearance: 'Cairan Jernih Agak Kental, Fragrance Sesuai Standar',
-    gravity: 1.02,
-    status: 'TESTING',
-    analyst: 'Staf QC Lab (IPC)',
-  },
-];
+let inMemoryIpcBatches: IpcBulkTest[] = [];
 
 export const ipcBulkService = {
   /**
@@ -71,6 +58,7 @@ export const ipcBulkService = {
         const mapped: IpcBulkTest[] = data.map((row: any) => ({
           id: row.id || `IPC-${row.batch_no}`,
           batchNo: row.batch_no || row.batchNo || 'UNKNOWN-BATCH',
+          productCode: row.product_code || row.productCode || undefined,
           productName: row.product_name || row.productName || 'Tanpa Nama Produk',
           mixingDate: row.mixing_date || row.mixingDate || new Date().toISOString().split('T')[0],
           pH: Number(row.ph || row.pH || 6.0),
@@ -100,6 +88,7 @@ export const ipcBulkService = {
       return {
         id: uniqueId,
         batchNo: input.batchNo.trim().toUpperCase(),
+        productCode: input.productCode ? input.productCode.trim() : undefined,
         productName: input.productName.trim(),
         mixingDate: input.mixingDate || timestamp,
         pH: input.pH !== undefined && input.pH !== null ? Number(input.pH) : 6.0,
@@ -169,6 +158,7 @@ export const ipcBulkService = {
         const { error } = await supabase.from('ipc_bulk_batches').upsert({
           id: updatedBatch.id,
           batch_no: updatedBatch.batchNo,
+          product_code: updatedBatch.productCode || null,
           product_name: updatedBatch.productName,
           ph: updatedBatch.pH,
           viscosity: updatedBatch.viscosity,

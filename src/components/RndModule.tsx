@@ -49,27 +49,9 @@ export const RndModule: React.FC<RndModuleProps> = ({
   const [formulations, setFormulations] = useState<BulkFormulation[]>([]);
   const [selectedFormulation, setSelectedFormulation] = useState<BulkFormulation | null>(null);
 
-  // Data Loading
+  // Data Loading directly from Supabase
   useEffect(() => {
-    const savedRM = localStorage.getItem('lsm_raw_materials_b');
-    const savedPM = localStorage.getItem('lsm_packaging_materials_k');
-
-    if (savedRM) {
-      try {
-        setRawMaterials(JSON.parse(savedRM));
-      } catch (e) {
-        setRawMaterials([]);
-      }
-    }
-    if (savedPM) {
-      try {
-        setPackagingMaterials(JSON.parse(savedPM));
-      } catch (e) {
-        setPackagingMaterials([]);
-      }
-    }
-
-    // 3. Sync Materials & Packaging with Supabase
+    // 1. Sync Materials & Packaging with Supabase
     materialService.getMaterials().then((res) => {
       if (res) {
         setRawMaterials(res);
@@ -82,12 +64,12 @@ export const RndModule: React.FC<RndModuleProps> = ({
       }
     });
 
-    // 4. Products & Multi-Variants (PJ0001, PJ0002)
+    // 2. Products & Multi-Variants (PJ0001, PJ0002) directly from Supabase
     productService.getProducts().then((res) => {
       setProducts(res);
     });
 
-    // 4. Formulations directly from Supabase / formulaService
+    // 3. Formulations directly from Supabase / formulaService
     formulaService.getFormulations().then((res) => {
       setFormulations(res);
       if (res.length > 0) setSelectedFormulation(res[0]);
@@ -106,7 +88,6 @@ export const RndModule: React.FC<RndModuleProps> = ({
       updated = [resolvedRM, ...rawMaterials];
     }
     setRawMaterials(updated);
-    localStorage.setItem('lsm_raw_materials_b', JSON.stringify(updated));
   };
 
   const handleBatchSaveRM = async (newRMs: RawMaterial[]) => {
@@ -115,9 +96,7 @@ export const RndModule: React.FC<RndModuleProps> = ({
       const map = new Map<string, RawMaterial>();
       prev.forEach((r) => map.set(r.code.trim().toUpperCase(), r));
       newRMs.forEach((r) => map.set(r.code.trim().toUpperCase(), r));
-      const updated = Array.from(map.values());
-      localStorage.setItem('lsm_raw_materials_b', JSON.stringify(updated));
-      return updated;
+      return Array.from(map.values());
     });
     await materialService.saveMaterials(newRMs);
   };
@@ -126,7 +105,6 @@ export const RndModule: React.FC<RndModuleProps> = ({
     const rm = rawMaterials.find((r) => r.id === id);
     const updated = rawMaterials.filter((r) => r.id !== id && (!rm?.code || r.code !== rm.code));
     setRawMaterials(updated);
-    localStorage.setItem('lsm_raw_materials_b', JSON.stringify(updated));
     materialService.deleteMaterial(id, rm?.code);
   };
 
@@ -142,7 +120,6 @@ export const RndModule: React.FC<RndModuleProps> = ({
       updated = [resolvedPM, ...packagingMaterials];
     }
     setPackagingMaterials(updated);
-    localStorage.setItem('lsm_packaging_materials_k', JSON.stringify(updated));
   };
 
   const handleBatchSavePM = async (newPMs: PackagingMaterial[]) => {
@@ -151,9 +128,7 @@ export const RndModule: React.FC<RndModuleProps> = ({
       const map = new Map<string, PackagingMaterial>();
       prev.forEach((p) => map.set(p.code.trim().toUpperCase(), p));
       newPMs.forEach((p) => map.set(p.code.trim().toUpperCase(), p));
-      const updated = Array.from(map.values());
-      localStorage.setItem('lsm_packaging_materials_k', JSON.stringify(updated));
-      return updated;
+      return Array.from(map.values());
     });
     await packagingService.savePackagingMaterials(newPMs);
   };
@@ -162,7 +137,6 @@ export const RndModule: React.FC<RndModuleProps> = ({
     const pm = packagingMaterials.find((p) => p.id === id);
     const updated = packagingMaterials.filter((p) => p.id !== id && (!pm?.code || p.code !== pm.code));
     setPackagingMaterials(updated);
-    localStorage.setItem('lsm_packaging_materials_k', JSON.stringify(updated));
     packagingService.deletePackagingMaterial(id, pm?.code);
   };
 
@@ -257,8 +231,6 @@ export const RndModule: React.FC<RndModuleProps> = ({
 
       setRawMaterials([]);
       setPackagingMaterials([]);
-      localStorage.setItem('lsm_raw_materials_b', JSON.stringify([]));
-      localStorage.setItem('lsm_packaging_materials_k', JSON.stringify([]));
       
       // Delete from Supabase in background
       for (const rm of rmToDelete) {

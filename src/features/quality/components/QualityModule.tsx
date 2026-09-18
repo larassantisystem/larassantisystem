@@ -1921,7 +1921,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
                     <th className="p-3">ID Laporan</th>
                     <th className="p-3">No. Bets (Klik u/ Analisa)</th>
                     <th className="p-3">Nama Produk</th>
-                    <th className="p-3">Tanggal Mixing</th>
+                    <th className="p-3">Tanggal Analisa</th>
                     <th className="p-3 text-center">pH</th>
                     <th className="p-3 text-center">Viskositas</th>
                     <th className="p-3">Pemerian (Appearance)</th>
@@ -1964,7 +1964,14 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
                             <Sparkles className="w-3 h-3 text-purple-600 group-hover:scale-125 transition-transform" />
                           </button>
                         </td>
-                        <td className="p-3 font-semibold">{t.productName}</td>
+                        <td className="p-3 font-semibold">
+                          <div>{t.productName}</div>
+                          {t.productCode && (
+                            <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                              {t.productCode}
+                            </span>
+                          )}
+                        </td>
                         <td className="p-3 text-slate-500">{t.mixingDate}</td>
                         <td className={`p-3 text-center font-bold ${t.pH >= 5.0 && t.pH <= 7.5 ? 'text-slate-800' : 'text-rose-600'}`}>{t.pH}</td>
                         <td className="p-3 text-center font-semibold">{t.viscosity.toLocaleString()} cPs</td>

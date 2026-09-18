@@ -2,7 +2,17 @@ import { supabase, isSupabaseConfigured } from '../../../core/auth/supabaseClien
 import { RawMaterial } from '../../../types';
 import { ensureUUID } from '../../../utils/uuid';
 
-const RAW_MATERIALS_STORAGE_KEY = 'lsm_raw_materials_b';
+// In-memory cache untuk performa UI (BUKAN local storage)
+let inMemoryRawMaterials: RawMaterial[] = [];
+
+// Bersihkan data lama jika ada di browser
+if (typeof window !== 'undefined' && window.localStorage) {
+  try {
+    localStorage.removeItem('lsm_raw_materials_b');
+  } catch {
+    // ignore
+  }
+}
 
 export const materialService = {
   checkConnection: async (): Promise<{ configured: boolean; connected: boolean; message: string }> => {
@@ -14,7 +24,7 @@ export const materialService = {
       };
     }
     try {
-      const { data, error } = await supabase.from('raw_materials').select('id').limit(1);
+      const { error } = await supabase.from('raw_materials').select('id').limit(1);
       if (error) {
         return {
           configured: true,
@@ -37,18 +47,7 @@ export const materialService = {
   },
 
   getLocalMaterials: (): RawMaterial[] => {
-    if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
-      return [];
-    }
-    const saved = localStorage.getItem(RAW_MATERIALS_STORAGE_KEY);
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error('Error parsing local raw materials', e);
-      }
-    }
-    return [];
+    return inMemoryRawMaterials;
   },
 
   getMaterials: async (): Promise<RawMaterial[]> => {
@@ -62,27 +61,45 @@ export const materialService = {
 
         // Fetch in batches of 1000 to bypass Supabase PostgREST default max-rows limit (1000 items)
         while (hasMore) {
-          const { data, error } = await supabase
-            .from('raw_materials')
-            .select('*')
-            .order('code', { ascending: true })
-            .range(from, from + step - 1);
+          let batchSuccess = false;
+          let batchError: any = null;
 
-          if (error) {
-            console.warn('[Supabase Audit] Notice fetching raw_materials batch (falling back to local storage):', error.message || error);
-            fetchError = true;
-            break;
+          for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+              const { data, error } = await supabase
+                .from('raw_materials')
+                .select('*')
+                .order('code', { ascending: true })
+                .range(from, from + step - 1);
+
+              if (error) {
+                batchError = error;
+                await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
+                continue;
+              }
+
+              if (data && data.length > 0) {
+                allData = allData.concat(data);
+                if (data.length < step) {
+                  hasMore = false;
+                } else {
+                  from += step;
+                }
+              } else {
+                hasMore = false;
+              }
+              batchSuccess = true;
+              break;
+            } catch (netErr) {
+              batchError = netErr;
+              await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
+            }
           }
 
-          if (data && data.length > 0) {
-            allData = allData.concat(data);
-            if (data.length < step) {
-              hasMore = false;
-            } else {
-              from += step;
-            }
-          } else {
-            hasMore = false;
+          if (!batchSuccess) {
+            console.warn('[Supabase Audit] Warning fetching raw_materials batch:', batchError?.message || batchError);
+            fetchError = true;
+            break;
           }
         }
 
@@ -108,27 +125,15 @@ export const materialService = {
             lastModifiedBy: m.last_modified_by || m.lastModifiedBy,
             lastModifiedAt: m.last_modified_at || m.lastModifiedAt,
           }));
-          if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
-            localStorage.setItem(RAW_MATERIALS_STORAGE_KEY, JSON.stringify(mapped));
-          }
+          inMemoryRawMaterials = mapped;
           return mapped;
         }
       } catch (err) {
-        console.warn('[Supabase Audit] Supabase raw materials fetch exception, falling back to local storage', err);
+        console.error('[Supabase Audit] Supabase raw materials fetch exception:', err);
       }
     }
 
-    if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
-      const saved = localStorage.getItem(RAW_MATERIALS_STORAGE_KEY);
-      if (saved) {
-        try {
-          return JSON.parse(saved);
-        } catch (e) {
-          console.error('Error parsing local raw materials', e);
-        }
-      }
-    }
-    return [];
+    return inMemoryRawMaterials;
   },
 
   saveSingleMaterial: async (item: RawMaterial): Promise<{ success: boolean; error?: string; updatedId?: string }> => {
@@ -136,16 +141,13 @@ export const materialService = {
     const validId = ensureUUID(item.id);
     const normalizedItem: RawMaterial = { ...item, id: validId };
 
-    // Update local cache first
-    const saved = localStorage.getItem(RAW_MATERIALS_STORAGE_KEY);
-    let currentList: RawMaterial[] = saved ? JSON.parse(saved) : [];
-    const idx = currentList.findIndex((r) => r.id === validId || r.code === normalizedItem.code || r.id === item.id);
+    // Update in-memory state
+    const idx = inMemoryRawMaterials.findIndex((r) => r.id === validId || r.code === normalizedItem.code || r.id === item.id);
     if (idx >= 0) {
-      currentList[idx] = normalizedItem;
+      inMemoryRawMaterials[idx] = normalizedItem;
     } else {
-      currentList.unshift(normalizedItem);
+      inMemoryRawMaterials.unshift(normalizedItem);
     }
-    localStorage.setItem(RAW_MATERIALS_STORAGE_KEY, JSON.stringify(currentList));
 
     if (isSupabaseConfigured && supabase) {
       try {
@@ -236,41 +238,30 @@ export const materialService = {
               }
               return { success: true, updatedId: resolvedId };
             }
-            if (insertError.message?.includes('fetch') || insertError.message?.includes('network')) {
-              console.warn('[Supabase Audit] Network notice: raw_material cached locally, cloud sync will retry:', insertError.message);
-              return { success: true, updatedId: resolvedId, error: 'Tersimpan lokal (sinkronisasi cloud tertunda).' };
-            }
             console.error('[Supabase Audit] Error inserting raw_material:', insertError);
             return { success: false, error: `${insertError.message} (${insertError.code})` };
           }
           return { success: true, updatedId: resolvedId };
         }
       } catch (err: any) {
-        if (err.message?.includes('fetch') || err.message?.includes('network')) {
-          console.warn('[Supabase Audit] Network exception: raw_material cached locally:', err.message);
-          return { success: true, updatedId: validId, error: 'Tersimpan lokal (jaringan offline).' };
-        }
         console.error('[Supabase Audit] Exception during raw_material save:', err);
         return { success: false, error: err.message || String(err) };
       }
     }
-    return { success: true, error: 'Tersimpan lokal (Supabase belum terkonfigurasi).' };
+    return { success: true };
   },
 
   saveMaterials: async (materials: RawMaterial[]): Promise<void> => {
     if (!materials || materials.length === 0) return;
     const normalizedList = materials.map((m) => ({ ...m, id: ensureUUID(m.id) }));
 
-    // 1. Update localStorage cache with deduplication by code
-    const saved = localStorage.getItem(RAW_MATERIALS_STORAGE_KEY);
-    const existingList: RawMaterial[] = saved ? JSON.parse(saved) : [];
+    // Update in-memory state
     const map = new Map<string, RawMaterial>();
-    existingList.forEach((r) => map.set(r.code.trim().toUpperCase(), r));
+    inMemoryRawMaterials.forEach((r) => map.set(r.code.trim().toUpperCase(), r));
     normalizedList.forEach((r) => map.set(r.code.trim().toUpperCase(), r));
-    const merged = Array.from(map.values());
-    localStorage.setItem(RAW_MATERIALS_STORAGE_KEY, JSON.stringify(merged));
+    inMemoryRawMaterials = Array.from(map.values());
 
-    // 2. Persist to Supabase in batches of 50 to prevent connection pool exhaustion / Failed to fetch
+    // Persist directly to Supabase in batches of 50
     if (isSupabaseConfigured && supabase) {
       const CHUNK_SIZE = 50;
       for (let i = 0; i < normalizedList.length; i += CHUNK_SIZE) {
@@ -302,10 +293,10 @@ export const materialService = {
             .upsert(payloads, { onConflict: 'code' });
 
           if (error) {
-            console.warn(`[Supabase Audit] Batch raw materials upsert chunk [${i}..${i + chunk.length}] warning:`, error.message);
+            console.error(`[Supabase Audit] Batch raw materials upsert chunk [${i}..${i + chunk.length}] error:`, error.message);
           }
         } catch (err: any) {
-          console.warn(`[Supabase Audit] Batch raw materials upsert network notice at chunk [${i}]:`, err?.message || err);
+          console.error(`[Supabase Audit] Batch raw materials upsert error at chunk [${i}]:`, err?.message || err);
         }
       }
     }
@@ -313,16 +304,7 @@ export const materialService = {
 
   deleteMaterial: async (id: string, code?: string): Promise<void> => {
     const validId = ensureUUID(id);
-    const saved = localStorage.getItem(RAW_MATERIALS_STORAGE_KEY);
-    if (saved) {
-      try {
-        const parsed: RawMaterial[] = JSON.parse(saved);
-        const filtered = parsed.filter((r) => r.id !== id && r.id !== validId && (!code || r.code !== code));
-        localStorage.setItem(RAW_MATERIALS_STORAGE_KEY, JSON.stringify(filtered));
-      } catch (e) {
-        console.error(e);
-      }
-    }
+    inMemoryRawMaterials = inMemoryRawMaterials.filter((r) => r.id !== id && r.id !== validId && (!code || r.code !== code));
 
     if (isSupabaseConfigured && supabase) {
       try {
@@ -333,7 +315,7 @@ export const materialService = {
           if (err2) console.error('[Supabase Audit] Delete by code error:', err2);
         }
       } catch (err) {
-        console.warn('[Supabase Audit] Supabase delete raw material error', err);
+        console.error('[Supabase Audit] Supabase delete raw material error:', err);
       }
     }
   },

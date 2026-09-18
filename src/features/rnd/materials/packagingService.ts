@@ -2,7 +2,17 @@ import { supabase, isSupabaseConfigured } from '../../../core/auth/supabaseClien
 import { PackagingMaterial } from '../../../types';
 import { ensureUUID } from '../../../utils/uuid';
 
-const PACKAGING_STORAGE_KEY = 'lsm_packaging_materials_k';
+// In-memory cache untuk performa UI (BUKAN local storage)
+let inMemoryPackaging: PackagingMaterial[] = [];
+
+// Bersihkan data lama jika ada di browser
+if (typeof window !== 'undefined' && window.localStorage) {
+  try {
+    localStorage.removeItem('lsm_packaging_materials_k');
+  } catch {
+    // ignore
+  }
+}
 
 export const packagingService = {
   checkConnection: async (): Promise<{ configured: boolean; connected: boolean; message: string }> => {
@@ -14,7 +24,7 @@ export const packagingService = {
       };
     }
     try {
-      const { data, error } = await supabase.from('packaging_materials').select('id').limit(1);
+      const { error } = await supabase.from('packaging_materials').select('id').limit(1);
       if (error) {
         return {
           configured: true,
@@ -37,18 +47,7 @@ export const packagingService = {
   },
 
   getLocalPackagingMaterials: (): PackagingMaterial[] => {
-    if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
-      return [];
-    }
-    const saved = localStorage.getItem(PACKAGING_STORAGE_KEY);
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error('Error parsing local packaging materials', e);
-      }
-    }
-    return [];
+    return inMemoryPackaging;
   },
 
   getPackagingMaterials: async (): Promise<PackagingMaterial[]> => {
@@ -62,27 +61,45 @@ export const packagingService = {
 
         // Fetch in batches of 1000 to bypass Supabase PostgREST default max-rows limit (1000 items)
         while (hasMore) {
-          const { data, error } = await supabase
-            .from('packaging_materials')
-            .select('*')
-            .order('code', { ascending: true })
-            .range(from, from + step - 1);
+          let batchSuccess = false;
+          let batchError: any = null;
 
-          if (error) {
-            console.warn('[Supabase Audit] Notice fetching packaging_materials batch (falling back to local storage):', error.message || error);
-            fetchError = true;
-            break;
+          for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+              const { data, error } = await supabase
+                .from('packaging_materials')
+                .select('*')
+                .order('code', { ascending: true })
+                .range(from, from + step - 1);
+
+              if (error) {
+                batchError = error;
+                await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
+                continue;
+              }
+
+              if (data && data.length > 0) {
+                allData = allData.concat(data);
+                if (data.length < step) {
+                  hasMore = false;
+                } else {
+                  from += step;
+                }
+              } else {
+                hasMore = false;
+              }
+              batchSuccess = true;
+              break;
+            } catch (netErr) {
+              batchError = netErr;
+              await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
+            }
           }
 
-          if (data && data.length > 0) {
-            allData = allData.concat(data);
-            if (data.length < step) {
-              hasMore = false;
-            } else {
-              from += step;
-            }
-          } else {
-            hasMore = false;
+          if (!batchSuccess) {
+            console.warn('[Supabase Audit] Warning fetching packaging_materials batch:', batchError?.message || batchError);
+            fetchError = true;
+            break;
           }
         }
 
@@ -104,27 +121,15 @@ export const packagingService = {
             lastModifiedBy: p.last_modified_by || p.lastModifiedBy,
             lastModifiedAt: p.last_modified_at || p.lastModifiedAt,
           }));
-          if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
-            localStorage.setItem(PACKAGING_STORAGE_KEY, JSON.stringify(mapped));
-          }
+          inMemoryPackaging = mapped;
           return mapped;
         }
       } catch (err) {
-        console.warn('[Supabase Audit] Supabase packaging materials fetch exception, falling back to local storage', err);
+        console.error('[Supabase Audit] Supabase packaging materials fetch exception:', err);
       }
     }
 
-    if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
-      const saved = localStorage.getItem(PACKAGING_STORAGE_KEY);
-      if (saved) {
-        try {
-          return JSON.parse(saved);
-        } catch (e) {
-          console.error('Error parsing local packaging materials', e);
-        }
-      }
-    }
-    return [];
+    return inMemoryPackaging;
   },
 
   saveSinglePackagingMaterial: async (item: PackagingMaterial): Promise<{ success: boolean; error?: string; updatedId?: string }> => {
@@ -132,16 +137,13 @@ export const packagingService = {
     const validId = ensureUUID(item.id);
     const normalizedItem: PackagingMaterial = { ...item, id: validId };
 
-    // Update local cache first
-    const saved = localStorage.getItem(PACKAGING_STORAGE_KEY);
-    let currentList: PackagingMaterial[] = saved ? JSON.parse(saved) : [];
-    const idx = currentList.findIndex((p) => p.id === validId || p.code === normalizedItem.code || p.id === item.id);
+    // Update in-memory state
+    const idx = inMemoryPackaging.findIndex((p) => p.id === validId || p.code === normalizedItem.code || p.id === item.id);
     if (idx >= 0) {
-      currentList[idx] = normalizedItem;
+      inMemoryPackaging[idx] = normalizedItem;
     } else {
-      currentList.unshift(normalizedItem);
+      inMemoryPackaging.unshift(normalizedItem);
     }
-    localStorage.setItem(PACKAGING_STORAGE_KEY, JSON.stringify(currentList));
 
     if (isSupabaseConfigured && supabase) {
       try {
@@ -186,7 +188,7 @@ export const packagingService = {
           manufacturer: normalizedItem.manufacturer || normalizedItem.supplier || '',
           storage_location: normalizedItem.storageLocation || '',
           storage_conditions: normalizedItem.storageConditions || '',
-          qc_parameters: normalizedItem.qcParameters || [], // QC parameters are an array of objects
+          qc_parameters: normalizedItem.qcParameters || [],
           reorder_point: normalizedItem.reorderPoint ?? 100,
           last_modified_by: normalizedItem.lastModifiedBy || 'Staff RnD',
           last_modified_at: normalizedItem.lastModifiedAt || new Date().toISOString(),
@@ -201,7 +203,6 @@ export const packagingService = {
 
           if (updateError) {
             console.error('[Supabase Audit] Error updating packaging_material by ID:', updateError);
-            // Fallback: try update by code
             const { error: fallbackError } = await supabase
               .from('packaging_materials')
               .update(payload)
@@ -219,7 +220,6 @@ export const packagingService = {
             .insert(payload);
 
           if (insertError) {
-            // If code conflict happens unexpectedly, try updating by code
             if (insertError.code === '23505' || insertError.message?.includes('duplicate key')) {
               const { error: retryUpdateError } = await supabase
                 .from('packaging_materials')
@@ -231,41 +231,30 @@ export const packagingService = {
               }
               return { success: true, updatedId: resolvedId };
             }
-            if (insertError.message?.includes('fetch') || insertError.message?.includes('network')) {
-              console.warn('[Supabase Audit] Network notice: packaging_material cached locally, cloud sync will retry:', insertError.message);
-              return { success: true, updatedId: resolvedId, error: 'Tersimpan lokal (sinkronisasi cloud tertunda).' };
-            }
             console.error('[Supabase Audit] Error inserting packaging_material:', insertError);
             return { success: false, error: `${insertError.message} (${insertError.code})` };
           }
           return { success: true, updatedId: resolvedId };
         }
       } catch (err: any) {
-        if (err.message?.includes('fetch') || err.message?.includes('network')) {
-          console.warn('[Supabase Audit] Network exception: packaging_material cached locally:', err.message);
-          return { success: true, updatedId: validId, error: 'Tersimpan lokal (jaringan offline).' };
-        }
         console.error('[Supabase Audit] Exception during packaging_material save:', err);
         return { success: false, error: err.message || String(err) };
       }
     }
-    return { success: true, error: 'Tersimpan lokal (Supabase belum terkonfigurasi).' };
+    return { success: true };
   },
 
   savePackagingMaterials: async (materials: PackagingMaterial[]): Promise<void> => {
     if (!materials || materials.length === 0) return;
     const normalizedList = materials.map((p) => ({ ...p, id: ensureUUID(p.id) }));
 
-    // 1. Update localStorage cache with deduplication by code
-    const saved = localStorage.getItem(PACKAGING_STORAGE_KEY);
-    const existingList: PackagingMaterial[] = saved ? JSON.parse(saved) : [];
+    // Update in-memory state
     const map = new Map<string, PackagingMaterial>();
-    existingList.forEach((p) => map.set(p.code.trim().toUpperCase(), p));
+    inMemoryPackaging.forEach((p) => map.set(p.code.trim().toUpperCase(), p));
     normalizedList.forEach((p) => map.set(p.code.trim().toUpperCase(), p));
-    const merged = Array.from(map.values());
-    localStorage.setItem(PACKAGING_STORAGE_KEY, JSON.stringify(merged));
+    inMemoryPackaging = Array.from(map.values());
 
-    // 2. Persist to Supabase in batches of 50 to prevent connection pool exhaustion / Failed to fetch
+    // Persist directly to Supabase in batches of 50
     if (isSupabaseConfigured && supabase) {
       const CHUNK_SIZE = 50;
       for (let i = 0; i < normalizedList.length; i += CHUNK_SIZE) {
@@ -296,10 +285,10 @@ export const packagingService = {
             .upsert(payloads, { onConflict: 'code' });
 
           if (error) {
-            console.warn(`[Supabase Audit] Batch packaging upsert chunk [${i}..${i + chunk.length}] warning:`, error.message);
+            console.error(`[Supabase Audit] Batch packaging upsert chunk [${i}..${i + chunk.length}] error:`, error.message);
           }
         } catch (err: any) {
-          console.warn(`[Supabase Audit] Batch packaging upsert network notice at chunk [${i}]:`, err?.message || err);
+          console.error(`[Supabase Audit] Batch packaging upsert error at chunk [${i}]:`, err?.message || err);
         }
       }
     }
@@ -307,16 +296,7 @@ export const packagingService = {
 
   deletePackagingMaterial: async (id: string, code?: string): Promise<void> => {
     const validId = ensureUUID(id);
-    const saved = localStorage.getItem(PACKAGING_STORAGE_KEY);
-    if (saved) {
-      try {
-        const parsed: PackagingMaterial[] = JSON.parse(saved);
-        const filtered = parsed.filter((p) => p.id !== id && p.id !== validId && (!code || p.code !== code));
-        localStorage.setItem(PACKAGING_STORAGE_KEY, JSON.stringify(filtered));
-      } catch (e) {
-        console.error(e);
-      }
-    }
+    inMemoryPackaging = inMemoryPackaging.filter((p) => p.id !== id && p.id !== validId && (!code || p.code !== code));
 
     if (isSupabaseConfigured && supabase) {
       try {
@@ -327,7 +307,7 @@ export const packagingService = {
           if (err2) console.error('[Supabase Audit] Delete packaging by code error:', err2);
         }
       } catch (err) {
-        console.warn('[Supabase Audit] Supabase delete packaging material error', err);
+        console.error('[Supabase Audit] Supabase delete packaging material error:', err);
       }
     }
   },

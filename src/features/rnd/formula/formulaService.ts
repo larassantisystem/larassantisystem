@@ -1,12 +1,14 @@
 import { supabase, isSupabaseConfigured } from '../../../core/auth/supabaseClient';
 import { BulkFormulation } from '../../../types';
 
-const FORMULA_STORAGE_KEY = 'cosmo_ddmp_bulk_formulations';
+// Penyimpanan sesi in-memory (BUKAN local storage)
+let inMemoryFormulations: BulkFormulation[] = [];
 
 // Bersihkan data demo lama dari local storage jika masih tersisa di browser
 export const purgeLegacyDemoFormulas = () => {
   if (typeof window !== 'undefined' && window.localStorage) {
     const legacyKeys = [
+      'cosmo_ddmp_bulk_formulations',
       'lsm_formulations_v2',
       'rnd_demo_formulas',
       'demo_formulations_cache',
@@ -29,10 +31,9 @@ export const formulaService = {
   isConfigured: isSupabaseConfigured,
 
   /**
-   * Mengambil semua master formulasi bulk dari database Supabase
+   * Mengambil semua master formulasi bulk langsung dari database Supabase
    */
   getFormulations: async (): Promise<BulkFormulation[]> => {
-    // 1. Coba ambil dari Supabase jika koneksi aktif
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase
@@ -61,29 +62,17 @@ export const formulaService = {
             updatedAt: row.updated_at || new Date().toISOString(),
           }));
 
-          // Sinkronkan ke cache penyimpanan lokal
-          localStorage.setItem(FORMULA_STORAGE_KEY, JSON.stringify(mapped));
+          inMemoryFormulations = mapped;
           return mapped;
+        } else if (error) {
+          console.error('[formulaService] Error loading bulk_formulations from Supabase:', error.message);
         }
       } catch (err) {
-        console.warn('Gagal memuat formulasi dari Supabase, beralih ke cache lokal:', err);
+        console.error('[formulaService] Exception loading from Supabase:', err);
       }
     }
 
-    // 2. Fallback: baca dari cache lokal (tanpa data demo palsu)
-    try {
-      const saved = localStorage.getItem(FORMULA_STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed;
-        }
-      }
-    } catch {
-      // ignore
-    }
-
-    return [];
+    return inMemoryFormulations;
   },
 
   /**
@@ -109,7 +98,7 @@ export const formulaService = {
       updated_at: new Date().toISOString(),
     };
 
-    // 1. Simpan ke Supabase jika aktif
+    // 1. Simpan langsung ke Supabase
     if (isSupabaseConfigured && supabase) {
       try {
         const { error } = await supabase
@@ -126,36 +115,32 @@ export const formulaService = {
             const { error: fallbackError } = await supabase.from('bulk_formulations').upsert(fallbackPayload, { onConflict: 'id' });
             if (fallbackError) {
                console.error('Supabase fallback upsert error (bulk_formulations):', fallbackError);
+               return { success: false, error: fallbackError.message };
             }
           } else {
             console.error('Supabase upsert error (bulk_formulations):', error);
+            return { success: false, error: error.message };
           }
         }
       } catch (dbErr: any) {
-        console.warn('Supabase request failed, saving to local cache:', dbErr);
+        console.error('Supabase saveSingleFormulation exception:', dbErr);
+        return { success: false, error: dbErr.message || String(dbErr) };
       }
     }
 
-    // 2. Perbarui cache lokal
-    try {
-      const saved = localStorage.getItem(FORMULA_STORAGE_KEY);
-      const list: BulkFormulation[] = saved ? JSON.parse(saved) : [];
-      const idx = list.findIndex((f) => f.id === formula.id || f.code.toUpperCase() === formula.code.toUpperCase());
-      if (idx !== -1) {
-        list[idx] = { ...formula, updatedAt: new Date().toISOString() };
-      } else {
-        list.unshift({ ...formula, createdAt: formula.createdAt || new Date().toISOString() });
-      }
-      localStorage.setItem(FORMULA_STORAGE_KEY, JSON.stringify(list));
-    } catch (cacheErr) {
-      console.error('Failed to update local formula cache:', cacheErr);
+    // 2. Perbarui state in-memory
+    const idx = inMemoryFormulations.findIndex((f) => f.id === formula.id || f.code.toUpperCase() === formula.code.toUpperCase());
+    if (idx !== -1) {
+      inMemoryFormulations[idx] = { ...formula, updatedAt: new Date().toISOString() };
+    } else {
+      inMemoryFormulations.unshift({ ...formula, createdAt: formula.createdAt || new Date().toISOString() });
     }
 
     return { success: true };
   },
 
   /**
-   * Menghapus formulasi dari database Supabase dan cache lokal
+   * Menghapus formulasi dari database Supabase
    */
   deleteFormulation: async (id: string, code?: string): Promise<{ success: boolean; error?: string }> => {
     if (isSupabaseConfigured && supabase) {
@@ -165,22 +150,11 @@ export const formulaService = {
           await supabase.from('bulk_formulations').delete().eq('code', code);
         }
       } catch (err: any) {
-        console.warn('Supabase delete error:', err);
+        console.error('[formulaService] Supabase delete error:', err);
       }
     }
 
-    // Hapus dari cache lokal
-    try {
-      const saved = localStorage.getItem(FORMULA_STORAGE_KEY);
-      if (saved) {
-        const list: BulkFormulation[] = JSON.parse(saved);
-        const filtered = list.filter((f) => f.id !== id && (!code || f.code !== code));
-        localStorage.setItem(FORMULA_STORAGE_KEY, JSON.stringify(filtered));
-      }
-    } catch {
-      // ignore
-    }
-
+    inMemoryFormulations = inMemoryFormulations.filter((f) => f.id !== id && (!code || f.code !== code));
     return { success: true };
   },
 

@@ -6,6 +6,7 @@ import { authService } from '../../core/auth/authService';
 import { canWriteModule, isReadOnlyModule } from '../../core/auth/permissionGuard';
 import { driveClient, DriveUploadedFile } from '../../core/drive-service/driveClient';
 import { ensureUUID, generateUUID } from '../../utils/uuid';
+import { auditLogger } from '../../core/utils/auditLogger';
 import {
   FlaskConical,
   Search,
@@ -406,23 +407,14 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
       onDeleteRM(rmToDelete.id);
 
       // Record Audit Trail Log
-      try {
-        const rawAudit = localStorage.getItem('cosmo_ddmp_audit_logs');
-        const auditList = rawAudit ? JSON.parse(rawAudit) : [];
-        const newAuditLog = {
-          id: `aud-${Date.now()}`,
-          timestamp: new Date().toISOString(),
-          actorNik: actorNik,
-          actorName: user?.name || user?.username || 'ADMIN',
-          module: 'rnd',
-          action: 'RM_MASTER_DELETE',
-          targetNik: rmToDelete.code,
-          details: `Penghapusan Master Bahan Baku ${rmToDelete.code} (${rmToDelete.name}) dengan otorisasi kata sandi pengguna aktif.`,
-        };
-        localStorage.setItem('cosmo_ddmp_audit_logs', JSON.stringify([newAuditLog, ...auditList]));
-      } catch (auditErr) {
-        console.warn('Audit trail write failed:', auditErr);
-      }
+      auditLogger.logAction({
+        actorNik: actorNik,
+        actorName: user?.name || user?.username || 'ADMIN',
+        module: 'rnd',
+        action: 'RM_MASTER_DELETE',
+        targetNik: rmToDelete.code,
+        details: `Penghapusan Master Bahan Baku ${rmToDelete.code} (${rmToDelete.name}) dengan otorisasi kata sandi pengguna aktif.`,
+      });
 
       setIsVerifyingDeletePassword(false);
       setSuccessToast(`Bahan baku "${rmToDelete.code} - ${rmToDelete.name}" berhasil dihapus.`);
@@ -485,23 +477,14 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
       onSaveRM(newOrUpdatedRM);
 
       // Record Audit Trail Log
-      try {
-        const rawAudit = localStorage.getItem('cosmo_ddmp_audit_logs');
-        const auditList = rawAudit ? JSON.parse(rawAudit) : [];
-        const newAuditLog = {
-          id: `aud-${Date.now()}`,
-          timestamp: new Date().toISOString(),
-          actorNik: actorNik,
-          actorName: user?.name || 'ADMIN',
-          module: 'rnd',
-          action: editingRM ? 'RM_MASTER_UPDATE' : 'RM_MASTER_CREATE',
-          targetNik: newOrUpdatedRM.code,
-          details: `${editingRM ? 'Pembaruan' : 'Pendaftaran'} Master Bahan Baku ${newOrUpdatedRM.code} (${newOrUpdatedRM.name}) dengan ${newOrUpdatedRM.categories?.length || 1} kategori, dokumen SDS di Google Drive, dan otorisasi kata sandi CPKB.`,
-        };
-        localStorage.setItem('cosmo_ddmp_audit_logs', JSON.stringify([newAuditLog, ...auditList]));
-      } catch (auditErr) {
-        console.warn('Audit trail write failed:', auditErr);
-      }
+      auditLogger.logAction({
+        actorNik: actorNik,
+        actorName: user?.name || 'ADMIN',
+        module: 'rnd',
+        action: editingRM ? 'RM_MASTER_UPDATE' : 'RM_MASTER_CREATE',
+        targetNik: newOrUpdatedRM.code,
+        details: `${editingRM ? 'Pembaruan' : 'Pendaftaran'} Master Bahan Baku ${newOrUpdatedRM.code} (${newOrUpdatedRM.name}) dengan ${newOrUpdatedRM.categories?.length || 1} kategori, dokumen SDS di Google Drive, dan otorisasi kata sandi CPKB.`,
+      });
 
       setIsVerifyingPassword(false);
       setShowLiveViewModal(false);
