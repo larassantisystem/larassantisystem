@@ -104,6 +104,11 @@ export const RndProductsTab: React.FC<RndProductsTabProps> = ({
   const [newProdQcCondition, setNewProdQcCondition] = useState('');
   const [newProdQcUnit, setNewProdQcUnit] = useState('');
 
+  const [prodFinishedParams, setProdFinishedParams] = useState<QCParameter[]>([]);
+  const [newProdFinishedName, setNewProdFinishedName] = useState('');
+  const [newProdFinishedCondition, setNewProdFinishedCondition] = useState('');
+  const [newProdFinishedUnit, setNewProdFinishedUnit] = useState('');
+
   // Modal State for Variant (PJ0001-V1)
   const [showVariantModal, setShowVariantModal] = useState(false);
   const [targetProductId, setTargetProductId] = useState<string | null>(null);
@@ -389,21 +394,14 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
         'No Notifikasi (BPOM)',
         'EXP Notifikasi (YYYY-MM-DD)',
         'Deskripsi',
-        'Parameter Uji 1',
-        'Syarat 1',
-        'Satuan 1',
-        'Parameter Uji 2',
-        'Syarat 2',
-        'Satuan 2',
-        'Parameter Uji 3',
-        'Syarat 3',
-        'Satuan 3',
-        'Parameter Uji 4',
-        'Syarat 4',
-        'Satuan 4',
-        'Parameter Uji 5',
-        'Syarat 5',
-        'Satuan 5'
+        // Bagian 1: Sediaan Ruahan (Bulk)
+        'Ruahan Param 1', 'Ruahan Syarat 1', 'Ruahan Satuan 1',
+        'Ruahan Param 2', 'Ruahan Syarat 2', 'Ruahan Satuan 2',
+        'Ruahan Param 3', 'Ruahan Syarat 3', 'Ruahan Satuan 3',
+        // Bagian 2: Produk Jadi / Kemasan
+        'Produk Jadi Param 1', 'Produk Jadi Syarat 1', 'Produk Jadi Satuan 1',
+        'Produk Jadi Param 2', 'Produk Jadi Syarat 2', 'Produk Jadi Satuan 2',
+        'Produk Jadi Param 3', 'Produk Jadi Syarat 3', 'Produk Jadi Satuan 3'
       ],
       [
         'PJ0001',
@@ -415,27 +413,20 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
         'NA18230100123',
         '2028-12-31',
         'Serum pencerah wajah premium dengan Niacinamide.',
-        'Pemerian / Organoleptis',
-        'Cairan kental jernih kekuningan, aroma khas floral',
-        '',
-        'pH',
-        '5.50 - 6.50',
-        'pH unit',
-        'Viskositas',
-        '1200 - 2500',
-        'cPs',
-        'Bobot Jenis',
-        '1.010 - 1.035',
-        'g/mL',
-        'Cemaran Mikroba (ALT)',
-        '< 100',
-        'CFU/g'
+        // Ruahan values
+        'pH Sediaan', '6.0 - 6.8', '',
+        'Viskositas', '3500 - 4500', 'cPs',
+        'Bobot Jenis', '0.98 - 1.02', 'g/ml',
+        // Produk Jadi values
+        'Berat Netto', '30 ± 0.5', 'gram',
+        'Uji Kebocoran', 'Tidak Bocor', '',
+        'Torsi Tutup', '12.0 - 18.0', 'kg.cm'
       ]
     ];
     const ws = XLSX.utils.aoa_to_sheet(templateData);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Template Master Produk Jadi');
-    XLSX.writeFile(wb, 'Template_Master_Produk_Jadi.xlsx');
+    XLSX.utils.book_append_sheet(wb, ws, 'Template Master Dual-Spec');
+    XLSX.writeFile(wb, 'Template_Master_Produk_Ruahan_dan_Produk_Jadi.xlsx');
   };
 
   const processExcelFile = async (file: File) => {
@@ -443,145 +434,199 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
 
     try {
       const data = await file.arrayBuffer();
-      const workbook = XLSX.read(data, { type: 'array' });
+      // Menggunakan cellDates: true agar tanggal Excel terkonversi akurat
+      const workbook = XLSX.read(data, { type: 'array', cellDates: true });
       const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows: any[][] = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+      const rawRows: any[][] = XLSX.utils.sheet_to_json(firstSheet, { header: 1, raw: false, dateNF: 'yyyy-mm-dd' });
 
-      if (rows.length < 2) {
-        alert('File Excel kosong atau format tidak sesuai.');
+      if (!rawRows || rawRows.length === 0) {
+        alert('File Excel kosong atau tidak dapat dibaca.');
         return;
       }
 
-      let importedCount = 0;
-      const headerRow: any[] = rows[0] || [];
-
-      // Deteksi dinamis pemetaan kolom parameter QC dari baris header (index >= 9)
-      interface QCColumnMap {
-        nameIdx: number;
-        specIdx: number;
-        unitIdx?: number;
-      }
-      const detectedQcMaps: QCColumnMap[] = [];
-
-      // Cek apakah header memiliki kata kunci penanda parameter
-      let hasParamKeywordsInHeader = false;
-      for (let c = 9; c < headerRow.length; c++) {
-        const hText = String(headerRow[c] || '').toLowerCase();
-        if (hText.includes('parameter') || hText.includes('uji')) {
-          hasParamKeywordsInHeader = true;
+      // 1. Cari Baris Header (Scan baris 0 s.d 15)
+      let headerRowIndex = 0;
+      for (let r = 0; r < Math.min(rawRows.length, 15); r++) {
+        const rowStr = (rawRows[r] || []).map((cell) => String(cell || '').toLowerCase()).join(' ');
+        if (
+          rowStr.includes('kode') ||
+          rowStr.includes('nama') ||
+          rowStr.includes('product') ||
+          rowStr.includes('brand') ||
+          rowStr.includes('kategori') ||
+          rowStr.includes('bpom') ||
+          rowStr.includes('ruahan') ||
+          rowStr.includes('produk jadi')
+        ) {
+          headerRowIndex = r;
           break;
         }
       }
 
-      if (hasParamKeywordsInHeader) {
-        let c = 9;
-        while (c < headerRow.length) {
-          const hName = String(headerRow[c] || '').toLowerCase();
-          if (hName.includes('parameter') || hName.includes('uji') || hName.includes('nama param')) {
-            const nameIdx = c;
-            let specIdx = c + 1;
-            let unitIdx: number | undefined = undefined;
+      const headerRow = rawRows[headerRowIndex] || [];
+      const dataRows = rawRows.slice(headerRowIndex + 1);
 
-            const nextH = String(headerRow[c + 1] || '').toLowerCase();
-            if (nextH.includes('syarat') || nextH.includes('spek') || nextH.includes('spesifikasi') || nextH.includes('standar')) {
-              specIdx = c + 1;
-              const thirdH = String(headerRow[c + 2] || '').toLowerCase();
-              if (thirdH.includes('satuan') || thirdH.includes('unit')) {
-                unitIdx = c + 2;
-                c += 3;
-              } else {
-                c += 2;
-              }
-            } else {
-              c += 1;
-            }
-            detectedQcMaps.push({ nameIdx, specIdx, unitIdx });
-          } else {
-            c++;
-          }
-        }
+      if (dataRows.length === 0) {
+        alert('File Excel tidak memiliki baris data setelah header.');
+        return;
       }
 
-      // Fallback step: periksa apakah kolom 11 berupa satuan atau nama parameter berikutnya
-      let fallbackStep = 3;
-      if (headerRow.length > 11) {
-        const h11 = String(headerRow[11] || '').toLowerCase();
-        if (h11.includes('param') || h11.includes('uji')) {
-          fallbackStep = 2;
+      // 2. Pemetaan Kolom Dinamis Berdasarkan Teks Header
+      let colCode = -1;
+      let colName = -1;
+      let colCategory = -1;
+      let colBrand = -1;
+      let colUnit = -1;
+      let colStorage = -1;
+      let colBpom = -1;
+      let colExp = -1;
+      let colDesc = -1;
+
+      headerRow.forEach((hCell, idx) => {
+        const hText = String(hCell || '').toLowerCase().trim();
+        if (colCode === -1 && (hText.includes('kode') || hText.includes('code') || hText.includes('sku') || hText === 'pj')) {
+          colCode = idx;
+        } else if (colName === -1 && (hText.includes('nama') || hText.includes('title') || hText.includes('product name') || hText.includes('nama produk'))) {
+          colName = idx;
+        } else if (colCategory === -1 && (hText.includes('kategori') || hText.includes('category') || hText.includes('jenis'))) {
+          colCategory = idx;
+        } else if (colBrand === -1 && (hText.includes('brand') || hText.includes('merk') || hText.includes('pabrik') || hText.includes('perusahaan'))) {
+          colBrand = idx;
+        } else if (colUnit === -1 && (hText.includes('satuan') || hText.includes('unit') || hText.includes('kemasan'))) {
+          colUnit = idx;
+        } else if (colStorage === -1 && (hText.includes('kondisi') || hText.includes('penyimpanan') || hText.includes('storage') || hText.includes('suhu'))) {
+          colStorage = idx;
+        } else if (colBpom === -1 && (hText.includes('bpom') || hText.includes('notifikasi') || hText.includes('no reg') || hText.includes('nomor bpom'))) {
+          colBpom = idx;
+        } else if (colExp === -1 && (hText.includes('exp') || hText.includes('kadaluarsa') || hText.includes('berlaku') || hText.includes('ext') || hText.includes('tanggal bpom'))) {
+          colExp = idx;
+        } else if (colDesc === -1 && (hText.includes('deskripsi') || hText.includes('description') || hText.includes('keterangan') || hText.includes('catatan'))) {
+          colDesc = idx;
         }
-      }
+      });
 
-      for (let i = 1; i < rows.length; i++) {
-        const row = rows[i];
-        if (!row || row.length === 0 || !row[0]) continue;
+      // Fallback ke posisi indeks standar jika header tidak sesuai nama
+      if (colCode === -1) colCode = 0;
+      if (colName === -1) colName = 1;
+      if (colCategory === -1) colCategory = 2;
+      if (colBrand === -1) colBrand = 3;
+      if (colUnit === -1) colUnit = 4;
+      if (colStorage === -1) colStorage = 5;
+      if (colBpom === -1) colBpom = 6;
+      if (colExp === -1) colExp = 7;
+      if (colDesc === -1) colDesc = 8;
 
-        const code = String(row[0] || `PJ${String(products.length + i).padStart(4, '0')}`).trim();
-        const name = String(row[1] || 'Produk Baru').trim();
-        const category = String(row[2] || 'Cream / Krim').trim();
-        const brand = String(row[3] || 'PT. LARASSANTI MAKMUR SEJAHTERA').trim();
-        const unit = String(row[4] || 'pcs (Pieces)').trim();
-        const storageConditions = String(row[5] || 'Suhu Ruang (15-25°C)').trim();
-        const bpomNotificationNumber = String(row[6] || '').trim();
-        const rawDate = row[7] !== undefined && row[7] !== null ? row[7] : '';
+      const importedProductsList: Product[] = [];
+
+      for (let i = 0; i < dataRows.length; i++) {
+        const row = dataRows[i];
+        if (!row || row.length === 0) continue;
+
+        const valCode = row[colCode] !== undefined && row[colCode] !== null ? String(row[colCode]).trim() : '';
+        const valName = row[colName] !== undefined && row[colName] !== null ? String(row[colName]).trim() : '';
+
+        // Abaikan baris kosong tanpa kode dan tanpa nama
+        if (!valCode && !valName) continue;
+
+        const code = valCode || `PJ${String(products.length + i + 1).padStart(4, '0')}`;
+        const name = valName || 'Produk Tanpa Nama';
+        const category = row[colCategory] !== undefined && row[colCategory] !== null ? String(row[colCategory]).trim() : 'Skincare';
+        const brand = row[colBrand] !== undefined && row[colBrand] !== null ? String(row[colBrand]).trim() : 'PT. LARASSANTI MAKMUR SEJAHTERA';
+        const unit = row[colUnit] !== undefined && row[colUnit] !== null ? String(row[colUnit]).trim() : 'pcs (Pieces)';
+        const storageConditions = row[colStorage] !== undefined && row[colStorage] !== null ? String(row[colStorage]).trim() : 'Suhu Ruang (15-25°C)';
+        const bpomNotificationNumber = row[colBpom] !== undefined && row[colBpom] !== null ? String(row[colBpom]).trim() : '';
+        const rawDate = row[colExp] !== undefined && row[colExp] !== null ? row[colExp] : '';
         const bpomNotificationExt = formatToISODate(rawDate) || '';
-        const description = String(row[8] || '').trim();
+        const description = row[colDesc] !== undefined && row[colDesc] !== null ? String(row[colDesc]).trim() : '';
 
-        // Parsing dinamis seluruh parameter QC (Parameter 1, 2, 3, 4, 5, dst)
+        // 3. Ekstraksi Parameter QC Sediaan Ruahan & Produk Jadi
         const qcParameters: QCParameter[] = [];
+        const finishedQcParameters: QCParameter[] = [];
 
-        if (detectedQcMaps.length > 0) {
-          for (let m = 0; m < detectedQcMaps.length; m++) {
-            const map = detectedQcMaps[m];
-            const pName = row[map.nameIdx] !== undefined && row[map.nameIdx] !== null ? String(row[map.nameIdx]).trim() : '';
-            if (!pName) continue;
-            const pSpec = map.specIdx !== undefined && row[map.specIdx] !== undefined && row[map.specIdx] !== null ? String(row[map.specIdx]).trim() : '';
-            const pUnit = map.unitIdx !== undefined && row[map.unitIdx] !== undefined && row[map.unitIdx] !== null ? String(row[map.unitIdx]).trim() : '';
+        // Strategi A: Pola Triplet Kolom (Param, Syarat, Satuan)
+        // Cek kolom dari index 9 s.d. akhir
+        let startParamCol = Math.max(colCode, colName, colCategory, colBrand, colUnit, colStorage, colBpom, colExp, colDesc) + 1;
+        if (startParamCol < 9) startParamCol = 9;
 
+        for (let c = startParamCol; c < headerRow.length; c++) {
+          const hName = String(headerRow[c] || '').trim();
+          const cellVal = row[c] !== undefined && row[c] !== null ? String(row[c]).trim() : '';
+          if (!hName || !cellVal) continue;
+
+          const hLower = hName.toLowerCase();
+
+          // Jika header bernama "Ruahan Param 1" / "Produk Jadi Param 1", ikuti format 3-kolom
+          if (hLower.includes('ruahan param') || hLower.includes('param ruahan')) {
+            const specVal = row[c + 1] !== undefined && row[c + 1] !== null ? String(row[c + 1]).trim() : '';
+            const unitVal = row[c + 2] !== undefined && row[c + 2] !== null ? String(row[c + 2]).trim() : '';
             qcParameters.push({
-              id: `qc-${Date.now()}-${i}-${m + 1}`,
-              name: pName,
-              parameterName: pName,
-              specification: pSpec,
-              acceptanceCondition: pSpec,
-              unit: pUnit,
+              id: `qc-${Date.now()}-${i}-${c}`,
+              name: cellVal,
+              parameterName: cellVal,
+              specification: specVal,
+              acceptanceCondition: specVal,
+              unit: unitVal,
             });
-          }
-        } else {
-          // Loop kolom dinamis kelipatan step (default 3: Nama, Syarat, Satuan)
-          let paramIdx = 0;
-          for (let c = 9; c < row.length; c += fallbackStep) {
-            const pName = row[c] !== undefined && row[c] !== null ? String(row[c]).trim() : '';
-            if (!pName) continue;
-            const pSpec = row[c + 1] !== undefined && row[c + 1] !== null ? String(row[c + 1]).trim() : '';
-            const pUnit = fallbackStep === 3 && row[c + 2] !== undefined && row[c + 2] !== null ? String(row[c + 2]).trim() : '';
+            c += 2; // loncat 2 kolom
+          } else if (hLower.includes('produk jadi param') || hLower.includes('param produk jadi') || hLower.includes('jadi param')) {
+            const specVal = row[c + 1] !== undefined && row[c + 1] !== null ? String(row[c + 1]).trim() : '';
+            const unitVal = row[c + 2] !== undefined && row[c + 2] !== null ? String(row[c + 2]).trim() : '';
+            finishedQcParameters.push({
+              id: `fin-${Date.now()}-${i}-${c}`,
+              name: cellVal,
+              parameterName: cellVal,
+              specification: specVal,
+              acceptanceCondition: specVal,
+              unit: unitVal,
+            });
+            c += 2; // loncat 2 kolom
+          } else {
+            // Strategi B: Nama Kolom Adalah Nama Parameter Langsung (misal: "pH Sediaan", "Berat Netto")
+            const isRuahan = hLower.includes('ruahan') || hLower.includes('bulk') || hLower.includes('sediaan') || c < startParamCol + 9;
+            const paramItem: QCParameter = {
+              id: `param-${Date.now()}-${i}-${c}`,
+              name: hName,
+              parameterName: hName,
+              specification: cellVal,
+              acceptanceCondition: cellVal,
+              unit: '',
+            };
 
-            paramIdx++;
-            qcParameters.push({
-              id: `qc-${Date.now()}-${i}-${paramIdx}`,
-              name: pName,
-              parameterName: pName,
-              specification: pSpec,
-              acceptanceCondition: pSpec,
-              unit: pUnit,
-            });
+            if (isRuahan) {
+              qcParameters.push(paramItem);
+            } else {
+              finishedQcParameters.push(paramItem);
+            }
           }
         }
 
-        // Jika tidak ada sama sekali parameter yang diisi pada baris tersebut, berikan 1 standar default
+        // Default fallback jika tidak ada parameter terdeteksi
         if (qcParameters.length === 0) {
           qcParameters.push({
-            id: `qc-${Date.now()}-${i}-1`,
-            name: 'Pemerian / Organoleptis',
-            parameterName: 'Pemerian / Organoleptis',
-            specification: 'Sesuai spesifikasi',
-            acceptanceCondition: 'Sesuai spesifikasi',
+            id: `qc-${Date.now()}-${i}-default`,
+            name: 'pH Sediaan (Bulk)',
+            parameterName: 'pH Sediaan (Bulk)',
+            specification: '6.0 - 6.8',
+            acceptanceCondition: '6.0 - 6.8',
             unit: '',
+          });
+        }
+
+        if (finishedQcParameters.length === 0) {
+          finishedQcParameters.push({
+            id: `fin-${Date.now()}-${i}-default`,
+            name: 'Berat Netto / Isi Aktual',
+            parameterName: 'Berat Netto / Isi Aktual',
+            specification: '30 ± 0.5',
+            acceptanceCondition: '30 ± 0.5',
+            unit: 'gram',
           });
         }
 
         const newProd: Product = {
           id: `prod-${Date.now()}-${i}`,
           code,
+          productCode: code,
           name,
           category,
           brand,
@@ -590,17 +635,35 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
           storageConditions,
           bpomNotificationNumber,
           bpomNotificationExt,
+          expNotificationDate: bpomNotificationExt,
           qcParameters,
+          finishedQcParameters,
           variants: [],
           createdAt: new Date().toISOString(),
         };
 
-        await onSaveProduct(newProd);
-        importedCount++;
+        importedProductsList.push(newProd);
       }
 
-      setSuccessToast(`Berhasil mengimpor ${importedCount} Master Produk Jadi ke tabel database 'products'!`);
-      setTimeout(() => setSuccessToast(null), 5000);
+      if (importedProductsList.length === 0) {
+        alert('File Excel tidak memiliki baris produk yang valid.');
+        return;
+      }
+
+      // Simpan seluruh data sekaligus dalam batch terdedikasi ke Supabase
+      const saveRes = await productService.saveProducts(importedProductsList);
+
+      // Update state tampilan secara kolektif
+      for (const prod of importedProductsList) {
+        onSaveProduct(prod);
+      }
+
+      if (saveRes.error) {
+        alert(`Peringatan Impor Excel:\n${saveRes.error}\n\nStatus: ${saveRes.count} dari ${importedProductsList.length} produk tersimpan di Supabase, sisanya ditampilkan di memori.`);
+      } else {
+        setSuccessToast(`Berhasil mengimpor ${importedProductsList.length} Master Produk dengan Spesifikasi Ruahan & Produk Jadi ke Supabase!`);
+        setTimeout(() => setSuccessToast(null), 5000);
+      }
       setShowImportModal(false);
     } catch (err: any) {
       console.error('Error importing excel:', err);
@@ -649,39 +712,83 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
 
     try {
       const data = await file.arrayBuffer();
-      const workbook = XLSX.read(data, { type: 'array' });
+      const workbook = XLSX.read(data, { type: 'array', cellDates: true });
       const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows: any[][] = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+      const rawRows: any[][] = XLSX.utils.sheet_to_json(firstSheet, { header: 1, raw: false });
 
-      if (rows.length < 2) {
+      if (!rawRows || rawRows.length === 0) {
         alert('File Excel varian kosong atau tidak memiliki baris data.');
         return;
       }
+
+      // 1. Cari Baris Header (Scan baris 0 s.d 10)
+      let headerRowIndex = 0;
+      for (let r = 0; r < Math.min(rawRows.length, 10); r++) {
+        const rowStr = (rawRows[r] || []).map((cell) => String(cell || '').toLowerCase()).join(' ');
+        if (rowStr.includes('induk') || rowStr.includes('parent') || rowStr.includes('sku') || rowStr.includes('varian')) {
+          headerRowIndex = r;
+          break;
+        }
+      }
+
+      const headerRow = rawRows[headerRowIndex] || [];
+      const dataRows = rawRows.slice(headerRowIndex + 1);
+
+      // Pemetaan Kolom Varian Dinamis
+      let colParent = -1;
+      let colSku = -1;
+      let colName = -1;
+      let colNet = -1;
+      let colUnit = -1;
+      let colBarcode = -1;
+      let colDesc = -1;
+
+      headerRow.forEach((hCell, idx) => {
+        const hText = String(hCell || '').toLowerCase().trim();
+        if (colParent === -1 && (hText.includes('induk') || hText.includes('parent') || hText.includes('kode produk'))) colParent = idx;
+        else if (colSku === -1 && (hText.includes('sku') || hText.includes('kode varian') || hText.includes('variant code'))) colSku = idx;
+        else if (colName === -1 && (hText.includes('nama varian') || hText.includes('variant name') || hText.includes('label'))) colName = idx;
+        else if (colNet === -1 && (hText.includes('bobot') || hText.includes('netto') || hText.includes('isi') || hText.includes('volume') || hText.includes('gram'))) colNet = idx;
+        else if (colUnit === -1 && hText.includes('satuan')) colUnit = idx;
+        else if (colBarcode === -1 && (hText.includes('barcode') || hText.includes('ean'))) colBarcode = idx;
+        else if (colDesc === -1 && (hText.includes('keterangan') || hText.includes('deskripsi') || hText.includes('kemasan'))) colDesc = idx;
+      });
+
+      if (colParent === -1) colParent = 0;
+      if (colSku === -1) colSku = 1;
+      if (colName === -1) colName = 2;
+      if (colNet === -1) colNet = 3;
+      if (colUnit === -1) colUnit = 4;
+      if (colBarcode === -1) colBarcode = 5;
+      if (colDesc === -1) colDesc = 6;
 
       let importedCount = 0;
       let errorCount = 0;
       const errorDetails: string[] = [];
 
-      for (let i = 1; i < rows.length; i++) {
-        const row = rows[i];
-        if (!row || row.length === 0 || !row[0]) continue;
+      for (let i = 0; i < dataRows.length; i++) {
+        const row = dataRows[i];
+        if (!row || row.length === 0) continue;
 
-        const parentCode = String(row[0]).trim();
+        const parentCode = row[colParent] !== undefined && row[colParent] !== null ? String(row[colParent]).trim() : '';
+        if (!parentCode) continue;
+
         const parentProd = products.find(
-          (p) => p.code.toLowerCase() === parentCode.toLowerCase() || p.id === parentCode
+          (p) => p.code.toLowerCase() === parentCode.toLowerCase() || p.id === parentCode || (p.productCode && p.productCode.toLowerCase() === parentCode.toLowerCase())
         );
 
         if (!parentProd) {
           errorCount++;
-          errorDetails.push(`Baris ${i + 1}: Master Produk Induk "${parentCode}" tidak ditemukan di database.`);
+          errorDetails.push(`Baris ${i + headerRowIndex + 2}: Master Produk Induk "${parentCode}" tidak ditemukan di database.`);
           continue;
         }
 
-        const sku = String(row[1] || `${parentProd.code}-V${parentProd.variants.length + 1}`).trim().toUpperCase();
-        const variantName = String(row[2] || `${row[3] || '30'} g`).trim();
-        const netVolume = Number(row[3]) || 30;
-        const barcode = row[5] ? String(row[5]).trim() : generateEAN13();
-        const description = String(row[6] || '').trim();
+        const rawSku = row[colSku] !== undefined && row[colSku] !== null ? String(row[colSku]).trim().toUpperCase() : '';
+        const sku = rawSku || `${parentProd.code}-V${parentProd.variants.length + i + 1}`;
+        const variantName = row[colName] !== undefined && row[colName] !== null ? String(row[colName]).trim() : `${row[colNet] || '30'} g`;
+        const netVolume = Number(row[colNet]) || 30;
+        const barcode = row[colBarcode] !== undefined && row[colBarcode] !== null ? String(row[colBarcode]).trim() : generateEAN13();
+        const description = row[colDesc] !== undefined && row[colDesc] !== null ? String(row[colDesc]).trim() : '';
 
         const variantData: ProductVariant = {
           id: `var-${Date.now()}-${i}`,
@@ -800,8 +907,14 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
     setProdBpomNo('');
     setProdBpomExt('');
     setProdQcParams([
-      { id: '1', name: 'Pemerian / Organoleptis', parameterName: 'Pemerian / Organoleptis', specification: 'Sesuai standar spesifikasi pabrikan', acceptanceCondition: 'Sesuai standar spesifikasi pabrikan', unit: '' },
-      { id: '2', name: 'Dimensi & Ukuran Standar', parameterName: 'Dimensi & Ukuran Standar', specification: 'Sesuai Technical Drawing', acceptanceCondition: 'Sesuai Technical Drawing', unit: 'mm' }
+      { id: '1', name: 'pH Sediaan (Bulk)', parameterName: 'pH Sediaan (Bulk)', specification: '6.0 - 6.8', acceptanceCondition: '6.0 - 6.8', unit: '' },
+      { id: '2', name: 'Viskositas Adonan', parameterName: 'Viskositas Adonan', specification: '3500 - 4500', acceptanceCondition: '3500 - 4500', unit: 'cPs' },
+      { id: '3', name: 'Bobot Jenis (Density)', parameterName: 'Bobot Jenis (Density)', specification: '0.98 - 1.02', acceptanceCondition: '0.98 - 1.02', unit: 'g/ml' },
+    ]);
+    setProdFinishedParams([
+      { id: 'f1', name: 'Berat Netto / Isi Aktual', parameterName: 'Berat Netto / Isi Aktual', specification: '30 ± 0.5', acceptanceCondition: '30 ± 0.5', unit: 'gram' },
+      { id: 'f2', name: 'Uji Kebocoran Sealing', parameterName: 'Uji Kebocoran Sealing', specification: 'Tidak Bocor / Sempurna', acceptanceCondition: 'Tidak Bocor / Sempurna', unit: '' },
+      { id: 'f3', name: 'Torsi Tutup Botol', parameterName: 'Torsi Tutup Botol', specification: '12.0 - 18.0', acceptanceCondition: '12.0 - 18.0', unit: 'kg.cm' },
     ]);
     setShowProductModal(true);
   };
@@ -827,6 +940,22 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
         unit: p.unit || ''
       }))
     );
+    setProdFinishedParams(
+      (prod.finishedQcParameters || []).length > 0
+        ? (prod.finishedQcParameters || []).map((p, idx) => ({
+            id: p.id || `fin-${idx}`,
+            name: p.name || p.parameterName || '',
+            parameterName: p.parameterName || p.name || '',
+            specification: p.specification || p.acceptanceCondition || '',
+            acceptanceCondition: p.acceptanceCondition || p.specification || '',
+            unit: p.unit || ''
+          }))
+        : [
+            { id: 'f1', name: 'Berat Netto / Isi Aktual', parameterName: 'Berat Netto / Isi Aktual', specification: '30 ± 0.5', acceptanceCondition: '30 ± 0.5', unit: 'gram' },
+            { id: 'f2', name: 'Uji Kebocoran Sealing', parameterName: 'Uji Kebocoran Sealing', specification: 'Tidak Bocor', acceptanceCondition: 'Tidak Bocor', unit: '' },
+            { id: 'f3', name: 'Torsi Tutup Botol', parameterName: 'Torsi Tutup Botol', specification: '12.0 - 18.0', acceptanceCondition: '12.0 - 18.0', unit: 'kg.cm' },
+          ]
+    );
     setShowProductModal(true);
   };
 
@@ -834,6 +963,15 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
     e.preventDefault();
     const normalizedQcParams = prodQcParams.map((p, idx) => ({
       id: p.id || `qc-${Date.now()}-${idx}`,
+      name: (p.parameterName || p.name || '').trim(),
+      parameterName: (p.parameterName || p.name || '').trim(),
+      specification: (p.acceptanceCondition || p.specification || '').trim(),
+      acceptanceCondition: (p.acceptanceCondition || p.specification || '').trim(),
+      unit: (p.unit || '').trim()
+    }));
+
+    const normalizedFinishedParams = prodFinishedParams.map((p, idx) => ({
+      id: p.id || `fin-${Date.now()}-${idx}`,
       name: (p.parameterName || p.name || '').trim(),
       parameterName: (p.parameterName || p.name || '').trim(),
       specification: (p.acceptanceCondition || p.specification || '').trim(),
@@ -855,6 +993,7 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
       bpomNotificationExt: prodBpomExt.trim(),
       expNotificationDate: prodBpomExt.trim(),
       qcParameters: normalizedQcParams,
+      finishedQcParameters: normalizedFinishedParams,
       variants: editingProduct ? editingProduct.variants : [],
       createdAt: editingProduct?.createdAt || new Date().toISOString(),
     };
@@ -1564,94 +1703,183 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
                 </div>
               </div>
 
-              {/* DAFTAR PARAMETER UJI QC */}
-              <div className="border border-slate-200 rounded-2xl p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="text-xs font-bold text-slate-800 flex items-center gap-2 uppercase tracking-wider">
-                    <FlaskConical className="w-4 h-4 text-teal-600" />
-                    Daftar Parameter Uji QC Standar ({prodQcParams.length} Parameter)
-                  </h4>
-                  <span className="text-[10px] text-slate-500">Standar rilis mutu QC Lab</span>
-                </div>
+               {/* BAGIAN 1: SPESIFIKASI SEDIAAN RUAHAN (BULK SPECS) */}
+               <div className="border border-slate-200 rounded-2xl p-5 bg-slate-50/30">
+                 <div className="flex items-center justify-between mb-4">
+                   <h4 className="text-xs font-bold text-slate-800 flex items-center gap-2 uppercase tracking-wider">
+                     <FlaskConical className="w-4 h-4 text-purple-600" />
+                     <span>Bagian 1: Spesifikasi Sediaan Ruahan (Bulk) ({prodQcParams.length} Parameter)</span>
+                   </h4>
+                   <span className="text-[10px] text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md font-semibold">Acuan Menu 2.1 IPC Ruahan</span>
+                 </div>
 
-                <div className="space-y-3 mb-5">
-                  {prodQcParams.map((param, index) => (
-                    <div key={param.id} className="flex items-center justify-between border border-slate-100 rounded-xl p-3 bg-white">
-                      <div className="flex items-start gap-3">
-                        <span className="text-xs font-bold text-slate-400 w-5">{index + 1}.</span>
-                        <div>
-                          <div className="text-xs font-bold text-slate-800">{param.parameterName || param.name}</div>
-                          <div className="text-[10px] text-teal-700 font-medium">Syarat: {param.acceptanceCondition || param.specification} {param.unit}</div>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setProdQcParams(prodQcParams.filter(p => p.id !== param.id))}
-                        className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
-                  {prodQcParams.length === 0 && (
-                    <div className="text-center py-4 text-xs text-slate-400 border border-dashed border-slate-200 rounded-xl">
-                      Belum ada parameter uji.
-                    </div>
-                  )}
-                </div>
+                 <div className="space-y-3 mb-4">
+                   {prodQcParams.map((param, index) => (
+                     <div key={param.id} className="flex items-center justify-between border border-slate-200/80 rounded-xl p-3 bg-white shadow-xs">
+                       <div className="flex items-start gap-3">
+                         <span className="text-xs font-bold text-slate-400 w-5">{index + 1}.</span>
+                         <div>
+                           <div className="text-xs font-bold text-slate-800">{param.parameterName || param.name}</div>
+                           <div className="text-[10px] text-purple-700 font-medium">Syarat: {param.acceptanceCondition || param.specification} {param.unit}</div>
+                         </div>
+                       </div>
+                       <button
+                         type="button"
+                         onClick={() => setProdQcParams(prodQcParams.filter(p => p.id !== param.id))}
+                         className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                       >
+                         <Trash2 className="w-4 h-4" />
+                       </button>
+                     </div>
+                   ))}
+                   {prodQcParams.length === 0 && (
+                     <div className="text-center py-3 text-xs text-slate-400 border border-dashed border-slate-200 rounded-xl">
+                       Belum ada parameter ruahan.
+                     </div>
+                   )}
+                 </div>
 
-                <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/50">
-                  <h5 className="text-[10px] font-bold text-slate-700 mb-3">+ Tambah Parameter Uji Baru:</h5>
-                  <div className="space-y-3">
-                    <input
-                      type="text"
-                      value={newProdQcName}
-                      onChange={(e) => setNewProdQcName(e.target.value)}
-                      placeholder="Nama Parameter (cth: Kadar Air / Bobot Jenis / Tinggi Botol)"
-                      className="w-full rounded-lg bg-white border border-slate-200 px-3 py-2 text-xs focus:outline-none focus:border-teal-500"
-                    />
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="text"
-                        value={newProdQcCondition}
-                        onChange={(e) => setNewProdQcCondition(e.target.value)}
-                        placeholder="Standar Syarat (cth: Minimal 99.0% / Jernih tak berwarna / 110 ± 1.0 mm)"
-                        className="flex-1 rounded-lg bg-white border border-slate-200 px-3 py-2 text-xs focus:outline-none focus:border-teal-500"
-                      />
-                      <input
-                        type="text"
-                        value={newProdQcUnit}
-                        onChange={(e) => setNewProdQcUnit(e.target.value)}
-                        placeholder="Satuan (cth: % / mm)"
-                        className="w-32 rounded-lg bg-white border border-slate-200 px-3 py-2 text-xs focus:outline-none focus:border-teal-500"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (newProdQcName && newProdQcCondition) {
-                            setProdQcParams([
-                              ...prodQcParams,
-                              {
-                                id: `qc-${Date.now()}`,
-                                parameterName: newProdQcName,
-                                acceptanceCondition: newProdQcCondition,
-                                unit: newProdQcUnit,
-                              }
-                            ]);
-                            setNewProdQcName('');
-                            setNewProdQcCondition('');
-                            setNewProdQcUnit('');
-                          }
-                        }}
-                        disabled={!newProdQcName || !newProdQcCondition}
-                        className="px-4 py-2 bg-teal-600 hover:bg-teal-700 disabled:bg-slate-300 text-white text-xs font-bold rounded-lg transition-colors whitespace-nowrap cursor-pointer"
-                      >
-                        + Tambah
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
+                 <div className="border border-slate-200 rounded-xl p-3.5 bg-white">
+                   <h5 className="text-[10px] font-bold text-slate-700 mb-2.5">+ Tambah Parameter Ruahan Baru:</h5>
+                   <div className="space-y-2.5">
+                     <input
+                       type="text"
+                       value={newProdQcName}
+                       onChange={(e) => setNewProdQcName(e.target.value)}
+                       placeholder="Nama Parameter (cth: pH / Viskositas / Bobot Jenis)"
+                       className="w-full rounded-lg bg-white border border-slate-200 px-3 py-1.5 text-xs focus:outline-none focus:border-purple-600"
+                     />
+                     <div className="flex items-center gap-2">
+                       <input
+                         type="text"
+                         value={newProdQcCondition}
+                         onChange={(e) => setNewProdQcCondition(e.target.value)}
+                         placeholder="Standar Syarat (cth: 6.0 - 6.8)"
+                         className="flex-1 rounded-lg bg-white border border-slate-200 px-3 py-1.5 text-xs focus:outline-none focus:border-purple-600"
+                       />
+                       <input
+                         type="text"
+                         value={newProdQcUnit}
+                         onChange={(e) => setNewProdQcUnit(e.target.value)}
+                         placeholder="Satuan (cth: cPs / g/ml)"
+                         className="w-28 rounded-lg bg-white border border-slate-200 px-3 py-1.5 text-xs focus:outline-none focus:border-purple-600"
+                       />
+                       <button
+                         type="button"
+                         onClick={() => {
+                           if (newProdQcName && newProdQcCondition) {
+                             setProdQcParams([
+                               ...prodQcParams,
+                               {
+                                 id: `qc-${Date.now()}`,
+                                 parameterName: newProdQcName,
+                                 acceptanceCondition: newProdQcCondition,
+                                 unit: newProdQcUnit,
+                               }
+                             ]);
+                             setNewProdQcName('');
+                             setNewProdQcCondition('');
+                             setNewProdQcUnit('');
+                           }
+                         }}
+                         disabled={!newProdQcName || !newProdQcCondition}
+                         className="px-3.5 py-1.5 bg-purple-700 hover:bg-purple-800 disabled:bg-slate-300 text-white text-xs font-bold rounded-lg transition-colors whitespace-nowrap cursor-pointer"
+                       >
+                         + Tambah
+                       </button>
+                     </div>
+                   </div>
+                 </div>
+               </div>
+
+               {/* BAGIAN 2: SPESIFIKASI PRODUK JADI (FINISHED GOODS SPECS) */}
+               <div className="border border-slate-200 rounded-2xl p-5 bg-indigo-50/20">
+                 <div className="flex items-center justify-between mb-4">
+                   <h4 className="text-xs font-bold text-slate-800 flex items-center gap-2 uppercase tracking-wider">
+                     <PackageCheck className="w-4 h-4 text-indigo-600" />
+                     <span>Bagian 2: Spesifikasi Produk Jadi / Kemasan ({prodFinishedParams.length} Parameter)</span>
+                   </h4>
+                   <span className="text-[10px] text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-md font-semibold">Acuan Menu 2.2 IPC Produk Jadi</span>
+                 </div>
+
+                 <div className="space-y-3 mb-4">
+                   {prodFinishedParams.map((param, index) => (
+                     <div key={param.id} className="flex items-center justify-between border border-slate-200/80 rounded-xl p-3 bg-white shadow-xs">
+                       <div className="flex items-start gap-3">
+                         <span className="text-xs font-bold text-slate-400 w-5">{index + 1}.</span>
+                         <div>
+                           <div className="text-xs font-bold text-slate-800">{param.parameterName || param.name}</div>
+                           <div className="text-[10px] text-indigo-700 font-medium">Syarat: {param.acceptanceCondition || param.specification} {param.unit}</div>
+                         </div>
+                       </div>
+                       <button
+                         type="button"
+                         onClick={() => setProdFinishedParams(prodFinishedParams.filter(p => p.id !== param.id))}
+                         className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                       >
+                         <Trash2 className="w-4 h-4" />
+                       </button>
+                     </div>
+                   ))}
+                   {prodFinishedParams.length === 0 && (
+                     <div className="text-center py-3 text-xs text-slate-400 border border-dashed border-slate-200 rounded-xl">
+                       Belum ada parameter produk jadi.
+                     </div>
+                   )}
+                 </div>
+
+                 <div className="border border-slate-200 rounded-xl p-3.5 bg-white">
+                   <h5 className="text-[10px] font-bold text-slate-700 mb-2.5">+ Tambah Parameter Produk Jadi Baru:</h5>
+                   <div className="space-y-2.5">
+                     <input
+                       type="text"
+                       value={newProdFinishedName}
+                       onChange={(e) => setNewProdFinishedName(e.target.value)}
+                       placeholder="Nama Parameter (cth: Berat Netto / Uji Kebocoran Sealing / Torsi Tutup)"
+                       className="w-full rounded-lg bg-white border border-slate-200 px-3 py-1.5 text-xs focus:outline-none focus:border-indigo-600"
+                     />
+                     <div className="flex items-center gap-2">
+                       <input
+                         type="text"
+                         value={newProdFinishedCondition}
+                         onChange={(e) => setNewProdFinishedCondition(e.target.value)}
+                         placeholder="Standar Syarat (cth: 30 ± 0.5 / Tidak Bocor / 12-18)"
+                         className="flex-1 rounded-lg bg-white border border-slate-200 px-3 py-1.5 text-xs focus:outline-none focus:border-indigo-600"
+                       />
+                       <input
+                         type="text"
+                         value={newProdFinishedUnit}
+                         onChange={(e) => setNewProdFinishedUnit(e.target.value)}
+                         placeholder="Satuan (cth: gram / kg.cm)"
+                         className="w-28 rounded-lg bg-white border border-slate-200 px-3 py-1.5 text-xs focus:outline-none focus:border-indigo-600"
+                       />
+                       <button
+                         type="button"
+                         onClick={() => {
+                           if (newProdFinishedName && newProdFinishedCondition) {
+                             setProdFinishedParams([
+                               ...prodFinishedParams,
+                               {
+                                 id: `fin-${Date.now()}`,
+                                 parameterName: newProdFinishedName,
+                                 acceptanceCondition: newProdFinishedCondition,
+                                 unit: newProdFinishedUnit,
+                               }
+                             ]);
+                             setNewProdFinishedName('');
+                             setNewProdFinishedCondition('');
+                             setNewProdFinishedUnit('');
+                           }
+                         }}
+                         disabled={!newProdFinishedName || !newProdFinishedCondition}
+                         className="px-3.5 py-1.5 bg-indigo-700 hover:bg-indigo-800 disabled:bg-slate-300 text-white text-xs font-bold rounded-lg transition-colors whitespace-nowrap cursor-pointer"
+                       >
+                         + Tambah
+                       </button>
+                     </div>
+                   </div>
+                 </div>
+               </div>
 
               <div className="flex items-center justify-end gap-2 pt-3">
                 <button
@@ -2737,34 +2965,68 @@ PJ0001\tPJ0001-60G\t60 g\t60\tg\t8993219584732\tBotol Pump 60ml`;
                 </div>
               </div>
 
-              {/* Parameter QC jika ada */}
-              {activeViewingDetailProduct.qcParameters && activeViewingDetailProduct.qcParameters.length > 0 && (
-                <div>
-                  <h4 className="text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Parameter QC Produk
-                  </h4>
-                  <div className="border border-slate-200 rounded-xl overflow-hidden">
-                    <table className="w-full text-left text-xs border-collapse">
-                      <thead className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase font-bold text-slate-500">
-                        <tr>
-                          <th className="py-1.5 px-2.5">Parameter</th>
-                          <th className="py-1.5 px-2.5">Kondisi / Standar</th>
-                          <th className="py-1.5 px-2.5">Satuan</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {activeViewingDetailProduct.qcParameters.map((qc, qIdx) => (
-                          <tr key={qIdx}>
-                            <td className="py-1.5 px-2.5 font-bold text-slate-800">{qc.name || qc.parameterName}</td>
-                            <td className="py-1.5 px-2.5 text-slate-600">{qc.specification || qc.acceptanceCondition}</td>
-                            <td className="py-1.5 px-2.5 text-slate-500 font-mono">{qc.unit || '-'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
+               {/* Parameter QC Ruahan & Produk Jadi */}
+               <div className="space-y-4">
+                 {/* Bagian 1: Ruahan */}
+                 {activeViewingDetailProduct.qcParameters && activeViewingDetailProduct.qcParameters.length > 0 && (
+                   <div>
+                     <h4 className="text-[11px] font-bold text-purple-800 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                       <FlaskConical className="w-3.5 h-3.5 text-purple-600" />
+                       <span>Bagian 1: Spesifikasi Sediaan Ruahan (Bulk)</span>
+                     </h4>
+                     <div className="border border-purple-200 rounded-xl overflow-hidden bg-purple-50/20">
+                       <table className="w-full text-left text-xs border-collapse">
+                         <thead className="bg-purple-100/60 border-b border-purple-200 text-[10px] uppercase font-bold text-purple-900">
+                           <tr>
+                             <th className="py-1.5 px-2.5">Parameter</th>
+                             <th className="py-1.5 px-2.5">Standar Syarat</th>
+                             <th className="py-1.5 px-2.5">Satuan</th>
+                           </tr>
+                         </thead>
+                         <tbody className="divide-y divide-purple-100">
+                           {activeViewingDetailProduct.qcParameters.map((qc, qIdx) => (
+                             <tr key={qIdx}>
+                               <td className="py-1.5 px-2.5 font-bold text-slate-800">{qc.name || qc.parameterName}</td>
+                               <td className="py-1.5 px-2.5 text-slate-600">{qc.specification || qc.acceptanceCondition}</td>
+                               <td className="py-1.5 px-2.5 text-slate-500 font-mono">{qc.unit || '-'}</td>
+                             </tr>
+                           ))}
+                         </tbody>
+                       </table>
+                     </div>
+                   </div>
+                 )}
+
+                 {/* Bagian 2: Produk Jadi */}
+                 {activeViewingDetailProduct.finishedQcParameters && activeViewingDetailProduct.finishedQcParameters.length > 0 && (
+                   <div>
+                     <h4 className="text-[11px] font-bold text-indigo-800 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                       <PackageCheck className="w-3.5 h-3.5 text-indigo-600" />
+                       <span>Bagian 2: Spesifikasi Produk Jadi / Kemasan</span>
+                     </h4>
+                     <div className="border border-indigo-200 rounded-xl overflow-hidden bg-indigo-50/20">
+                       <table className="w-full text-left text-xs border-collapse">
+                         <thead className="bg-indigo-100/60 border-b border-indigo-200 text-[10px] uppercase font-bold text-indigo-900">
+                           <tr>
+                             <th className="py-1.5 px-2.5">Parameter</th>
+                             <th className="py-1.5 px-2.5">Standar Syarat</th>
+                             <th className="py-1.5 px-2.5">Satuan</th>
+                           </tr>
+                         </thead>
+                         <tbody className="divide-y divide-indigo-100">
+                           {activeViewingDetailProduct.finishedQcParameters.map((qc, qIdx) => (
+                             <tr key={qIdx}>
+                               <td className="py-1.5 px-2.5 font-bold text-slate-800">{qc.name || qc.parameterName}</td>
+                               <td className="py-1.5 px-2.5 text-slate-600">{qc.specification || qc.acceptanceCondition}</td>
+                               <td className="py-1.5 px-2.5 text-slate-500 font-mono">{qc.unit || '-'}</td>
+                             </tr>
+                           ))}
+                         </tbody>
+                       </table>
+                     </div>
+                   </div>
+                 )}
+               </div>
 
               {/* Ringkasan Varian Produk */}
               <div>

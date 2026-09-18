@@ -19,6 +19,7 @@ import { ipcBulkService, IpcBulkBatchInput, IpcAuditResult } from '../services/i
 import { IpcBulkTest } from '../utils/qcExtData';
 import { productService } from '../../rnd/products/productService';
 import { Product } from '../../../types';
+import { useAuth } from '../../../core/auth/AuthContext';
 
 interface IpcBulkBatchRegisterModalProps {
   isOpen: boolean;
@@ -31,6 +32,7 @@ export const IpcBulkBatchRegisterModal: React.FC<IpcBulkBatchRegisterModalProps>
   onClose,
   onSuccess,
 }) => {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'excel' | 'paste' | 'manual'>('excel');
 
   // Parsed Batch List for Preview
@@ -49,7 +51,7 @@ export const IpcBulkBatchRegisterModal: React.FC<IpcBulkBatchRegisterModalProps>
     productName: '',
     mixingQtyKg: 100,
     mixingDate: new Date().toISOString().split('T')[0],
-    analyst: 'Staf QC Lab (IPC)',
+    analyst: user?.name || 'Staf QC Lab',
     notes: '',
   });
 
@@ -205,7 +207,7 @@ export const IpcBulkBatchRegisterModal: React.FC<IpcBulkBatchRegisterModalProps>
             productName: matched.name || nameVal,
             mixingQtyKg: qtyIdx !== -1 && row[qtyIdx] ? Number(row[qtyIdx]) || 100 : 100,
             mixingDate: parseExcelDate(rawDateVal),
-            analyst: 'Staf QC Lab (IPC)',
+            analyst: user?.name || 'Staf QC Lab',
             origin: 'EXCEL_IMPORT',
           });
         }
@@ -283,7 +285,7 @@ export const IpcBulkBatchRegisterModal: React.FC<IpcBulkBatchRegisterModalProps>
           productName: matched.name || productName,
           mixingQtyKg,
           mixingDate,
-          analyst: 'Staf QC Lab (IPC)',
+          analyst: user?.name || 'Staf QC Lab',
           origin: 'PASTE_IMPORT',
         });
       }
@@ -327,7 +329,7 @@ export const IpcBulkBatchRegisterModal: React.FC<IpcBulkBatchRegisterModalProps>
       productName: '',
       mixingQtyKg: 100,
       mixingDate: new Date().toISOString().split('T')[0],
-      analyst: 'Staf QC Lab (IPC)',
+      analyst: user?.name || 'Staf QC Lab',
       notes: '',
     });
     setErrorMessage(null);

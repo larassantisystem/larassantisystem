@@ -65,6 +65,7 @@ export const authService = {
             name: profileData.name || profileData.full_name || (isAdminUser ? 'ADMIN' : `Karyawan ${cleanNik}`),
             department: isAdminUser ? 'admin' : (profileData.department || 'rnd'),
             role: isAdminUser ? 'admin' : (profileData.role || 'staff'),
+            position: profileData.position || profileData.job_title || profileData.jabatan || profileData.jobTitle,
             email: dummyEmail,
             specificAccess: accessMap[resolvedNik.toLowerCase()] || [],
           };
@@ -218,6 +219,7 @@ export const authService = {
               name: p.full_name || p.name || (isAdmin ? 'ADMIN' : `Karyawan ${cleanNik}`),
               department: (isAdmin ? 'admin' : (p.department || 'rnd')) as UserProfile['department'],
               role: (isAdmin ? 'admin' : (p.role || 'staff')) as UserProfile['role'],
+              position: p.position || p.job_title || p.jabatan || p.jobTitle,
               email: p.email || (cleanNik === 'admin' ? 'lms00000@larassanti.co.id' : `${cleanNik.toLowerCase()}@larassanti.co.id`),
               specificAccess: accessMap[cleanNik.toLowerCase()] || [],
             };

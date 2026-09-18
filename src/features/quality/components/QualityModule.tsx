@@ -29,6 +29,7 @@ import {
   Sliders,
   Database,
   QrCode,
+  RotateCcw,
 } from 'lucide-react';
 import { QcInspectionReport } from '../types/qcTypes';
 import { qualityService } from '../qualityService';
@@ -42,6 +43,8 @@ import { QcDiagnosticAuditModal } from './QcDiagnosticAuditModal';
 import { QcContainerSamplingQrModal } from './QcContainerSamplingQrModal';
 import { IpcBulkBatchRegisterModal } from './IpcBulkBatchRegisterModal';
 import { IpcAnalysisModal } from './IpcAnalysisModal';
+import { IpcInspectionReportPdfModal } from './IpcInspectionReportPdfModal';
+import { IpcStatusLabelModal } from './IpcStatusLabelModal';
 import { ipcBulkService, IpcAuditResult } from '../services/ipcBulkService';
 import { warehouseService } from '../../warehouse/warehouseService';
 import { GrnDetailModal } from '../../warehouse/components/GrnDetailModal';
@@ -49,8 +52,10 @@ import { GrnRecord } from '../../warehouse/types/grnTypes';
 import { Pagination } from '../../../core/ui-components/Pagination';
 import { useAuth } from '../../../core/auth/AuthContext';
 import { isQualityManager } from '../../../core/auth/permissionGuard';
+import { formatDateDDMMMYYYY } from '../../../utils/dateUtils';
 import {
   IpcBulkTest,
+  IpcFinishedTest,
   IpcReworkTest,
   RetainedSample,
   StabilityStudy,
@@ -58,6 +63,7 @@ import {
   CapaRecord,
   QualityComplaint,
   initialIpcBulkTests,
+  initialIpcFinishedTests,
   initialIpcReworkTests,
   initialRetainedSamples,
   initialStabilityStudies,
@@ -77,7 +83,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
   const [isLoading, setIsLoading] = useState<boolean>(() => qualityService.getLocalReports().length === 0);
   const [currentTab, setCurrentTab] = useState<
     'queue' | 'testing' | 'approval' | 'archive' | 
-    'ipc-bulk' | 'ipc-rework' | 
+    'ipc-bulk' | 'ipc-finished' | 'ipc-rework' | 
     'retained' | 'stability' | 
     'sop' | 'capa' | 'complaints'
   >('queue');
@@ -106,6 +112,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
 
   // Extended Quality states
   const [ipcBulkTests, setIpcBulkTests] = useState<IpcBulkTest[]>(initialIpcBulkTests);
+  const [ipcFinishedTests, setIpcFinishedTests] = useState<IpcFinishedTest[]>(initialIpcFinishedTests);
   const [ipcReworkTests, setIpcReworkTests] = useState<IpcReworkTest[]>(initialIpcReworkTests);
   const [retainedSamples, setRetainedSamples] = useState<RetainedSample[]>(initialRetainedSamples);
   const [stabilityStudies, setStabilityStudies] = useState<StabilityStudy[]>(initialStabilityStudies);
@@ -115,6 +122,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
 
   // Interactive Form Dialog visibility
   const [ipcSubTab, setIpcSubTab] = useState<'analisa' | 'otorisasi' | 'released' | 'reject'>('analisa');
+  const [ipcFinishedSubTab, setIpcFinishedSubTab] = useState<'analisa' | 'otorisasi' | 'released' | 'reject'>('analisa');
   const [selectedAnalysisBatch, setSelectedAnalysisBatch] = useState<IpcBulkTest | null>(null);
   const [showIpcRegisterModal, setShowIpcRegisterModal] = useState(false);
   const [latestIpcAuditResult, setLatestIpcAuditResult] = useState<IpcAuditResult | null>(null);
@@ -122,6 +130,11 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
   const [showIpcForm, setShowIpcForm] = useState(false);
   const [newIpc, setNewIpc] = useState<Partial<IpcBulkTest>>({
     batchNo: '', productName: '', pH: 6.0, viscosity: 4000, appearance: 'Homogen, Sesuai Spek', gravity: 1.0, status: 'TESTING', analyst: user?.name || 'Staff QC'
+  });
+
+  const [showFinishedForm, setShowFinishedForm] = useState(false);
+  const [newFinished, setNewFinished] = useState<Partial<IpcFinishedTest>>({
+    batchNo: '', productName: '', packSize: '100 ml', netWeightGrams: 100, sealingIntegrity: 'Tidak Bocor', torqueKgCm: 15, appearance: 'Bersih, Cetakan Label Sempurna', status: 'TESTING', analyst: user?.name || 'Staff QC'
   });
 
   const [showReworkForm, setShowReworkForm] = useState(false);
@@ -163,6 +176,8 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
   const [smartTagReport, setSmartTagReport] = useState<QcInspectionReport | null>(null);
   const [showDiagnosticAudit, setShowDiagnosticAudit] = useState<boolean>(false);
   const [selectedGrnDetail, setSelectedGrnDetail] = useState<GrnRecord | null>(null);
+  const [ipcPdfBatch, setIpcPdfBatch] = useState<IpcBulkTest | null>(null);
+  const [ipcLabelState, setIpcLabelState] = useState<{ batch: IpcBulkTest; type: 'QUARANTINE' | 'RELEASED' } | null>(null);
 
   const handleOpenGrnDetail = (report: QcInspectionReport) => {
     const localGrns = warehouseService.getLocalRecords();
@@ -522,7 +537,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
                     {item.grnNumber}
                   </span>
                 </button>
-                <div className={`${isCompactMode ? 'text-[9.5px]' : 'text-[11px]'} text-slate-400 mt-0.5`}>{item.receivedDate}</div>
+                <div className={`${isCompactMode ? 'text-[9.5px]' : 'text-[11px]'} text-slate-400 mt-0.5`}>{formatDateDDMMMYYYY(item.receivedDate)}</div>
               </td>
               <td className={isCompactMode ? 'p-1.5' : 'p-3'}>
                 <div className="flex items-center gap-1.5">
@@ -641,7 +656,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
                     {item.grnNumber}
                   </span>
                 </button>
-                <div className={`${isCompactMode ? 'text-[9.5px]' : 'text-[11px]'} text-slate-400 mt-0.5`}>Tgl: {item.receivedDate}</div>
+                <div className={`${isCompactMode ? 'text-[9.5px]' : 'text-[11px]'} text-slate-400 mt-0.5`}>Tgl: {formatDateDDMMMYYYY(item.receivedDate)}</div>
               </td>
               <td className={isCompactMode ? 'p-1.5' : 'p-3'}>
                 <div className="flex items-center gap-1.5 flex-wrap">
@@ -1147,7 +1162,8 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
           </optgroup>
           <optgroup label="2. In-Process Control (IPC)">
             <option value="ipc-bulk">2.1 Sediaan Ruahan (Bulk)</option>
-            <option value="ipc-rework">2.2 Uji Rework</option>
+            <option value="ipc-finished">2.2 Produk Jadi</option>
+            <option value="ipc-rework">2.3 Rework / Reprocess</option>
           </optgroup>
           <optgroup label="3. Retained & Stability">
             <option value="retained">3.1 Retained Sample</option>
@@ -1172,7 +1188,8 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
               {currentTab === 'approval' && <><ShieldCheck className="w-3.5 h-3.5 text-indigo-600" /> 1.3 Otorisasi Manager</>}
               {currentTab === 'archive' && <><FileText className="w-3.5 h-3.5 text-emerald-600" /> 1.4 Arsip Laporan & Lot</>}
               {currentTab === 'ipc-bulk' && <><Sliders className="w-3.5 h-3.5 text-blue-600" /> 2.1 Sediaan Ruahan (Bulk)</>}
-              {currentTab === 'ipc-rework' && <><FlaskConical className="w-3.5 h-3.5 text-orange-500" /> 2.2 Uji Rework</>}
+              {currentTab === 'ipc-finished' && <><Package className="w-3.5 h-3.5 text-indigo-600" /> 2.2 Produk Jadi</>}
+              {currentTab === 'ipc-rework' && <><FlaskConical className="w-3.5 h-3.5 text-orange-500" /> 2.3 Rework / Reprocess</>}
               {currentTab === 'retained' && <><Package className="w-3.5 h-3.5 text-teal-700" /> 3.1 Retained Sample</>}
               {currentTab === 'stability' && <><CalendarDays className="w-3.5 h-3.5 text-purple-700" /> 3.2 Stability Study</>}
               {currentTab === 'sop' && <><FileText className="w-3.5 h-3.5 text-slate-700" /> 4.1 Daftar SOP Aktif</>}
@@ -1185,6 +1202,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
               {currentTab === 'approval' && 'Pelepasan otorisasi atau penolakan bahan baku dan bahan kemas oleh Quality Manager.'}
               {currentTab === 'archive' && 'Penyimpanan digital lembar Laporan Hasil Analisis (LHA) resmi rilis.'}
               {currentTab === 'ipc-bulk' && 'Pemeriksaan kualitas sediaan setengah jadi adonan cream, gel, pasta, liquid sebelum pengemasan.'}
+              {currentTab === 'ipc-finished' && 'Pengujian fisik, organoleptik, penimbangan netto, dan uji kebocoran kemasan produk jadi.'}
               {currentTab === 'ipc-rework' && 'Pengendalian pengerjaan ulang sediaan bets yang tidak sesuai parameter.'}
               {currentTab === 'retained' && 'Penyimpanan contoh pertinggal bahan baku, bahan kemas, produk jadi untuk jaminan mutu CPKB.'}
               {currentTab === 'stability' && 'Monitoring stabilitas organoleptik, pH, viskositas produk jadi di climate chamber.'}
@@ -1745,16 +1763,17 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
               <form
                 onSubmit={async (e) => {
                   e.preventDefault();
+                  if (!newIpc.batchNo.trim() || !newIpc.productName.trim()) return;
                   const isPassed = Number(newIpc.pH) >= 5.0 && Number(newIpc.pH) <= 7.5 && Number(newIpc.viscosity) >= 1500 && Number(newIpc.viscosity) <= 18000;
                   const inputItem = {
-                    batchNo: newIpc.batchNo || 'B260904X',
-                    productName: newIpc.productName || 'Base Lotion Moisturizer',
+                    batchNo: newIpc.batchNo.trim().toUpperCase(),
+                    productName: newIpc.productName.trim(),
                     mixingDate: new Date().toISOString().split('T')[0],
                     pH: Number(newIpc.pH),
                     viscosity: Number(newIpc.viscosity),
-                    appearance: newIpc.appearance || 'Homogen, Sesuai Spek',
+                    appearance: newIpc.appearance || 'Homogen, Sesuai Spesifikasi Standard CPKB',
                     gravity: Number(newIpc.gravity),
-                    analyst: newIpc.analyst || user?.name || 'Staff QC',
+                    analyst: newIpc.analyst || user?.name || 'Staf QC Lab',
                     origin: 'MANUAL_ENTRY' as const,
                   };
                   const updated = await ipcBulkService.saveBatches([inputItem]);
@@ -1763,7 +1782,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
                   setLatestIpcAuditResult(auditRes);
 
                   setShowIpcForm(false);
-                  setNewIpc({ batchNo: '', productName: '', pH: 6.0, viscosity: 4000, appearance: 'Homogen, Sesuai Spek', gravity: 1.0, status: 'TESTING', analyst: user?.name || 'Staff QC' });
+                  setNewIpc({ batchNo: '', productName: '', pH: 6.0, viscosity: 4000, appearance: 'Homogen, Sesuai Spek', gravity: 1.0, status: 'TESTING', analyst: user?.name || 'Staf QC Lab' });
                 }}
                 className="bg-slate-50 p-4 rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-3 animate-in fade-in duration-150"
               >
@@ -1863,7 +1882,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
               >
                 <span>🧪 1. Dalam Analisa (QC Lab)</span>
                 <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${ipcSubTab === 'analisa' ? 'bg-purple-600 text-white' : 'bg-slate-200 text-slate-800'}`}>
-                  {ipcBulkTests.filter(t => t.status === 'TESTING' || t.status === 'PASSED').length}
+                  {ipcBulkTests.filter(t => t.status === 'TESTING' || t.status === 'RETEST' || t.status === 'PASSED').length}
                 </span>
               </button>
 
@@ -1893,7 +1912,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
               >
                 <span>✅ 3. Released (Disetujui)</span>
                 <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${ipcSubTab === 'released' ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-800'}`}>
-                  {ipcBulkTests.filter(t => t.status === 'RELEASED').length}
+                  {ipcBulkTests.filter(t => t.status === 'RELEASED' || t.status === 'RELEASED_DEVIATION').length}
                 </span>
               </button>
 
@@ -1919,23 +1938,34 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-black text-slate-500 uppercase tracking-wider">
                     <th className="p-3">ID Laporan</th>
-                    <th className="p-3">No. Bets (Klik u/ Analisa)</th>
-                    <th className="p-3">Nama Produk</th>
-                    <th className="p-3">Tanggal Analisa</th>
-                    <th className="p-3 text-center">pH</th>
-                    <th className="p-3 text-center">Viskositas</th>
-                    <th className="p-3">Pemerian (Appearance)</th>
-                    <th className="p-3 text-center">Bobot Jenis</th>
-                    <th className="p-3">Analis</th>
-                    <th className="p-3 text-center">Aksi / Status</th>
+                    <th className="p-3">
+                      {ipcSubTab === 'otorisasi'
+                        ? 'No. Bets (Klik u/ Otorisasi)'
+                        : ipcSubTab === 'analisa'
+                        ? 'No. Bets (Klik u/ Analisa)'
+                        : 'No. Bets'}
+                    </th>
+                    <th className="p-3">Nama & Kode Produk</th>
+                    <th className="p-3">
+                      {ipcSubTab === 'released'
+                        ? 'Tgl Rilis'
+                        : ipcSubTab === 'otorisasi'
+                        ? 'Tgl Uji'
+                        : 'Tgl Mixing'}
+                    </th>
+                    {ipcSubTab === 'analisa' && <th className="p-3 text-center">Cetak Label</th>}
+                    {ipcSubTab === 'released' && <th className="p-3 text-center">Cetak Dokumen & Label</th>}
+                    {ipcSubTab === 'otorisasi' && <th className="p-3 text-center">Laporan Pemeriksaan</th>}
+                    {ipcSubTab === 'reject' && <th className="p-3">Alasan Penolakan</th>}
+                    {ipcSubTab !== 'otorisasi' && <th className="p-3 text-center">Status</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-[11px] text-slate-700">
                   {(() => {
                     const filtered = ipcBulkTests.filter((t) => {
-                      if (ipcSubTab === 'analisa') return t.status === 'TESTING' || t.status === 'PASSED';
+                      if (ipcSubTab === 'analisa') return t.status === 'TESTING' || t.status === 'RETEST' || t.status === 'PASSED';
                       if (ipcSubTab === 'otorisasi') return t.status === 'AWAITING_QM';
-                      if (ipcSubTab === 'released') return t.status === 'RELEASED';
+                      if (ipcSubTab === 'released') return t.status === 'RELEASED' || t.status === 'RELEASED_DEVIATION';
                       if (ipcSubTab === 'reject') return t.status === 'REJECTED';
                       return true;
                     });
@@ -1943,7 +1973,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
                     if (filtered.length === 0) {
                       return (
                         <tr>
-                          <td colSpan={10} className="p-8 text-center text-slate-400 font-medium">
+                          <td colSpan={6} className="p-8 text-center text-slate-400 font-medium">
                             Tidak ada batch ruahan di kategori tab <strong className="text-slate-600">{ipcSubTab.toUpperCase()}</strong>.
                           </td>
                         </tr>
@@ -1952,49 +1982,130 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
 
                     return filtered.map((t) => (
                       <tr key={t.id} className="hover:bg-purple-50/40 transition-colors">
-                        <td className="p-3 font-bold text-slate-900">{t.id}</td>
+                        <td className="p-3 font-mono font-bold text-purple-950">{t.ipcNo || t.id}</td>
                         <td className="p-3">
                           <button
                             type="button"
                             onClick={() => setSelectedAnalysisBatch(t)}
                             className="bg-purple-100 hover:bg-purple-200 text-purple-900 border border-purple-300 px-2.5 py-1 rounded-lg font-mono font-extrabold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs group"
-                            title="Klik untuk membuka Modal Analisa Produk & Otorisasi"
+                            title="Klik untuk membuka Analisa Lab & Parameter Uji"
                           >
                             <span>{t.batchNo}</span>
                             <Sparkles className="w-3 h-3 text-purple-600 group-hover:scale-125 transition-transform" />
                           </button>
                         </td>
                         <td className="p-3 font-semibold">
-                          <div>{t.productName}</div>
+                          <div className="text-slate-900">{t.productName}</div>
                           {t.productCode && (
                             <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-purple-50 text-purple-700 border border-purple-200">
                               {t.productCode}
                             </span>
                           )}
                         </td>
-                        <td className="p-3 text-slate-500">{t.mixingDate}</td>
-                        <td className={`p-3 text-center font-bold ${t.pH >= 5.0 && t.pH <= 7.5 ? 'text-slate-800' : 'text-rose-600'}`}>{t.pH}</td>
-                        <td className="p-3 text-center font-semibold">{t.viscosity.toLocaleString()} cPs</td>
-                        <td className="p-3 text-slate-500 italic">{t.appearance}</td>
-                        <td className="p-3 text-center">{t.gravity} g/ml</td>
-                        <td className="p-3 text-slate-600 font-semibold">{t.analyst}</td>
-                        <td className="p-3 text-center">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedAnalysisBatch(t)}
-                            className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-extrabold cursor-pointer transition-transform hover:scale-105 ${
-                              t.status === 'RELEASED'
-                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                : t.status === 'AWAITING_QM'
-                                ? 'bg-blue-100 text-blue-800 border border-blue-300'
-                                : t.status === 'REJECTED'
-                                ? 'bg-rose-100 text-rose-800 border border-rose-300'
-                                : 'bg-amber-100 text-amber-800 border border-amber-300'
-                            }`}
-                          >
-                            {t.status === 'AWAITING_QM' ? 'OTORISASI QM' : t.status}
-                          </button>
+                        <td className="p-3 font-medium text-slate-600 whitespace-nowrap">
+                          {ipcSubTab === 'released'
+                            ? formatDateDDMMMYYYY(t.testDate || t.mixingDate)
+                            : ipcSubTab === 'otorisasi'
+                            ? formatDateDDMMMYYYY(t.testDate || t.mixingDate)
+                            : formatDateDDMMMYYYY(t.mixingDate)}
                         </td>
+
+                        {/* Cetak Label Karantina (Tab Analisa) */}
+                        {ipcSubTab === 'analisa' && (
+                          <td className="p-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() => setIpcLabelState({ batch: t, type: 'QUARANTINE' })}
+                              className="bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 px-2.5 py-1 rounded-md text-[10px] font-bold inline-flex items-center gap-1.5 cursor-pointer transition-all shadow-2xs"
+                              title="Cetak Label Karantina Wadah Sediaan Ruahan"
+                            >
+                              <Tag className="w-3.5 h-3.5 text-amber-700" />
+                              <span>Label Karantina</span>
+                            </button>
+                          </td>
+                        )}
+
+                        {/* Cetak Label Rilis & Cetak Laporan (Tab Release) */}
+                        {ipcSubTab === 'released' && (
+                          <td className="p-3 text-center">
+                            <div className="flex items-center justify-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setIpcLabelState({ batch: t, type: 'RELEASED' })}
+                                className="bg-emerald-100 hover:bg-emerald-200 text-emerald-900 border border-emerald-300 px-2.5 py-1 rounded-md text-[10px] font-bold inline-flex items-center gap-1.5 cursor-pointer transition-all shadow-2xs"
+                                title="Cetak Label Rilis Hijau Sediaan Ruahan"
+                              >
+                                <Tag className="w-3.5 h-3.5 text-emerald-700" />
+                                <span>Cetak Label Rilis</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setIpcPdfBatch(t)}
+                                className="bg-purple-100 hover:bg-purple-200 text-purple-900 border border-purple-300 px-2.5 py-1 rounded-md text-[10px] font-bold inline-flex items-center gap-1.5 cursor-pointer transition-all shadow-2xs"
+                                title="Cetak Laporan Hasil Uji Ruahan (PDF)"
+                              >
+                                <FileText className="w-3.5 h-3.5 text-purple-700" />
+                                <span>Cetak Laporan</span>
+                              </button>
+                            </div>
+                          </td>
+                        )}
+
+                        {/* Otorisasi (Tab Otorisasi) */}
+                        {ipcSubTab === 'otorisasi' && (
+                          <td className="p-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() => setIpcPdfBatch(t)}
+                              className="bg-purple-700 hover:bg-purple-800 text-white px-3 py-1.5 rounded-lg text-[11px] font-bold inline-flex items-center gap-1.5 cursor-pointer shadow-xs transition-all"
+                              title="View Laporan Pemeriksaan IPC Ruahan"
+                            >
+                              <FileText className="w-3.5 h-3.5" />
+                              <span>View Laporan</span>
+                            </button>
+                          </td>
+                        )}
+
+                        {/* Reject Reason (Tab Reject) */}
+                        {ipcSubTab === 'reject' && (
+                          <td className="p-3 text-rose-700 font-medium">
+                            {t.rejectionReason || 'Ditolak Quality Control'}
+                          </td>
+                        )}
+
+                        {/* Status Column */}
+                        {ipcSubTab !== 'otorisasi' && (
+                          <td className="p-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedAnalysisBatch(t)}
+                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold cursor-pointer transition-transform hover:scale-105 ${
+                                t.status === 'RELEASED'
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                  : t.status === 'AWAITING_QM'
+                                  ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                                  : t.status === 'REJECTED'
+                                  ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                                  : t.status === 'RETEST'
+                                  ? 'bg-orange-100 text-orange-800 border border-orange-300'
+                                  : 'bg-amber-100 text-amber-800 border border-amber-300'
+                              }`}
+                            >
+                              {t.status === 'RETEST' && <RotateCcw className="w-3 h-3 text-orange-700" />}
+                              <span>
+                                {t.status === 'RELEASED'
+                                  ? 'RELEASED'
+                                  : t.status === 'AWAITING_QM'
+                                  ? 'MENUNGGU QM'
+                                  : t.status === 'REJECTED'
+                                  ? 'REJECTED'
+                                  : t.status === 'RETEST'
+                                  ? 'Re-test'
+                                  : 'Analisa'}
+                              </span>
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     ));
                   })()}
@@ -2004,7 +2115,207 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
           </div>
         )}
 
-        {/* TAB 2.2: IPC - Uji Rework */}
+        {/* TAB 2.2: IPC - Produk Jadi (Finished Goods) */}
+        {currentTab === 'ipc-finished' && (
+          <div className="p-4 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                  <span>Monitoring Mutu & Kemasan Produk Jadi (IPC Kemas)</span>
+                  <span className="bg-indigo-100 text-indigo-800 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-indigo-200">
+                    CPKB Standard
+                  </span>
+                </h4>
+                <p className="text-[10px] text-slate-500">
+                  Pengujian Netto, Kebocoran Sealing, Torsi Tutup, dan Kesesuaian Estetika Kemasan Sekunder/Primer.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowFinishedForm(!showFinishedForm)}
+                  className="bg-indigo-700 hover:bg-indigo-800 text-white text-[11px] font-extrabold px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <Plus className="w-3.5 h-3.5 text-indigo-200" />
+                  <span>Tambah Uji Produk Jadi</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Form Tambah Produk Jadi */}
+            {showFinishedForm && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const added: IpcFinishedTest = {
+                    id: `FG-${Date.now().toString().slice(-5)}`,
+                    batchNo: newFinished.batchNo || 'FG260901',
+                    productName: newFinished.productName || 'Glow Brightening Cream 30g',
+                    packSize: newFinished.packSize || '30 gram',
+                    netWeightGrams: Number(newFinished.netWeightGrams) || 30.2,
+                    sealingIntegrity: newFinished.sealingIntegrity || 'Tidak Bocor',
+                    torqueKgCm: Number(newFinished.torqueKgCm) || 14.5,
+                    appearance: newFinished.appearance || 'Sempurna, Bersih, Batch tercetak jelas',
+                    testDate: new Date().toISOString().split('T')[0],
+                    status: 'TESTING',
+                    analyst: user?.name || 'Staff QC',
+                  };
+                  setIpcFinishedTests([added, ...ipcFinishedTests]);
+                  setShowFinishedForm(false);
+                  setNewFinished({ batchNo: '', productName: '', packSize: '30g', netWeightGrams: 30, sealingIntegrity: 'Tidak Bocor', torqueKgCm: 15, appearance: 'Sempurna', status: 'TESTING' });
+                }}
+                className="bg-slate-50 p-4 rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-3 animate-in fade-in duration-150"
+              >
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-600 block">No Bets Produk Jadi</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Contoh: FG260901"
+                    value={newFinished.batchNo}
+                    onChange={(e) => setNewFinished({ ...newFinished, batchNo: e.target.value })}
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-600 block">Nama Produk</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Contoh: Brightening Serum"
+                    value={newFinished.productName}
+                    onChange={(e) => setNewFinished({ ...newFinished, productName: e.target.value })}
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-600 block">Ukuran Kemasan</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Contoh: 30 ml / 100 gram"
+                    value={newFinished.packSize}
+                    onChange={(e) => setNewFinished({ ...newFinished, packSize: e.target.value })}
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-600 block">Berat Netto Aktual (gram)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    required
+                    value={newFinished.netWeightGrams}
+                    onChange={(e) => setNewFinished({ ...newFinished, netWeightGrams: Number(e.target.value) })}
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-600 block">Uji Kebocoran / Sealing</label>
+                  <select
+                    value={newFinished.sealingIntegrity}
+                    onChange={(e) => setNewFinished({ ...newFinished, sealingIntegrity: e.target.value })}
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:ring-1 focus:ring-indigo-500"
+                  >
+                    <option value="Tidak Bocor">Tidak Bocor (Sempurna)</option>
+                    <option value="Bocor Sealing">Bocor Sealing / Seal Lemah</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-600 block">Torsi Tutup (kg.cm)</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    required
+                    value={newFinished.torqueKgCm}
+                    onChange={(e) => setNewFinished({ ...newFinished, torqueKgCm: Number(e.target.value) })}
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+                <div className="sm:col-span-3 flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowFinishedForm(false)}
+                    className="border border-slate-200 text-slate-600 hover:bg-slate-100 text-xs font-bold px-3 py-1.5 rounded-lg"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    className="bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold px-4 py-1.5 rounded-lg"
+                  >
+                    Simpan & Uji Laboratorium
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* Table Finished Goods */}
+            <div className="overflow-x-auto border border-slate-200 rounded-xl">
+              <table className="w-full text-left text-xs text-slate-700">
+                <thead className="bg-slate-100/70 text-[10px] uppercase font-bold text-slate-500 border-b border-slate-200">
+                  <tr>
+                    <th className="p-3">ID / Tanggal</th>
+                    <th className="p-3">Nomor Bets & Produk</th>
+                    <th className="p-3">Kemasan & Netto</th>
+                    <th className="p-3">Sealing & Torsi</th>
+                    <th className="p-3">Status</th>
+                    <th className="p-3 text-right">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {ipcFinishedTests.map((item) => (
+                    <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="p-3 font-mono">
+                        <div className="font-bold text-indigo-700">{item.id}</div>
+                        <div className="text-[10px] text-slate-400">{item.testDate || 'Hari ini'}</div>
+                      </td>
+                      <td className="p-3">
+                        <div className="font-bold text-slate-900">{item.productName}</div>
+                        <div className="text-[10px] text-slate-500 font-mono">Bets: {item.batchNo}</div>
+                      </td>
+                      <td className="p-3">
+                        <div className="font-semibold text-slate-800">{item.packSize}</div>
+                        <div className="text-[10px] text-slate-500 font-medium">Netto: {item.netWeightGrams} g</div>
+                      </td>
+                      <td className="p-3">
+                        <div className="font-semibold text-slate-800">{item.sealingIntegrity}</div>
+                        <div className="text-[10px] text-slate-500 font-medium">Torsi: {item.torqueKgCm} kg.cm</div>
+                      </td>
+                      <td className="p-3">
+                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                          item.status === 'PASSED' || item.status === 'RELEASED'
+                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                            : item.status === 'REJECTED'
+                            ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                            : item.status === 'RETEST'
+                            ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                            : 'bg-blue-100 text-blue-800 border border-blue-200'
+                        }`}>
+                          {item.status}
+                        </span>
+                      </td>
+                      <td className="p-3 text-right">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIpcFinishedTests(ipcFinishedTests.map(t => t.id === item.id ? { ...t, status: t.status === 'PASSED' ? 'TESTING' : 'PASSED' } : t));
+                          }}
+                          className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                        >
+                          {item.status === 'PASSED' ? 'Re-test' : 'Set Passed'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2.3: IPC - Uji Rework */}
         {currentTab === 'ipc-rework' && (
           <div className="p-4 space-y-4">
             <div className="flex items-center justify-between">
@@ -2330,8 +2641,8 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
                         </td>
                         <td className="p-3 font-semibold text-slate-700"><span className="border border-slate-200 px-1.5 py-0.5 rounded-md bg-slate-50">{s.rackNo}</span></td>
                         <td className="p-3 font-medium text-slate-600">{s.qty}</td>
-                        <td className="p-3 text-center text-slate-500">{s.receivedDate}</td>
-                        <td className="p-3 text-center text-rose-600 font-semibold">{s.expiryDate}</td>
+                        <td className="p-3 text-center text-slate-500">{formatDateDDMMMYYYY(s.receivedDate)}</td>
+                        <td className="p-3 text-center text-rose-600 font-semibold">{formatDateDDMMMYYYY(s.expiryDate)}</td>
                         <td className="p-3 text-center">
                           <span
                             className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold ${
@@ -2872,7 +3183,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-slate-400 font-semibold">Tutup: {c.targetDate}</span>
+                        <span className="text-[10px] text-slate-400 font-semibold">Tutup: {formatDateDDMMMYYYY(c.targetDate)}</span>
                         <button
                           type="button"
                           onClick={() => {
@@ -3142,6 +3453,20 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
             setLatestIpcAuditResult(auditRes);
           }
         }}
+      />
+
+      <IpcInspectionReportPdfModal
+        isOpen={!!ipcPdfBatch}
+        onClose={() => setIpcPdfBatch(null)}
+        batch={ipcPdfBatch}
+      />
+
+      <IpcStatusLabelModal
+        isOpen={!!ipcLabelState}
+        onClose={() => setIpcLabelState(null)}
+        batch={ipcLabelState?.batch || null}
+        defaultLabelType={ipcLabelState?.type || 'QUARANTINE'}
+        onViewReport={(batch) => setIpcPdfBatch(batch)}
       />
 
       <GrnDetailModal

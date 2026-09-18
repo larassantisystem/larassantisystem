@@ -250,6 +250,7 @@ export const productService = {
           bpomNotificationExt: p.exp_notification_date || '',
           expNotificationDate: p.exp_notification_date || '',
           qcParameters: p.qc_parameters || [],
+          finishedQcParameters: p.finished_parameters || p.finished_qc_parameters || [],
           createdAt: p.created_at,
           variants: pVariants.map((v: any) => ({
             id: v.id,
@@ -299,7 +300,7 @@ export const productService = {
 
     try {
       // 1. Simpan Master Produk ke tabel 'products'
-      const productPayload = {
+      let productPayload: any = {
         id: prod.id,
         product_code: (prod.productCode || prod.code).trim().toUpperCase(),
         name: prod.name.trim(),
@@ -311,14 +312,28 @@ export const productService = {
         storage_conditions: prod.storageConditions || '',
         bpom_notification_number: prod.bpomNotificationNumber || '',
         qc_parameters: prod.qcParameters || [],
+        finished_parameters: prod.finishedQcParameters || [],
         created_at: prod.createdAt || new Date().toISOString(),
       };
 
-      const res = await productService.withNetworkRetry(async () => {
+      let res = await productService.withNetworkRetry(async () => {
         return await supabase
           .from('products')
-          .upsert(productPayload, { onConflict: 'id' });
+          .upsert(productPayload, { onConflict: 'product_code' });
       });
+
+      // Handling jika kolom finished_parameters atau qc_parameters belum ada di schema cache Supabase
+      if (res.error && (res.error.message?.includes('finished_parameters') || res.error.message?.includes('qc_parameters'))) {
+        console.warn('[productService] Kolom parameter belum terdaftar di schema cache Supabase. Melakukan fallback upsert...');
+        delete productPayload.finished_parameters;
+        delete productPayload.qc_parameters;
+        res = await productService.withNetworkRetry(async () => {
+          return await supabase
+            .from('products')
+            .upsert(productPayload, { onConflict: 'product_code' });
+        });
+      }
+
       const prodError = res.error;
 
       if (prodError) {
@@ -354,7 +369,7 @@ export const productService = {
           const varRes = await productService.withNetworkRetry(async () => {
             return await supabase
               .from('product_variants')
-              .upsert(variantPayload, { onConflict: 'id' });
+              .upsert(variantPayload, { onConflict: 'sku' });
           });
           const varError = varRes.error;
 
@@ -417,7 +432,7 @@ export const productService = {
       const res = await productService.withNetworkRetry(async () => {
         return await supabase
           .from('product_variants')
-          .upsert(variantPayload, { onConflict: 'id' });
+          .upsert(variantPayload, { onConflict: 'sku' });
       });
       const error = res.error;
 
@@ -497,11 +512,87 @@ export const productService = {
   },
 
   /**
-   * Menyimpan sekumpulan produk (batch) ke Supabase
+   * Menyimpan sekumpulan produk (batch) secara efisien dengan chunked bulk upsert ke Supabase
    */
-  saveProducts: async (products: Product[]): Promise<void> => {
+  saveProducts: async (products: Product[]): Promise<{ success: boolean; count: number; error?: string }> => {
+    purgeLegacyLocalStorageProducts();
+
+    // 1. Update inMemoryProducts
     for (const prod of products) {
-      await productService.saveSingleProduct(prod);
+      const idx = inMemoryProducts.findIndex(p => p.id === prod.id || p.code === prod.code);
+      if (idx >= 0) {
+        inMemoryProducts[idx] = prod;
+      } else {
+        inMemoryProducts.push(prod);
+      }
+    }
+
+    if (!isSupabaseConfigured || !supabase) {
+      return { success: true, count: products.length };
+    }
+
+    try {
+      // Chunking array into batches of 100 for fast bulk upsert
+      const chunkSize = 100;
+      let insertedCount = 0;
+
+      for (let i = 0; i < products.length; i += chunkSize) {
+        const chunk = products.slice(i, i + chunkSize);
+
+        const payloads = chunk.map((prod) => ({
+          id: prod.id,
+          product_code: (prod.productCode || prod.code).trim().toUpperCase(),
+          name: prod.name.trim(),
+          brand: prod.brand.trim(),
+          exp_notification_date: formatToISODate(prod.expNotificationDate || prod.bpomNotificationExt),
+          category: prod.category || '',
+          description: prod.description || '',
+          unit: prod.unit || 'pcs (Pieces)',
+          storage_conditions: prod.storageConditions || '',
+          bpom_notification_number: prod.bpomNotificationNumber || '',
+          qc_parameters: prod.qcParameters || [],
+          finished_parameters: prod.finishedQcParameters || [],
+          created_at: prod.createdAt || new Date().toISOString(),
+        }));
+
+        let res = await productService.withNetworkRetry(async () => {
+          return await supabase
+            .from('products')
+            .upsert(payloads, { onConflict: 'product_code' });
+        });
+
+        // Handling jika kolom finished_parameters atau qc_parameters belum ada di schema cache Supabase
+        if (res.error && (res.error.message?.includes('finished_parameters') || res.error.message?.includes('qc_parameters'))) {
+          console.warn('[productService] Kolom parameter belum terdaftar di schema cache Supabase. Melakukan fallback batch upsert...');
+          const fallbackPayloads = payloads.map(({ finished_parameters, qc_parameters, ...rest }) => rest);
+          res = await productService.withNetworkRetry(async () => {
+            return await supabase
+              .from('products')
+              .upsert(fallbackPayloads, { onConflict: 'product_code' });
+          });
+        }
+
+        if (res.error) {
+          console.error('[productService] Error during batch upsert to Supabase:', res.error);
+          if (isTableMissingError(res.error)) {
+            tablesInitializedInSupabase = false;
+            return {
+              success: false,
+              count: insertedCount,
+              error: `Tabel 'products' belum dikonfirmasi di Supabase. Silakan jalankan skrip SQL supabase_schema_products.sql di Supabase SQL Editor. Pesan: ${res.error.message}`,
+            };
+          }
+          return { success: false, count: insertedCount, error: res.error.message };
+        }
+
+        insertedCount += chunk.length;
+      }
+
+      tablesInitializedInSupabase = true;
+      return { success: true, count: insertedCount };
+    } catch (err: any) {
+      console.error('[productService] Exception in saveProducts:', err);
+      return { success: false, count: 0, error: err?.message || String(err) };
     }
   },
 

@@ -101,7 +101,7 @@ export const WarehouseModule: React.FC<WarehouseModuleProps> = ({
 
   const stats: GrnStats = warehouseService.calculateStats(grnRecords);
 
-  const handleSaveGrn = async (recordData: Omit<GrnRecord, 'id' | 'createdAt' | 'grnNumber'>) => {
+  const handleSaveGrn = async (recordData: Omit<GrnRecord, 'id' | 'createdAt'> & { grnNumber?: string }) => {
     const saved = await warehouseService.saveGrnRecord(recordData);
     setGrnRecords((prev) => [saved, ...prev]);
     // Synchronize stock lots

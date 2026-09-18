@@ -164,54 +164,54 @@ export const RndModule: React.FC<RndModuleProps> = ({
 
   // --- PRODUCTS & VARIANTS HANDLERS (SUPABASE ONLY, NO LOCAL STORAGE) ---
   const handleSaveProduct = async (newProd: Product) => {
-    const exists = products.some((p) => p.id === newProd.id);
-    let updated: Product[];
-    if (exists) {
-      updated = products.map((p) => (p.id === newProd.id ? newProd : p));
-    } else {
-      updated = [newProd, ...products];
-    }
-    setProducts(updated);
+    setProducts((prev) => {
+      const exists = prev.some((p) => p.id === newProd.id || p.code === newProd.code);
+      if (exists) {
+        return prev.map((p) => (p.id === newProd.id || p.code === newProd.code ? newProd : p));
+      }
+      return [newProd, ...prev];
+    });
 
     // Persist directly to Supabase tables 'products' & 'product_variants'
     await productService.saveSingleProduct(newProd);
   };
 
   const handleDeleteProduct = async (productId: string) => {
-    const updated = products.filter((p) => p.id !== productId);
-    setProducts(updated);
+    setProducts((prev) => prev.filter((p) => p.id !== productId));
 
     // Delete directly from Supabase table 'products' (cascades to variants)
     await productService.deleteProduct(productId);
   };
 
   const handleSaveVariant = async (productId: string, variant: ProductVariant) => {
-    const updated = products.map((prod) => {
-      if (prod.id !== productId) return prod;
-      const vExists = prod.variants.some((v) => v.id === variant.id);
-      let newVariants: ProductVariant[];
-      if (vExists) {
-        newVariants = prod.variants.map((v) => (v.id === variant.id ? variant : v));
-      } else {
-        newVariants = [...prod.variants, variant];
-      }
-      return { ...prod, variants: newVariants };
-    });
-    setProducts(updated);
+    setProducts((prev) =>
+      prev.map((prod) => {
+        if (prod.id !== productId) return prod;
+        const vExists = prod.variants.some((v) => v.id === variant.id || v.sku === variant.sku);
+        let newVariants: ProductVariant[];
+        if (vExists) {
+          newVariants = prod.variants.map((v) => (v.id === variant.id || v.sku === variant.sku ? variant : v));
+        } else {
+          newVariants = [...prod.variants, variant];
+        }
+        return { ...prod, variants: newVariants };
+      })
+    );
 
     // Persist directly to Supabase table 'product_variants'
     await productService.saveSingleVariant(productId, variant);
   };
 
   const handleDeleteVariant = async (productId: string, variantId: string) => {
-    const updated = products.map((prod) => {
-      if (prod.id !== productId) return prod;
-      return {
-        ...prod,
-        variants: prod.variants.filter((v) => v.id !== variantId),
-      };
-    });
-    setProducts(updated);
+    setProducts((prev) =>
+      prev.map((prod) => {
+        if (prod.id !== productId) return prod;
+        return {
+          ...prod,
+          variants: prod.variants.filter((v) => v.id !== variantId),
+        };
+      })
+    );
 
     // Delete directly from Supabase table 'product_variants'
     await productService.deleteVariant(variantId);

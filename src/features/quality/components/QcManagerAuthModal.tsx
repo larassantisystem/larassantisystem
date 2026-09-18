@@ -546,7 +546,7 @@ export const QcManagerAuthModal: React.FC<QcManagerAuthModalProps> = ({
               />
               <p className="text-[11px] text-slate-500 flex items-center gap-1">
                 <HelpCircle className="w-3.5 h-3.5 text-slate-400" />
-                Tanda tangan elektronik ini terikat secara legal dengan identitas Apoteker / Quality Manager.
+                Tanda tangan elektronik ini terikat secara legal dengan identitas Quality Manager.
               </p>
             </div>
           )}

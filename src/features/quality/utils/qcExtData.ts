@@ -2,16 +2,69 @@ import { Department } from '../../../types';
 
 export interface IpcBulkTest {
   id: string;
+  ipcNo?: string; // Format: LPR-YYMMxxxx (e.g. LPR-26090001)
   batchNo: string;
   productCode?: string;
   productName: string;
-  mixingDate: string;
+  mixingDate?: string;
+  testDate?: string;
+  mixingQtyKg?: number;
   pH: number;
   viscosity: number; // cPs
   appearance: string; // e.g. "Homogen, Putih Mengkilap"
   gravity: number; // g/ml
-  status: 'PASSED' | 'REJECTED' | 'TESTING' | 'AWAITING_QM' | 'RELEASED';
+  status: 'PASSED' | 'REJECTED' | 'TESTING' | 'RETEST' | 'AWAITING_QM' | 'RELEASED' | 'RELEASED_DEVIATION';
   analyst: string;
+  rejectionReason?: string;
+  staffSignature?: {
+    signerName: string;
+    signerNik?: string;
+    signerPosition?: string;
+    signedAt?: string;
+  };
+  qmSignature?: {
+    signerName: string;
+    signerNik?: string;
+    signerPosition?: string;
+    signedAt?: string;
+  };
+  labParameters?: Array<{
+    id: string;
+    parameterName: string;
+    specification: string;
+    resultValue: string;
+    isCompliant: boolean;
+  }>;
+}
+
+export interface IpcFinishedTest {
+  id: string;
+  ipcNo?: string;
+  batchNo: string;
+  productCode?: string;
+  productName: string;
+  packagingDate?: string;
+  testDate?: string;
+  packSize?: string;
+  netWeightGrams: number;
+  sealingIntegrity: string; // e.g. "Bocor / Tidak Bocor"
+  torqueKgCm: number; // Tutup botol
+  appearance: string; // "Bersih, Cetakan Label Sempurna"
+  status: 'PASSED' | 'REJECTED' | 'TESTING' | 'RETEST' | 'AWAITING_QM' | 'RELEASED' | 'RELEASED_DEVIATION';
+  analyst: string;
+  rejectionReason?: string;
+  staffSignature?: {
+    signerName: string;
+    signerNik?: string;
+    signerPosition?: string;
+    signedAt?: string;
+  };
+  qmSignature?: {
+    signerName: string;
+    signerNik?: string;
+    signerPosition?: string;
+    signedAt?: string;
+  };
   labParameters?: Array<{
     id: string;
     parameterName: string;
@@ -103,6 +156,8 @@ export interface QualityComplaint {
 
 // Pre-populated CPKB Compliant Data (Cleared for Clean Production State)
 export const initialIpcBulkTests: IpcBulkTest[] = [];
+
+export const initialIpcFinishedTests: IpcFinishedTest[] = [];
 
 export const initialIpcReworkTests: IpcReworkTest[] = [];
 

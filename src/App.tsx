@@ -42,6 +42,7 @@ const MainAppContent: React.FC = () => {
     | 'approval'
     | 'archive'
     | 'ipc-bulk'
+    | 'ipc-finished'
     | 'ipc-rework'
     | 'retained'
     | 'stability'
@@ -94,6 +95,7 @@ const MainAppContent: React.FC = () => {
         'approval',
         'archive',
         'ipc-bulk',
+        'ipc-finished',
         'ipc-rework',
         'retained',
         'stability',

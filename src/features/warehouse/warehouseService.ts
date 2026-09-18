@@ -37,7 +37,7 @@ function buildPrimarySupabasePayload(record: GrnRecord): Record<string, any> {
     : null;
   const normalizedRetestDate = autoRetestDate ? formatToIsoDateString(autoRetestDate) : null;
 
-  const rawQcStatus = record.qcStatus || 'QUARANTINE';
+  const rawQcStatus = (record.qcStatus as string) || 'QUARANTINE';
   const mappedQcStatus = (rawQcStatus === 'RELEASED' || rawQcStatus === 'RELEASE_DEVIATION') ? 'PASSED' : rawQcStatus;
 
   const payload: Record<string, any> = {
@@ -206,7 +206,7 @@ async function executeWithSchemaAdaptiveRetry(
     received_date: record.receivedDate || new Date().toISOString().slice(0, 10),
     quantity_received: Number(record.quantityReceived) || 0,
     unit: record.unit || 'kg',
-    qc_status: (record.qcStatus === 'RELEASED' || record.qcStatus === 'RELEASE_DEVIATION') ? 'PASSED' : (record.qcStatus || 'QUARANTINE'),
+    qc_status: ((record.qcStatus as string) === 'RELEASED' || (record.qcStatus as string) === 'RELEASE_DEVIATION') ? 'PASSED' : (record.qcStatus || 'QUARANTINE'),
     notes: packGrnNotes(record.notes, record.qcPayload) || null,
   };
 

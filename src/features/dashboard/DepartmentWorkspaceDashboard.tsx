@@ -338,7 +338,7 @@ export const DepartmentWorkspaceDashboard: React.FC<DepartmentWorkspaceDashboard
                 {qcPendingQm.length} <span className="text-xs font-normal text-slate-500">Pending TTD</span>
               </div>
               <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 text-[11px]">
-                <span className="text-slate-500 font-semibold text-indigo-700">Tanda Tangan Digital Apoteker</span>
+                <span className="text-slate-500 font-semibold text-indigo-700">Tanda Tangan Digital Quality Manager</span>
                 <ChevronRight className="w-3.5 h-3.5 text-indigo-600 group-hover:translate-x-1 transition-transform" />
               </div>
             </div>
@@ -663,7 +663,7 @@ export const DepartmentWorkspaceDashboard: React.FC<DepartmentWorkspaceDashboard
                           </span>
                         </div>
                         <p className="text-[11px] text-indigo-900/80">
-                          Hasil uji lab telah selesai diinput. Menunggu tanda tangan digital Apoteker/QM untuk rilis ke gudang/produksi.
+                          Hasil uji lab telah selesai diinput. Menunggu tanda tangan digital Quality Manager untuk rilis ke gudang/produksi.
                         </p>
                       </div>
                       <button
@@ -897,7 +897,7 @@ export const DepartmentWorkspaceDashboard: React.FC<DepartmentWorkspaceDashboard
                     className="p-4 rounded-2xl bg-slate-50 border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/40 transition-all cursor-pointer group"
                   >
                     <KeyRound className="w-5 h-5 text-indigo-600 mb-2 group-hover:scale-110 transition-transform" />
-                    <div className="text-xs font-bold text-slate-900">Otorisasi Apoteker</div>
+                    <div className="text-xs font-bold text-slate-900">Otorisasi Quality Manager</div>
                     <div className="text-[11px] text-slate-500 mt-0.5">Tanda tangan digital QM</div>
                   </div>
 

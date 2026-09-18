@@ -88,6 +88,7 @@ export interface StockDeductionPayload {
 
 export interface StockOpnamePayload {
   materialCode: string;
+  materialName?: string;
   lotInternalNumber?: string;
   systemQuantity?: number;
   actualQuantity: number;

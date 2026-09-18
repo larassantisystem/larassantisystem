@@ -185,7 +185,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           label: '⚙️ 2. In-Process Control (IPC)',
           subItems: [
             { id: 'ipc-bulk', label: '2.1 Sediaan Ruahan (Bulk)', icon: <Sliders className="w-3.5 h-3.5 text-blue-600" /> },
-            { id: 'ipc-rework', label: '2.2 Uji Rework', icon: <FlaskConical className="w-3.5 h-3.5 text-orange-500" /> },
+            { id: 'ipc-finished', label: '2.2 Produk Jadi', icon: <Package className="w-3.5 h-3.5 text-indigo-600" /> },
+            { id: 'ipc-rework', label: '2.3 Rework / Reprocess', icon: <FlaskConical className="w-3.5 h-3.5 text-orange-500" /> },
           ]
         },
         {

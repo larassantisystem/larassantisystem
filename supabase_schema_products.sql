@@ -20,8 +20,13 @@ CREATE TABLE IF NOT EXISTS public.products (
     unit TEXT DEFAULT 'pcs (Pieces)',                   -- Satuan default
     storage_conditions TEXT,                            -- Kondisi penyimpanan
     bpom_notification_number TEXT,                      -- Nomor notifikasi BPOM
-    qc_parameters JSONB DEFAULT '[]'::jsonb             -- Parameter QC spesifikasi produk jadi
+    qc_parameters JSONB DEFAULT '[]'::jsonb,            -- Parameter QC sediaan ruahan (bulk)
+    finished_parameters JSONB DEFAULT '[]'::jsonb       -- Parameter QC produk jadi & kemasan
 );
+
+-- Skrip Tambahan jika tabel 'products' sudah ada sebelumnya:
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS qc_parameters JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS finished_parameters JSONB DEFAULT '[]'::jsonb;
 
 -- 2. Table: product_variants (Varian Ukuran & Kemasan)
 CREATE TABLE IF NOT EXISTS public.product_variants (

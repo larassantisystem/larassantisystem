@@ -29,6 +29,10 @@ export interface UserProfile {
   name: string;
   department: Department;
   role: Role;
+  position?: string;
+  job_title?: string;
+  jobTitle?: string;
+  jabatan?: string;
   email: string;
   avatarUrl?: string;
   lastLogin?: string;
@@ -166,7 +170,9 @@ export interface Product {
   bpomNotificationNumber?: string; // e.g. "NA18220100123"
   bpomNotificationExt?: string; // e.g. "2028-12-31 / Ext-01"
   expNotificationDate?: string; // DB column mapping for exp_notification_date
-  qcParameters?: QCParameter[];
+  qcParameters?: QCParameter[]; // Bulk specs
+  bulkQcParameters?: QCParameter[]; // Bulk specs alias
+  finishedQcParameters?: QCParameter[]; // Finished goods specs
   variants: ProductVariant[];
   createdAt?: string;
 }
