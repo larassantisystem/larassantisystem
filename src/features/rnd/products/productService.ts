@@ -181,7 +181,7 @@ export const productService = {
 
         const { data, error } = await supabase
           .from('products')
-          .select('*')
+          .select('id, product_code, name, brand, category, description, unit, storage_conditions, bpom_notification_number, exp_notification_date, created_at')
           .order('product_code', { ascending: true })
           .range(from, to);
 
@@ -275,6 +275,52 @@ export const productService = {
     } catch (err: any) {
       console.warn('[productService] Exception saat mengambil data products:', err?.message || err);
       return inMemoryProducts;
+    }
+  },
+
+  /**
+   * Mengambil spesifikasi parameter lengkap dari sebuah produk secara on-demand (lazy load)
+   */
+  getProductWithParams: async (productId: string): Promise<Product | null> => {
+    if (!isSupabaseConfigured || !supabase) {
+      const prod = inMemoryProducts.find(p => p.id === productId);
+      return prod || null;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('id, qc_parameters, finished_parameters')
+        .eq('id', productId)
+        .single();
+
+      if (error) {
+        console.warn(`[productService] Gagal mengambil parameter on-demand untuk ${productId}:`, error.message);
+        return null;
+      }
+
+      if (data) {
+        const cachedProd = inMemoryProducts.find(p => p.id === productId);
+        if (cachedProd) {
+          cachedProd.qcParameters = data.qc_parameters || [];
+          cachedProd.finishedQcParameters = data.finished_parameters || [];
+        }
+        return {
+          id: data.id,
+          code: cachedProd?.code || '',
+          name: cachedProd?.name || '',
+          brand: cachedProd?.brand || '',
+          category: cachedProd?.category || '',
+          description: cachedProd?.description || '',
+          qcParameters: data.qc_parameters || [],
+          finishedQcParameters: data.finished_parameters || [],
+          variants: cachedProd?.variants || []
+        };
+      }
+      return null;
+    } catch (err) {
+      console.warn(`[productService] Exception saat mengambil parameter on-demand:`, err);
+      return null;
     }
   },
 

@@ -919,7 +919,19 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
     setShowProductModal(true);
   };
 
-  const handleOpenEditProduct = (prod: Product) => {
+  const handleOpenDetailProduct = async (prod: Product) => {
+    setViewingProductDetail(prod);
+    try {
+      const fullParams = await productService.getProductWithParams(prod.id);
+      if (fullParams) {
+        setViewingProductDetail(prev => prev && prev.id === prod.id ? { ...prev, ...fullParams } : prev);
+      }
+    } catch (err) {
+      console.warn('[productService] Gagal memuat detail parameter QC:', err);
+    }
+  };
+
+  const handleOpenEditProduct = async (prod: Product) => {
     setEditingProduct(prod);
     setProdCode(prod.code);
     setProdName(prod.name);
@@ -957,6 +969,41 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
           ]
     );
     setShowProductModal(true);
+
+    // Ambil spesifikasi lengkap on-demand dari Supabase
+    try {
+      const fullParams = await productService.getProductWithParams(prod.id);
+      if (fullParams) {
+        setProdQcParams(
+          (fullParams.qcParameters || []).map((p, idx) => ({
+            id: p.id || `qc-${idx}`,
+            name: p.name || p.parameterName || '',
+            parameterName: p.parameterName || p.name || '',
+            specification: p.specification || p.acceptanceCondition || '',
+            acceptanceCondition: p.acceptanceCondition || p.specification || '',
+            unit: p.unit || ''
+          }))
+        );
+        setProdFinishedParams(
+          (fullParams.finishedQcParameters || []).length > 0
+            ? (fullParams.finishedQcParameters || []).map((p, idx) => ({
+                id: p.id || `fin-${idx}`,
+                name: p.name || p.parameterName || '',
+                parameterName: p.parameterName || p.name || '',
+                specification: p.specification || p.acceptanceCondition || '',
+                acceptanceCondition: p.acceptanceCondition || p.specification || '',
+                unit: p.unit || ''
+              }))
+            : [
+                { id: 'f1', name: 'Berat Netto / Isi Aktual', parameterName: 'Berat Netto / Isi Aktual', specification: '30 ± 0.5', acceptanceCondition: '30 ± 0.5', unit: 'gram' },
+                { id: 'f2', name: 'Uji Kebocoran Sealing', parameterName: 'Uji Kebocoran Sealing', specification: 'Tidak Bocor', acceptanceCondition: 'Tidak Bocor', unit: '' },
+                { id: 'f3', name: 'Torsi Tutup Botol', parameterName: 'Torsi Tutup Botol', specification: '12.0 - 18.0', acceptanceCondition: '12.0 - 18.0', unit: 'kg.cm' },
+              ]
+        );
+      }
+    } catch (err) {
+      console.warn('[productService] Gagal memuat parameter on-demand:', err);
+    }
   };
 
   const handleSaveProductForm = (e: React.FormEvent) => {
@@ -1350,7 +1397,7 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
                       <td className="py-1.5 px-3">
                         <button
                           type="button"
-                          onClick={() => setViewingProductDetail(prod)}
+                          onClick={() => handleOpenDetailProduct(prod)}
                           className="font-mono font-bold text-[11px] text-purple-700 bg-purple-50 hover:bg-purple-100 hover:border-purple-300 px-1.5 py-0.5 rounded border border-purple-200 inline-block transition-all cursor-pointer text-left"
                           title="Klik untuk melihat detail produk jadi"
                         >
@@ -1360,7 +1407,7 @@ CREATE POLICY "Allow insert update delete on product_variants" ON public.product
                       <td className="py-1.5 px-3">
                         <button
                           type="button"
-                          onClick={() => setViewingProductDetail(prod)}
+                          onClick={() => handleOpenDetailProduct(prod)}
                           className="font-extrabold text-slate-900 text-xs hover:text-purple-700 transition-colors text-left block cursor-pointer"
                           title="Klik untuk melihat detail produk jadi"
                         >

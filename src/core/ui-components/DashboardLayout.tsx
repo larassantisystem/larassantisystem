@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { canAccessModule } from '../auth/permissionGuard';
 import { Department } from '../../types';
+import { supabase, isSupabaseConfigured } from '../auth/supabaseClient';
 import {
   FlaskConical,
   CalendarDays,
@@ -100,6 +101,54 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       console.error('Error fetching notification counts:', e);
     }
   };
+
+  const [supabaseRestrictionMessage, setSupabaseRestrictionMessage] = useState<string | null>(null);
+  const [dbStatus, setDbStatus] = useState<'testing' | 'connected' | 'restricted' | 'fallback'>('testing');
+
+  useEffect(() => {
+    const checkConnection = async () => {
+      if (!isSupabaseConfigured || !supabase) {
+        setDbStatus('fallback');
+        return;
+      }
+      try {
+        const { data, error } = await supabase.from('products').select('id').limit(1);
+        if (error) {
+          if (
+            error.message.includes('egress') || 
+            error.message.includes('restricted') || 
+            error.message.includes('violation')
+          ) {
+            setDbStatus('restricted');
+            setSupabaseRestrictionMessage('Database Supabase Anda saat ini dibatasi (restricted) karena kuota egress terlampaui. Silakan ganti kredensial di menu Settings.');
+          } else {
+            setDbStatus('fallback');
+          }
+        } else {
+          setDbStatus('connected');
+        }
+      } catch (err) {
+        setDbStatus('fallback');
+      }
+    };
+
+    checkConnection();
+
+    const handleRestriction = (e: Event) => {
+      const msg = (e as CustomEvent).detail || 'Database Supabase Anda saat ini dibatasi (restricted) karena kuota bulanan gratis (egress) telah terlampaui.';
+      setSupabaseRestrictionMessage(msg);
+      setDbStatus('restricted');
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('supabase-restriction', handleRestriction);
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('supabase-restriction', handleRestriction);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     refreshNotificationCounts();
@@ -315,6 +364,44 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
         {/* User Info & Actions */}
         <div className="flex items-center gap-2.5">
+          {/* DB Connection Status Badge */}
+          <div className="flex items-center shrink-0">
+            {dbStatus === 'testing' && (
+              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 font-bold text-[9px] uppercase font-mono animate-pulse">
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                DB Test...
+              </span>
+            )}
+            {dbStatus === 'connected' && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 font-extrabold text-[9px] uppercase font-mono shadow-2xs" title="Koneksi Supabase aktif dan berjalan normal">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                </span>
+                DB Connected
+              </span>
+            )}
+            {dbStatus === 'restricted' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSupabaseRestrictionMessage('Database Supabase Anda saat ini dibatasi karena kuota egress terlampaui. Silakan ganti kredensial di menu Settings.');
+                }}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 font-extrabold text-[9px] uppercase font-mono shadow-2xs hover:bg-amber-100 transition-colors cursor-pointer"
+                title="Klik untuk detail pembatasan kuota egress Supabase"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                DB Restricted
+              </button>
+            )}
+            {dbStatus === 'fallback' && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-700 font-bold text-[9px] uppercase font-mono" title="Menggunakan database simulasi memori (Local Fallback)">
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
+                DB Fallback
+              </span>
+            )}
+          </div>
+
           {/* Universal QR Camera Scanner Button */}
           <button
             type="button"
@@ -435,6 +522,29 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
       {/* System-wide ROP Inventory Alert Banner */}
       <SystemInventoryBanner onNavigateTab={onSelectTab} />
+
+      {/* Supabase Restriction Warning Alert Banner */}
+      {supabaseRestrictionMessage && (
+        <div className="bg-amber-50 border-y border-amber-200 px-4 py-3 flex items-center justify-between gap-3 text-amber-900 shadow-xs">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="p-1 rounded-lg bg-amber-100 text-amber-700 shrink-0">
+              <Info className="w-4 h-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-xs font-extrabold tracking-wide text-amber-800 uppercase">Koneksi Database Terbatas (Egress Quota Exceeded)</p>
+              <p className="text-[11px] text-amber-700 leading-normal whitespace-normal">
+                {supabaseRestrictionMessage}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setSupabaseRestrictionMessage(null)}
+            className="text-xs font-bold text-amber-700 hover:text-amber-900 px-2.5 py-1.5 rounded-lg hover:bg-amber-100 transition-colors cursor-pointer whitespace-nowrap"
+          >
+            Sembunyikan
+          </button>
+        </div>
+      )}
 
       {/* Main App Layout Body */}
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden">

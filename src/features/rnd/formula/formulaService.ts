@@ -2,7 +2,57 @@ import { supabase, isSupabaseConfigured } from '../../../core/auth/supabaseClien
 import { BulkFormulation } from '../../../types';
 
 // Penyimpanan sesi in-memory (BUKAN local storage)
-let inMemoryFormulations: BulkFormulation[] = [];
+const defaultFormulations: BulkFormulation[] = [
+  {
+    id: 'f-default-1',
+    code: 'BOM-PJ0099-V1.0',
+    name: 'Larassanti Ginseng Hair Tonic',
+    productId: 'p-default-1',
+    productCode: 'PJ0099',
+    productName: 'Larassanti Hair Tonic Ginseng',
+    version: 'v1.0',
+    status: 'ACTIVE',
+    bulkQuantityKg: 100,
+    purposeDescription: 'Formula standar komersial hair tonic ginseng dengan ekstrak aktif untuk kekuatan akar rambut.',
+    ingredients: [
+      { rawMaterialCode: 'RM-AQUA', percentage: 75.0, qtyBasisKg: 75.0, phase: 'A', description: 'Pelarut utama / Carrier' },
+      { rawMaterialCode: 'RM-ALC', percentage: 15.0, qtyBasisKg: 15.0, phase: 'A', description: 'Pelarut tambahan / Solubilizer' },
+      { rawMaterialCode: 'RM-GINSENG', percentage: 5.0, qtyBasisKg: 5.0, phase: 'B', description: 'Bahan aktif utama penumbuh rambut' },
+      { rawMaterialCode: 'RM-PEG40', percentage: 3.0, qtyBasisKg: 3.0, phase: 'C', description: 'Emulsifier untuk pewangi' },
+      { rawMaterialCode: 'RM-FRAG', percentage: 1.0, qtyBasisKg: 1.0, phase: 'C', description: 'Pewangi herbal ginseng' },
+      { rawMaterialCode: 'RM-METHYL', percentage: 1.0, qtyBasisKg: 1.0, phase: 'D', description: 'Sistem pengawet produk cair' },
+    ],
+    mixingInstructions: '1. Larutkan pengawet dalam air hangat fase A.\n2. Tambahkan pelarut tambahan secara perlahan.\n3. Homogenkan fase B (Ginseng extract) ke dalam campuran utama.\n4. Campur fase C secara terpisah hingga bening, lalu masukkan ke bejana utama.\n5. Lakukan QC cek penampilan fisik, pH (5.5 - 6.5), dan viskositas.',
+    createdBy: 'Andi RnD',
+    createdAt: '2026-09-01T08:00:00Z',
+    updatedAt: '2026-09-01T08:00:00Z',
+  },
+  {
+    id: 'f-default-2',
+    code: 'BOM-PJ0100-V1.0',
+    name: 'Larassanti Aloe Vera Soothing Gel',
+    productId: 'p-default-2',
+    productCode: 'PJ0100',
+    productName: 'Larassanti Aloe Vera Soothing Gel',
+    version: 'v1.0',
+    status: 'ACTIVE',
+    bulkQuantityKg: 100,
+    purposeDescription: 'Formula gel penyejuk kulit wajah dan tubuh berbasis karbomer dengan kandungan aloe vera 98%.',
+    ingredients: [
+      { rawMaterialCode: 'RM-AQUA', percentage: 90.0, qtyBasisKg: 90.0, phase: 'A', description: 'Pelarut / Basis Gel' },
+      { rawMaterialCode: 'RM-CARBOMER', percentage: 1.5, qtyBasisKg: 1.5, phase: 'A', description: 'Gelling agent pembentuk viskositas' },
+      { rawMaterialCode: 'RM-TEA', percentage: 1.5, qtyBasisKg: 1.5, phase: 'B', description: 'Penetral pH untuk mengaktifkan gel' },
+      { rawMaterialCode: 'RM-ALOE', percentage: 5.0, qtyBasisKg: 5.0, phase: 'C', description: 'Ekstrak aktif lidah buaya' },
+      { rawMaterialCode: 'RM-PHENOXY', percentage: 1.0, qtyBasisKg: 1.0, phase: 'D', description: 'Sistem pengawet ramah kulit' },
+    ],
+    mixingInstructions: '1. Dispersikan karbomer dalam air fase A hingga mengembang sempurna (± 2 jam).\n2. Tambahkan TEA secara perlahan sambil dimixer cepat hingga terbentuk struktur gel bening yang tebal.\n3. Masukkan ekstrak Aloe Vera dan pengawet, aduk perlahan (low speed) agar tidak memerangkap udara (gelembung).\n4. Cek pH akhir (6.0 - 7.0) dan kejernihan gel.',
+    createdBy: 'Siti Formulator',
+    createdAt: '2026-09-05T09:30:00Z',
+    updatedAt: '2026-09-05T09:30:00Z',
+  }
+];
+
+let inMemoryFormulations: BulkFormulation[] = [...defaultFormulations];
 
 // Bersihkan data demo lama dari local storage jika masih tersisa di browser
 export const purgeLegacyDemoFormulas = () => {
@@ -66,6 +116,13 @@ export const formulaService = {
           return mapped;
         } else if (error) {
           console.error('[formulaService] Error loading bulk_formulations from Supabase:', error.message);
+          if (typeof window !== 'undefined' && (error.message.includes('egress') || error.message.includes('restricted'))) {
+            window.dispatchEvent(
+              new CustomEvent('supabase-restriction', {
+                detail: 'Database Supabase Anda saat ini dibatasi (restricted) karena kuota egress terlampaui. Untuk memulihkan layanan, silakan perbarui URL/Key di menu Settings AI Studio.'
+              })
+            );
+          }
         }
       } catch (err) {
         console.error('[formulaService] Exception loading from Supabase:', err);

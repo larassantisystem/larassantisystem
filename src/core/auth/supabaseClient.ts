@@ -39,7 +39,30 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
           let lastErr: any;
           for (let attempt = 0; attempt <= maxRetries; attempt++) {
             try {
-              return await fetch(url, options);
+              const res = await fetch(url, options);
+              if (!res.ok) {
+                const clone = res.clone();
+                try {
+                  const bodyText = await clone.text();
+                  if (
+                    bodyText.includes('exceed_egress_quota') ||
+                    bodyText.includes('restricted due to') ||
+                    bodyText.includes('spend caps') ||
+                    bodyText.includes('egress_quota')
+                  ) {
+                    if (typeof window !== 'undefined') {
+                      window.dispatchEvent(
+                        new CustomEvent('supabase-restriction', {
+                          detail: 'Service for this project is restricted due to exceeding the egress quota. The project owner must upgrade their plan or remove spend caps to restore service.'
+                        })
+                      );
+                    }
+                  }
+                } catch (cloneErr) {
+                  // ignore
+                }
+              }
+              return res;
             } catch (err: any) {
               lastErr = err;
               if (attempt < maxRetries) {
