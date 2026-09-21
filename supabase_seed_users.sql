@@ -62,6 +62,27 @@ BEGIN
       '',
       FALSE
     );
+
+    -- Insert ke tabel auth.identities agar dikenali oleh GoTrue
+    INSERT INTO auth.identities (
+      id,
+      user_id,
+      identity_data,
+      provider,
+      provider_id,
+      last_sign_in_at,
+      created_at,
+      updated_at
+    ) VALUES (
+      v_user_id,
+      v_user_id,
+      json_build_object('sub', v_user_id::text, 'email', p_email)::jsonb,
+      'email',
+      p_email,
+      NOW(),
+      NOW(),
+      NOW()
+    ) ON CONFLICT DO NOTHING;
     
     RAISE NOTICE 'User % (% / %) berhasil dibuat.', p_name, p_nik, p_email;
   ELSE
