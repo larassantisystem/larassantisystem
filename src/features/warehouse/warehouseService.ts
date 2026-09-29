@@ -9,6 +9,11 @@ const WAREHOUSE_GRN_STORAGE_KEY = 'lsm_warehouse_grn_v1';
 
 const defaultGrnRecords: GrnRecord[] = [];
 
+// In-memory runtime cache untuk efisiensi EGRESS (BUKAN local storage)
+let inMemoryGrnRecords: GrnRecord[] = [];
+let lastGrnFetchTime = 0;
+const GRN_CACHE_TTL_MS = 45 * 1000; // 45 detik cache di RAM
+
 const knownMissingColumns = new Set<string>();
 
 /**
@@ -330,14 +335,24 @@ export const warehouseService = {
     return [];
   },
 
-  getGrnRecords: async (): Promise<GrnRecord[]> => {
+  invalidateCache: () => {
+    lastGrnFetchTime = 0;
+  },
+
+  getGrnRecords: async (forceRefresh = false): Promise<GrnRecord[]> => {
+    const isCacheValid = !forceRefresh && inMemoryGrnRecords.length > 0 && (Date.now() - lastGrnFetchTime < GRN_CACHE_TTL_MS);
+    if (isCacheValid) {
+      return inMemoryGrnRecords;
+    }
+
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await withTimeout(
           supabase
             .from('warehouse_grn')
-            .select('*')
-            .order('created_at', { ascending: false }),
+            .select('id, grn_number, internal_lot_number, material_type, material_id, material_code, material_name, delivery_note_number, purchase_order_number, po_number, supplier_batch_number, batch_number, received_date, expiry_date, expiration_date, retest_date, quantity_received, unit, container_count, container_type, storage_location, storage_conditions, qc_status, qc_parameters_count, received_by, created_at, notes, seal_condition, packaging_condition, coa_attachment, manufacturer, distributor')
+            .order('created_at', { ascending: false })
+            .limit(300),
           5000
         );
 
@@ -355,22 +370,6 @@ export const warehouseService = {
             // Normalize internal lot number on the fly
             const unnormalizedLot = d.internal_lot_number || d.internalLotNumber || '';
             const normalizedLot = normalizeLotNumber(unnormalizedLot, d.received_date || d.receivedDate);
-            
-            // If the database has an unnormalized legacy lot number, correct it on the fly in Supabase!
-            if (unnormalizedLot && normalizedLot && normalizedLot !== unnormalizedLot) {
-              console.log(`[warehouseService] Correcting unnormalized lot number: ${unnormalizedLot} -> ${normalizedLot}`);
-              supabase
-                .from('warehouse_grn')
-                .update({ internal_lot_number: normalizedLot })
-                .eq('id', d.id)
-                .then(({ error: upErr }) => {
-                  if (upErr) {
-                    console.error(`[warehouseService] Failed to update lot number for ID ${d.id}:`, upErr);
-                  } else {
-                    console.log(`[warehouseService] Lot number successfully migrated to ${normalizedLot} in database.`);
-                  }
-                });
-            }
 
             const isOpnameGrn =
               (d.grn_number || '').startsWith('GRN-OPNAME-') ||
@@ -445,6 +444,8 @@ export const warehouseService = {
             });
           }
 
+          inMemoryGrnRecords = mapped;
+          lastGrnFetchTime = Date.now();
           return mapped;
         } else if (error) {
           console.warn('[warehouseService] Supabase GRN query warning:', error.message);
@@ -454,7 +455,7 @@ export const warehouseService = {
       }
     }
 
-    return [];
+    return inMemoryGrnRecords;
   },
 
   saveGrnRecord: async (
@@ -554,6 +555,10 @@ export const warehouseService = {
       window.dispatchEvent(new CustomEvent('warehouse_grn_updated', { detail: { id: newRecord.id, record: newRecord } }));
     }
 
+    // Perbarui in-memory cache secara langsung (0 byte tambahan egress)
+    inMemoryGrnRecords = [newRecord, ...inMemoryGrnRecords.filter((r) => r.id !== newRecord.id && r.grnNumber !== newRecord.grnNumber)];
+    lastGrnFetchTime = Date.now();
+
     return newRecord;
   },
 
@@ -640,6 +645,15 @@ export const warehouseService = {
       window.dispatchEvent(new CustomEvent('warehouse_grn_updated', { detail: { id, record: updatedRecord } }));
     }
 
+    // Perbarui in-memory cache secara langsung
+    const foundIdx = inMemoryGrnRecords.findIndex((r) => r.id === id || r.grnNumber === id || r.id === updatedRecord.id);
+    if (foundIdx >= 0) {
+      inMemoryGrnRecords[foundIdx] = updatedRecord;
+    } else {
+      inMemoryGrnRecords = [updatedRecord, ...inMemoryGrnRecords];
+    }
+    lastGrnFetchTime = Date.now();
+
     return updatedRecord;
   },
 
@@ -676,6 +690,11 @@ export const warehouseService = {
         console.warn('[warehouseService] Failed to delete from Supabase:', e);
       }
     }
+
+    // Update in-memory cache
+    inMemoryGrnRecords = inMemoryGrnRecords.filter((r) => r.id !== id && r.grnNumber !== id && (!target || r.id !== target.id));
+    lastGrnFetchTime = Date.now();
+
     return true;
   },
 

@@ -59,12 +59,23 @@ export const getNextIpcSequence = (batches: Array<{ id?: string; ipcNo?: string 
 };
 
 let inMemoryIpcBatches: IpcBulkTest[] = [];
+let lastIpcFetchTime = 0;
+const IPC_CACHE_TTL_MS = 45 * 1000; // 45 detik cache di RAM
 
 export const ipcBulkService = {
+  invalidateCache: () => {
+    lastIpcFetchTime = 0;
+  },
+
   /**
-   * Get all IPC Bulk Batches from Supabase (with fast memory fallback)
+   * Get all IPC Bulk Batches from Supabase (with fast memory fallback & egress cache)
    */
-  getBatches: async (): Promise<IpcBulkTest[]> => {
+  getBatches: async (forceRefresh = false): Promise<IpcBulkTest[]> => {
+    const isCacheValid = !forceRefresh && inMemoryIpcBatches.length > 0 && (Date.now() - lastIpcFetchTime < IPC_CACHE_TTL_MS);
+    if (isCacheValid) {
+      return [...inMemoryIpcBatches];
+    }
+
     if (!isSupabaseConfigured || !supabase) {
       return [...inMemoryIpcBatches];
     }
@@ -72,8 +83,9 @@ export const ipcBulkService = {
     try {
       const { data, error } = await supabase
         .from('ipc_bulk_batches')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .select('id, batch_no, product_code, product_name, mixing_date, mixing_qty_kg, ph, viscosity, appearance, gravity, status, analyst, notes, created_at, updated_at')
+        .order('created_at', { ascending: false })
+        .limit(300);
 
       if (error) {
         console.warn('[ipcBulkService] Error fetching from Supabase table ipc_bulk_batches, using active memory cache:', error.message);
@@ -105,6 +117,7 @@ export const ipcBulkService = {
           };
         });
         inMemoryIpcBatches = mapped;
+        lastIpcFetchTime = Date.now();
         return mapped;
       }
     } catch (err) {

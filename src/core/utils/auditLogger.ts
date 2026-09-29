@@ -51,4 +51,17 @@ export const auditLogger = {
     console.log(`[AuditTrail] ${newEntry.action} by ${newEntry.actorName} (${newEntry.actorNik}): ${newEntry.details}`);
     return newEntry;
   },
+
+  log: (entry: any): AuditLogEntry => {
+    const actorNik = entry.actorNik || entry.actor?.nik || entry.actor?.id || 'admin';
+    const actorName = entry.actorName || entry.actor?.name || entry.actor?.username || 'User';
+    return auditLogger.logAction({
+      actorNik,
+      actorName,
+      module: entry.module || 'RND',
+      action: entry.action || 'UPDATE',
+      targetNik: entry.targetNik || 'ALL',
+      details: entry.details || '',
+    });
+  },
 };

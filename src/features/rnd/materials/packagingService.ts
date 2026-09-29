@@ -2,8 +2,10 @@ import { supabase, isSupabaseConfigured } from '../../../core/auth/supabaseClien
 import { PackagingMaterial } from '../../../types';
 import { ensureUUID } from '../../../utils/uuid';
 
-// In-memory cache untuk performa UI (BUKAN local storage)
+// In-memory cache untuk performa UI & efisiensi EGRESS Supabase (BUKAN local storage)
 let inMemoryPackaging: PackagingMaterial[] = [];
+let lastFetchTime = 0;
+const CACHE_TTL_MS = 60 * 1000; // 60 detik cache di RAM browser
 
 // Bersihkan data lama jika ada di browser
 if (typeof window !== 'undefined' && window.localStorage) {
@@ -15,6 +17,10 @@ if (typeof window !== 'undefined' && window.localStorage) {
 }
 
 export const packagingService = {
+  invalidateCache: () => {
+    lastFetchTime = 0;
+  },
+
   checkConnection: async (): Promise<{ configured: boolean; connected: boolean; message: string }> => {
     if (!isSupabaseConfigured || !supabase) {
       return {
@@ -50,61 +56,22 @@ export const packagingService = {
     return inMemoryPackaging;
   },
 
-  getPackagingMaterials: async (): Promise<PackagingMaterial[]> => {
+  getPackagingMaterials: async (forceRefresh = false): Promise<PackagingMaterial[]> => {
+    const isCacheValid = !forceRefresh && inMemoryPackaging.length > 0 && (Date.now() - lastFetchTime < CACHE_TTL_MS);
+    if (isCacheValid) {
+      return inMemoryPackaging;
+    }
+
     if (isSupabaseConfigured && supabase) {
       try {
-        let allData: any[] = [];
-        let from = 0;
-        const step = 1000;
-        let hasMore = true;
-        let fetchError = false;
+        const { data, error } = await supabase
+          .from('packaging_materials')
+          .select('id, code, spec_number, name, type, unit, unit_capacity_grams, supplier, manufacturer, storage_location, storage_conditions, qc_parameters, reorder_point, last_modified_by, last_modified_at')
+          .order('code', { ascending: true })
+          .limit(1000);
 
-        // Fetch in batches of 1000 to bypass Supabase PostgREST default max-rows limit (1000 items)
-        while (hasMore) {
-          let batchSuccess = false;
-          let batchError: any = null;
-
-          for (let attempt = 0; attempt < 3; attempt++) {
-            try {
-              const { data, error } = await supabase
-                .from('packaging_materials')
-                .select('*')
-                .order('code', { ascending: true })
-                .range(from, from + step - 1);
-
-              if (error) {
-                batchError = error;
-                await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
-                continue;
-              }
-
-              if (data && data.length > 0) {
-                allData = allData.concat(data);
-                if (data.length < step) {
-                  hasMore = false;
-                } else {
-                  from += step;
-                }
-              } else {
-                hasMore = false;
-              }
-              batchSuccess = true;
-              break;
-            } catch (netErr) {
-              batchError = netErr;
-              await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
-            }
-          }
-
-          if (!batchSuccess) {
-            console.warn('[Supabase Audit] Warning fetching packaging_materials batch:', batchError?.message || batchError);
-            fetchError = true;
-            break;
-          }
-        }
-
-        if (!fetchError && (allData.length > 0 || from === 0)) {
-          const mapped: PackagingMaterial[] = allData.map((p: any) => ({
+        if (!error && data) {
+          const mapped: PackagingMaterial[] = data.map((p: any) => ({
             id: p.id,
             code: p.code,
             specNumber: p.spec_number || p.specNumber || `SP-BK-${p.code}`,
@@ -122,7 +89,10 @@ export const packagingService = {
             lastModifiedAt: p.last_modified_at || p.lastModifiedAt,
           }));
           inMemoryPackaging = mapped;
+          lastFetchTime = Date.now();
           return mapped;
+        } else if (error) {
+          console.warn('[Supabase Audit] Error fetching packaging_materials:', error.message);
         }
       } catch (err) {
         console.error('[Supabase Audit] Supabase packaging materials fetch exception:', err);

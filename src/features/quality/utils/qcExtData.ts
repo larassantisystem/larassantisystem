@@ -21,12 +21,14 @@ export interface IpcBulkTest {
     signerNik?: string;
     signerPosition?: string;
     signedAt?: string;
+    signatureHash?: string;
   };
   qmSignature?: {
     signerName: string;
     signerNik?: string;
     signerPosition?: string;
     signedAt?: string;
+    signatureHash?: string;
   };
   labParameters?: Array<{
     id: string;
@@ -58,12 +60,14 @@ export interface IpcFinishedTest {
     signerNik?: string;
     signerPosition?: string;
     signedAt?: string;
+    signatureHash?: string;
   };
   qmSignature?: {
     signerName: string;
     signerNik?: string;
     signerPosition?: string;
     signedAt?: string;
+    signatureHash?: string;
   };
   labParameters?: Array<{
     id: string;

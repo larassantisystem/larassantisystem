@@ -38,7 +38,29 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
   });
 
   const handlePrint = () => {
+    const styleEl = document.createElement('style');
+    styleEl.id = 'thermal-label-print-style';
+    styleEl.innerHTML = `
+      @page {
+        size: 100mm 100mm !important;
+        margin: 0 !important;
+      }
+      @media print {
+        html, body {
+          width: 100mm !important;
+          height: 100mm !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          background: transparent !important;
+        }
+      }
+    `;
+    document.head.appendChild(styleEl);
     window.print();
+    setTimeout(() => {
+      const el = document.getElementById('thermal-label-print-style');
+      if (el) el.remove();
+    }, 1500);
   };
 
   const containerList =
@@ -48,7 +70,7 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto bg-slate-900/70 backdrop-blur-xs">
-      <div className="bg-white w-full max-w-3xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[96vh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
+      <div className="bg-white w-full max-w-4xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[96vh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
         {/* Modal Header */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
           <div className="flex items-center gap-3">
@@ -58,14 +80,14 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-black text-slate-900">
-                  Cetak Label Karantina CPKB
+                  Cetak Label Karantina CPKB (Thermal 100×100 mm)
                 </h2>
                 <span className="px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold">
                   Status: Karantina Masuk
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                Label fisik wajib ditempelkan pada setiap wadah/koli sebelum disampling oleh tim QC.
+                Format presisi untuk Printer Thermal Roll Label 100×100 mm (Tinta Hitam Monokrom).
               </p>
             </div>
           </div>
@@ -78,15 +100,28 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
           </button>
         </div>
 
+        {/* Paper Roll Indicator Banner */}
+        <div className="bg-amber-100 border-b border-amber-300 px-6 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs text-amber-950 shrink-0">
+          <div className="flex items-center gap-2 font-medium">
+            <span className="w-3.5 h-3.5 rounded-full bg-amber-400 border border-amber-600 inline-block shadow-xs shrink-0" />
+            <span>
+              <strong>Kertas Label Thermal:</strong> Gunakan <strong>Roll KUNING (Yellow Paper)</strong> • Ukuran <strong>100 × 100 mm</strong>
+            </span>
+          </div>
+          <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-md bg-amber-200/90 border border-amber-400 text-amber-950">
+            Tinta Cetak: Hitam Pekat (Monochrome Thermal)
+          </span>
+        </div>
+
         {/* Toolbar & Options */}
         <div className="px-6 py-3 bg-slate-50 border-b border-slate-200/80 flex flex-wrap items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-2 text-xs">
-            <span className="font-bold text-slate-700">Mode Cetak Label:</span>
+            <span className="font-bold text-slate-700">Mode Wadah:</span>
             <div className="inline-flex bg-white rounded-xl border border-slate-200 p-1 shadow-2xs">
               <button
                 type="button"
                 onClick={() => setContainerRange('single')}
-                className={`px-3 py-1 rounded-lg font-semibold transition-all ${
+                className={`px-3 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
                   containerRange === 'single'
                     ? 'bg-amber-500 text-white shadow-2xs'
                     : 'text-slate-600 hover:text-slate-900'
@@ -97,7 +132,7 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
               <button
                 type="button"
                 onClick={() => setContainerRange('all')}
-                className={`px-3 py-1 rounded-lg font-semibold transition-all ${
+                className={`px-3 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
                   containerRange === 'all'
                     ? 'bg-amber-500 text-white shadow-2xs'
                     : 'text-slate-600 hover:text-slate-900'
@@ -131,177 +166,175 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
               className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md shadow-amber-500/20 transition-all cursor-pointer"
             >
               <Printer className="w-4 h-4" />
-              <span>Cetak Sekarang (Print)</span>
+              <span>Cetak Thermal ({containerList.length} Label 100×100)</span>
             </button>
           </div>
         </div>
 
         {/* Modal Body / Label Preview */}
-        <div className="p-6 overflow-y-auto bg-slate-100/70 space-y-6 flex-1">
+        <div className="p-6 overflow-y-auto bg-slate-200/70 space-y-6 flex-1 flex flex-col items-center">
+          <div className="text-xs text-slate-600 font-medium">
+            Pratinjau fisik label stiker roll kuning (Skala 100mm × 100mm):
+          </div>
+
           {/* Printable Container Target for Window Print */}
-          <div id="quarantine-label-printable" className="space-y-6">
+          <div id="quarantine-label-printable" className="space-y-6 w-full flex flex-col items-center">
             {containerList.map((containerIndex) => (
               <div
                 key={containerIndex}
-                className="bg-white rounded-2xl border-4 border-amber-400 p-5 shadow-md max-w-xl mx-auto break-inside-avoid print:shadow-none print:max-w-none print:border-4 print:border-amber-400 print:my-4 print:p-6"
+                className="thermal-label-page w-[100mm] h-[100mm] min-w-[100mm] min-h-[100mm] max-w-[100mm] max-h-[100mm] bg-[#FEF08A] text-black border-2 border-black rounded-lg p-[3mm] shadow-lg flex flex-col justify-between overflow-hidden select-none print:shadow-none print:rounded-none print:border print:border-black print:bg-transparent"
+                style={{ boxSizing: 'border-box' }}
               >
-                {/* Header CPKB */}
-                <div className="border-b-2 border-amber-300 pb-3 mb-3 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="p-1 bg-white rounded-xl border border-amber-200 shrink-0 shadow-2xs flex items-center justify-center">
-                      <img
-                        src="/logo.png"
-                        alt="Logo Larassanti"
-                        className="h-10 w-auto max-w-[90px] object-contain"
-                        referrerPolicy="no-referrer"
-                      />
-                    </div>
+                {/* 1. Header CPKB (Perusahaan & Kode Form) */}
+                <div className="flex items-center justify-between border-b-2 border-black pb-1">
+                  <div className="flex items-center gap-2">
+                    <img
+                      src="/logo.png"
+                      alt="Logo PT. Larassanti Makmur Sejahtera"
+                      className="h-7 w-auto max-w-[42px] object-contain filter brightness-0 shrink-0 select-none print:brightness-0"
+                      referrerPolicy="no-referrer"
+                    />
                     <div>
-                      <h1 className="font-black text-slate-900 text-sm tracking-tight leading-none">
+                      <h1 className="font-black text-[11px] tracking-tight uppercase leading-none text-black">
                         PT. LARASSANTI MAKMUR SEJAHTERA
                       </h1>
-                      <p className="text-[10px] font-bold text-slate-500 mt-1 uppercase tracking-wider">
+                      <p className="text-[8px] font-bold tracking-wider uppercase text-black/85 mt-0.5 leading-tight">
                         SISTEM PENANDAAN KARANTINA BAHAN MASUK (CPKB)
                       </p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <span className="font-mono text-xs font-bold text-slate-700 block">L-DQC-002-01</span>
+                    <span className="font-mono text-[8.5px] font-bold border border-black px-1.5 py-0.5 rounded-xs">
+                      L-DQC-002-01
+                    </span>
                   </div>
                 </div>
 
-                {/* BIG WARNING BANNER */}
-                <div className="bg-amber-400 text-slate-950 py-2.5 px-4 rounded-xl text-center font-black tracking-wider uppercase mb-4 shadow-xs">
-                  <div className="flex items-center justify-center gap-2 text-sm sm:text-base">
-                    <AlertTriangle className="w-5 h-5 shrink-0 fill-current" />
+                {/* 2. Status Banner (Inverted High-Contrast Black Bar) */}
+                <div className="bg-black text-white px-2.5 py-1 rounded-xs flex items-center justify-between my-1">
+                  <span className="font-black text-[10px] tracking-wider uppercase flex items-center gap-1.5">
+                    <span>⚠</span>
                     <span>STATUS: KARANTINA (QUARANTINE)</span>
-                  </div>
-                  <p className="text-[10px] font-bold tracking-normal text-slate-900 mt-0.5 opacity-90 normal-case">
-                    * DILARANG DIGUNAKAN / DIOLAH SEBELUM DILULUSKAN OLEH QC *
-                  </p>
+                  </span>
+                  <span className="text-[7.5px] font-bold tracking-normal italic">
+                    * DILARANG DIGUNAKAN / DIOLAH SEBELUM DILULUSKAN QC *
+                  </span>
                 </div>
 
-                {/* Primary Data Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs text-slate-800">
-                  <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase block">No. GRN</span>
-                    <span className="font-mono font-black text-slate-950 text-xs block mt-0.5">
-                      {record.grnNumber}
-                    </span>
+                {/* 3. Material Identity Box */}
+                <div className="border border-black/40 rounded-xs p-1.5 bg-white/30">
+                  <div className="font-black text-[12px] leading-tight uppercase text-black line-clamp-1">
+                    {record.materialName}
                   </div>
-
-                  <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase block">Tgl Kedatangan</span>
-                    <span className="font-bold text-slate-900 block mt-0.5">
-                      {record.receivedDate}
+                  <div className="flex items-center gap-1.5 text-[8.5px] font-bold text-black/90 mt-1">
+                    <span className="font-mono bg-black text-white px-1.5 py-0.2 rounded-xs">
+                      {record.materialCode}
                     </span>
-                  </div>
-
-                  <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200">
-                    <span className="text-[10px] font-extrabold text-amber-800 uppercase block">Nomor Koli / Wadah</span>
-                    <span className="font-black text-amber-950 text-xs block mt-0.5">
-                      Wadah ke <span className="underline decoration-2">{containerIndex}</span> dari {totalContainers}
+                    <span className="border border-black/60 px-1 py-0.2 rounded-xs">
+                      {record.materialType === 'raw' ? 'Bahan Baku' : 'Bahan Kemas'}
                     </span>
-                  </div>
-
-                  <div className="col-span-2 sm:col-span-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-extrabold text-slate-400 uppercase">
-                        {record.materialType === 'raw' ? 'Bahan Baku (Raw Material)' : 'Bahan Kemas (Packaging)'}
-                      </span>
-                      <span className="font-mono font-black text-xs px-2 py-0.5 rounded bg-slate-200 text-slate-800">
-                        {record.materialCode}
-                      </span>
-                    </div>
-                    <span className="font-black text-slate-900 text-sm block mt-1">
-                      {record.materialName}
-                    </span>
-                  </div>
-
-                  <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase block">No. Batch / Lot Produsen</span>
-                    <span className="font-mono font-bold text-slate-900 block mt-0.5 truncate">
-                      {record.batchNumber || '-'}
-                    </span>
-                  </div>
-
-                  <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase block">Tgl Kedaluwarsa</span>
-                    <span className={`font-bold block mt-0.5 ${record.expiryDate ? 'text-rose-700' : 'text-slate-500'}`}>
-                      {record.expiryDate || 'Non-Exp (Bahan Kemas)'}
-                    </span>
-                  </div>
-
-                  <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase block">Total Kuantitas</span>
-                    <span className="font-mono font-black text-slate-950 text-xs block mt-0.5">
-                      {formattedQty} {record.unit}
-                    </span>
-                  </div>
-
-                  <div className="col-span-2 sm:col-span-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase block">Produsen / Supplier</span>
-                    <span className="font-medium text-slate-900 block mt-0.5 truncate text-[11px]">
-                      {record.manufacturer} <span className="text-slate-400 font-normal">({record.distributor})</span>
-                    </span>
-                  </div>
-
-                  <div className="col-span-2 sm:col-span-1 p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase block">Jenis Kemasan</span>
-                    <span className="font-medium text-slate-800 block mt-0.5 truncate text-[11px]">
-                      {record.containerType}
-                    </span>
-                  </div>
-
-                  <div className="col-span-2 sm:col-span-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px]">
-                    <span className="text-[10px] font-extrabold text-slate-500 uppercase block">Kondisi Simpan:</span>
-                    <span className="font-bold text-slate-800">
-                      {record.storageConditions || 'Suhu Ruang Terkendali (15-30°C), Kering & Terlindung Cahaya'}
+                    <span className="truncate max-w-[140px] text-black/80">
+                      Produsen: {record.manufacturer}
                     </span>
                   </div>
                 </div>
 
-                {/* Footer Signatures & Large Scannable QR Code */}
-                <div className="mt-4 pt-3 border-t-2 border-dashed border-amber-300 flex flex-col sm:flex-row gap-4 items-center justify-between">
-                  <div className="flex-1 w-full grid grid-cols-2 gap-3">
-                    <div className="border border-slate-200 rounded-xl p-2.5 text-center bg-slate-50">
-                      <span className="text-[9px] font-extrabold text-slate-400 uppercase block">Petugas Penerima Gudang</span>
-                      <div className="h-10 flex items-center justify-center font-serif text-slate-700 font-bold italic text-xs">
-                        {record.receivedBy || 'Staf Gudang'}
+                {/* 4. Middle Section: Specs Grid (Left) + Large QR Code (Right) */}
+                <div className="flex items-stretch gap-2 my-1 flex-1 min-h-0">
+                  {/* Left Column: Data Grid */}
+                  <div className="flex-1 flex flex-col justify-between text-[8px]">
+                    <div className="space-y-1">
+                      <div className="flex justify-between border-b border-black/20 pb-0.5">
+                        <span className="font-bold text-black/70">No. GRN:</span>
+                        <span className="font-mono font-black text-[9px] text-black">{record.grnNumber}</span>
                       </div>
-                      <span className="text-[9px] text-slate-400 block border-t border-slate-200 pt-1">
-                        Paraf & Tanggal Terima
-                      </span>
+                      <div className="flex justify-between border-b border-black/20 pb-0.5">
+                        <span className="font-bold text-black/70">Tgl Kedatangan:</span>
+                        <span className="font-bold text-black">{record.receivedDate}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-black/20 pb-0.5">
+                        <span className="font-bold text-black/70">Batch / Lot Vendor:</span>
+                        <span className="font-mono font-bold text-black truncate max-w-[110px]">{record.batchNumber || '-'}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-black/20 pb-0.5">
+                        <span className="font-bold text-black/70">Tgl Kedaluwarsa:</span>
+                        <span className="font-bold text-black">{record.expiryDate || 'Non-Exp (Bahan Kemas)'}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-black/20 pb-0.5">
+                        <span className="font-bold text-black/70">Total Kuantitas:</span>
+                        <span className="font-mono font-black text-[9.5px] text-black">{formattedQty} {record.unit}</span>
+                      </div>
                     </div>
 
-                    <div className="border border-slate-200 rounded-xl p-2.5 text-center bg-slate-50">
-                      <span className="text-[9px] font-extrabold text-slate-400 uppercase block">Pengambilan Contoh (QC)</span>
-                      <div className="h-10 flex items-center justify-center font-sans text-amber-700 font-bold text-[10px]">
-                        [ Menunggu Sampling ]
-                      </div>
-                      <span className="text-[9px] text-slate-400 block border-t border-slate-200 pt-1">
-                        Paraf & Tanggal Sampling
-                      </span>
-                    </div>
-
-                    <div className="col-span-2 text-[10px] text-slate-500 bg-amber-50/60 border border-amber-200/80 rounded-lg p-2 flex items-center gap-2">
-                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                      <span>Scan QR Code di samping menggunakan HP/Scanner untuk konfirmasi pengambilan contoh (Sampling CPKB).</span>
+                    <div className="text-[7.5px] text-black/80 pt-0.5">
+                      <span className="font-bold">Simpan: </span>
+                      <span>{record.storageConditions || '15-30°C Ruang Terkendali, Kering & Terlindung Cahaya'}</span>
                     </div>
                   </div>
 
-                  {/* High-visibility large QR Code for fast mobile camera scanning */}
-                  <div className="shrink-0 flex flex-col items-center justify-center p-2.5 bg-white border-2 border-amber-400 rounded-2xl shadow-xs">
-                    <QrCodeBadge
-                      value={`GRN|NO:${record.grnNumber}|W:${containerIndex}/${totalContainers}|CODE:${record.materialCode}|BATCH:${record.batchNumber || '-'}`}
-                      size={110}
-                      className="rounded-lg"
-                    />
-                    <span className="font-mono text-[10px] text-slate-900 mt-1.5 font-black tracking-tight">
+                  {/* Right Column: High-Visibility Large QR Code */}
+                  <div className="w-[32mm] shrink-0 border-l border-black/40 pl-2 flex flex-col items-center justify-center">
+                    <div className="p-1 bg-white border border-black rounded-xs">
+                      <QrCodeBadge
+                        value={`GRN|NO:${record.grnNumber}|W:${containerIndex}/${totalContainers}|CODE:${record.materialCode}|BATCH:${record.batchNumber || '-'}`}
+                        size={92}
+                        className="rounded-none"
+                      />
+                    </div>
+                    <span className="font-mono text-[8px] font-black tracking-tight text-center mt-1 block leading-none text-black">
                       {record.grnNumber}-W{containerIndex}
                     </span>
-                    <span className="text-[8px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded-sm mt-0.5 uppercase tracking-wider">
-                      Wadah #{containerIndex} / {totalContainers}
+                    <span className="text-[7px] font-bold uppercase tracking-wider text-center block mt-0.5 text-black/80 leading-none">
+                      SCAN UNTUK SAMPLING
+                    </span>
+                  </div>
+                </div>
+
+                {/* 5. Koli / Wadah Highlight Bar */}
+                <div className="bg-black text-white px-2.5 py-1 rounded-xs flex items-center justify-between mb-1">
+                  <span className="font-black text-[9.5px] tracking-wider uppercase">
+                    WADAH KE [ {containerIndex} ] DARI {totalContainers} WADAH/KOLI
+                  </span>
+                  <span className="font-mono font-bold text-[9px]">
+                    KEMASAN: {record.containerType}
+                  </span>
+                </div>
+
+                {/* 6. Footer Signatures Row */}
+                <div className="border-t-2 border-black pt-1 grid grid-cols-3 gap-1.5 text-center">
+                  <div className="border border-black/60 rounded-xs py-1 px-1 bg-white/40">
+                    <span className="block text-[7px] text-black/70 font-bold uppercase leading-none">
+                      Penerima Gudang
+                    </span>
+                    <span className="font-serif italic font-bold text-[9px] truncate block leading-tight text-black mt-1">
+                      {record.receivedBy || 'Staf Gudang'}
+                    </span>
+                    <span className="block text-[6.5px] text-black/60 border-t border-black/20 pt-0.5 mt-0.5">
+                      Paraf & Tanggal Terima
+                    </span>
+                  </div>
+
+                  <div className="border border-black/60 rounded-xs py-1 px-1 bg-white/40">
+                    <span className="block text-[7px] text-black/70 font-bold uppercase leading-none">
+                      Pengambilan Contoh (QC)
+                    </span>
+                    <span className="font-bold text-[8.5px] block leading-tight text-black mt-1">
+                      [ Menunggu Sampling ]
+                    </span>
+                    <span className="block text-[6.5px] text-black/60 border-t border-black/20 pt-0.5 mt-0.5">
+                      Paraf & Tanggal Uji
+                    </span>
+                  </div>
+
+                  <div className="border border-black/60 rounded-xs py-1 px-1 bg-white/40 flex flex-col justify-between">
+                    <span className="block text-[7px] text-black/70 font-bold uppercase leading-none">
+                      Verifikasi Fisik
+                    </span>
+                    <span className="font-bold text-[8px] truncate block leading-tight text-black mt-1">
+                      Segel Utuh & Bersih
+                    </span>
+                    <span className="block text-[6.5px] text-black/60 border-t border-black/20 pt-0.5 mt-0.5">
+                      Sesuai Prosedur CPKB
                     </span>
                   </div>
                 </div>
@@ -312,8 +345,8 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
 
         {/* Modal Footer */}
         <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between bg-white shrink-0">
-          <p className="text-xs text-slate-400">
-            *Setelah label dicetak dan ditempelkan pada fisik wadah, barang siap diinspeksi & disampling oleh QC.
+          <p className="text-xs text-slate-500">
+            *Tempelkan stiker kuning 100×100 mm ini pada setiap koli/wadah saat barang tiba di area karantina gudang.
           </p>
 
           <div className="flex items-center gap-2.5">
@@ -328,7 +361,7 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
               className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md shadow-amber-500/20 transition-all cursor-pointer"
             >
               <Printer className="w-4 h-4" />
-              <span>Cetak Label ({containerList.length} Lembar)</span>
+              <span>Cetak Thermal ({containerList.length} Label 100×100)</span>
             </button>
           </div>
         </div>

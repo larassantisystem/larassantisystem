@@ -437,23 +437,47 @@ export const GrnTable: React.FC<GrnTableProps> = ({
                           </button>
 
                           {/* Edit Data Penerimaan */}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditRecordToUpdate(rec);
-                            }}
-                            className={`${isCompactMode ? 'p-1' : 'p-1.5'} rounded-lg text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-colors cursor-pointer`}
-                            title={
-                              rec.qcStatus === 'PASSED' || rec.qcStatus === 'RELEASED' || rec.qcStatus === 'REJECTED'
-                                ? 'Lihat Data Penerimaan (Terkunci CPKB)'
-                                : isReverted
-                                ? 'Koreksi Data Penerimaan yang Dikembalikan QC'
-                                : 'Edit Data Penerimaan Barang'
-                            }
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
+                          {(() => {
+                            const isEditable = rec.qcStatus === 'QUARANTINE' || isReverted;
+                            const isUnderTesting = rec.qcStatus === 'QUALITY_CONTROL_PROCESS';
+                            const isAwaitingQm = rec.qcStatus === 'AWAITING_QM_AUTHORIZATION';
+                            
+                            return (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditRecordToUpdate(rec);
+                                }}
+                                className={`${isCompactMode ? 'p-1' : 'p-1.5'} rounded-lg transition-colors cursor-pointer ${
+                                  isEditable
+                                    ? 'text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200'
+                                    : isUnderTesting
+                                    ? 'text-blue-700 bg-blue-50/70 hover:bg-blue-100 border border-blue-200'
+                                    : isAwaitingQm
+                                    ? 'text-purple-700 bg-purple-50/70 hover:bg-purple-100 border border-purple-200'
+                                    : 'text-slate-500 bg-slate-100 hover:bg-slate-200 border border-slate-200'
+                                }`}
+                                title={
+                                  isUnderTesting
+                                    ? 'Lihat Data Penerimaan (Terkunci CPKB: Sedang Diuji QC Lab)'
+                                    : isAwaitingQm
+                                    ? 'Lihat Data Penerimaan (Terkunci CPKB: Menunggu Otorisasi QM)'
+                                    : rec.qcStatus === 'PASSED' || rec.qcStatus === 'RELEASED' || rec.qcStatus === 'PASSED_WITH_DEVIATION' || rec.qcStatus === 'REJECTED'
+                                    ? 'Lihat Data Penerimaan (Terkunci CPKB: Selesai Otorisasi Mutu)'
+                                    : isReverted
+                                    ? 'Koreksi Data Penerimaan yang Dikembalikan QC'
+                                    : 'Edit Data Penerimaan Barang'
+                                }
+                              >
+                                {isEditable ? (
+                                  <Pencil className="w-3.5 h-3.5" />
+                                ) : (
+                                  <Lock className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            );
+                          })()}
 
                           {/* Detail View */}
                           <button

@@ -2,23 +2,26 @@ import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 
 interface QrCodeBadgeProps {
-  value: string;
+  value?: string;
+  url?: string;
   size?: number;
   className?: string;
 }
 
 export const QrCodeBadge: React.FC<QrCodeBadgeProps> = ({
   value,
+  url,
   size = 64,
   className = '',
 }) => {
   const [dataUrl, setDataUrl] = useState<string>('');
+  const qrText = value || url || '';
 
   useEffect(() => {
     let isMounted = true;
-    if (!value) return;
+    if (!qrText) return;
 
-    QRCode.toDataURL(value, {
+    QRCode.toDataURL(qrText, {
       width: Math.max(size * 4, 360), // Ultra-sharp resolution for printing & camera scanning
       margin: 2, // Standard quiet zone recommended for camera decoders
       color: {
@@ -39,7 +42,7 @@ export const QrCodeBadge: React.FC<QrCodeBadgeProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [value, size]);
+  }, [qrText, size]);
 
   if (!dataUrl) {
     return (
@@ -53,7 +56,7 @@ export const QrCodeBadge: React.FC<QrCodeBadgeProps> = ({
   return (
     <img
       src={dataUrl}
-      alt={`QR Code: ${value}`}
+      alt={`QR Code: ${qrText}`}
       width={size}
       height={size}
       className={`shrink-0 rounded-md object-contain bg-white border border-slate-200 shadow-2xs ${className}`}

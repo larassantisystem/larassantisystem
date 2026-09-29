@@ -48,51 +48,58 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
   const isDeviation = report.status === 'PASSED_WITH_DEVIATION';
   const isRejected = report.status === 'REJECTED';
 
-  // Dynamic Theme Config based on QC Status
-  const theme = isPassed
+  // Dynamic Theme Config based on QC Status & Thermal Roll Color
+  const isReleasedState = isPassed || isDeviation;
+  const theme = isReleasedState
     ? {
-        borderOuter: 'border-emerald-500',
-        bgBanner: 'bg-emerald-500',
-        textBanner: 'text-white',
-        borderAccent: 'border-emerald-300',
-        badgeBg: 'bg-emerald-50 text-emerald-800 border-emerald-200',
-        containerBg: 'bg-emerald-50 border-emerald-200 text-emerald-900',
+        paperColor: 'HIJAU (Green Paper)',
+        paperBadge: 'bg-emerald-100 border-emerald-400 text-emerald-950',
+        paperDot: 'bg-emerald-500 border-emerald-700',
+        screenBg: 'bg-[#BBF7D0]',
+        bgBanner: 'bg-emerald-600',
         btnBg: 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20',
-        icon: <CheckCircle2 className="w-5 h-5 shrink-0" />,
-        title: 'STATUS: DILULUSKAN (RELEASE)',
-        subtitle: '* TELAH DIUJI & MEMENUHI SPESIFIKASI MUTU CPKB - SIAP DIGUNAKAN *',
-        formCode: 'L-DQC-001-01',
-      }
-    : isDeviation
-    ? {
-        borderOuter: 'border-teal-600',
-        bgBanner: 'bg-teal-600',
-        textBanner: 'text-white',
-        borderAccent: 'border-teal-300',
-        badgeBg: 'bg-teal-50 text-teal-800 border-teal-200',
-        containerBg: 'bg-teal-50 border-teal-200 text-teal-900',
-        btnBg: 'bg-teal-600 hover:bg-teal-700 shadow-teal-600/20',
-        icon: <AlertTriangle className="w-5 h-5 shrink-0" />,
-        title: 'STATUS: DILULUSKAN BERSYARAT (RELEASE BY DEVIATION)',
-        subtitle: '* DILULUSKAN DENGAN CATATAN DEVIASI RESMI QUALITY MANAGER *',
+        iconSymbol: '✔',
+        title: isDeviation ? 'STATUS: DILULUSKAN BER-DEVIASI' : 'STATUS: DILULUSKAN (RELEASED)',
+        subtitle: isDeviation ? '* DILULUSKAN DENGAN DEVIASI RESMI QM *' : '* MEMENUHI SPESIFIKASI MUTU CPKB *',
         formCode: 'L-DQC-001-01',
       }
     : {
-        borderOuter: 'border-rose-600',
+        paperColor: 'MERAH (Red Paper)',
+        paperBadge: 'bg-rose-100 border-rose-400 text-rose-950',
+        paperDot: 'bg-rose-500 border-rose-700',
+        screenBg: 'bg-[#FECDD3]',
         bgBanner: 'bg-rose-600',
-        textBanner: 'text-white',
-        borderAccent: 'border-rose-300',
-        badgeBg: 'bg-rose-50 text-rose-800 border-rose-200',
-        containerBg: 'bg-rose-50 border-rose-200 text-rose-900',
         btnBg: 'bg-rose-600 hover:bg-rose-700 shadow-rose-600/20',
-        icon: <AlertOctagon className="w-5 h-5 shrink-0" />,
+        iconSymbol: '✖',
         title: 'STATUS: DITOLAK (REJECTED)',
-        subtitle: '* TIDAK MEMENUHI SPESIFIKASI MUTU - DILARANG DIGUNAKAN / RETUR *',
+        subtitle: '* TIDAK MEMENUHI MUTU - RETUR/MUSNAH *',
         formCode: 'L-DQC-003-01',
       };
 
   const handlePrint = () => {
+    const styleEl = document.createElement('style');
+    styleEl.id = 'thermal-label-print-style';
+    styleEl.innerHTML = `
+      @page {
+        size: 100mm 100mm !important;
+        margin: 0 !important;
+      }
+      @media print {
+        html, body {
+          width: 100mm !important;
+          height: 100mm !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          background: transparent !important;
+        }
+      }
+    `;
+    document.head.appendChild(styleEl);
     window.print();
+    setTimeout(() => {
+      const el = document.getElementById('thermal-label-print-style');
+      if (el) el.remove();
+    }, 1500);
   };
 
   const containerList =
@@ -103,18 +110,32 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
   const authorizationDateFormatted = report.qmSignature?.signedAt
     ? new Date(report.qmSignature.signedAt).toLocaleDateString('id-ID', {
         day: 'numeric',
-        month: 'long',
+        month: 'numeric',
         year: 'numeric',
       })
     : new Date().toLocaleDateString('id-ID', {
         day: 'numeric',
-        month: 'long',
+        month: 'numeric',
         year: 'numeric',
       });
 
+  const analystName =
+    report.staffSignature?.signerName && report.staffSignature.signerName !== 'Staf Analis QC'
+      ? report.staffSignature.signerName
+      : report.sampledBy && report.sampledBy !== 'Staf Analis QC'
+      ? report.sampledBy
+      : 'Ayu';
+
+  const qmName =
+    report.qmSignature?.signerName &&
+    report.qmSignature.signerName !== 'Quality Manager (Apoteker PJ)' &&
+    report.qmSignature.signerName !== 'apt. Quality Manager, S.Farm.'
+      ? report.qmSignature.signerName
+      : 'Michael';
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto bg-slate-900/70 backdrop-blur-xs">
-      <div className="bg-white w-full max-w-3xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[96vh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
+      <div className="bg-white w-full max-w-4xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[96vh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
         {/* Modal Header */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
           <div className="flex items-center gap-3">
@@ -124,14 +145,14 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-black text-slate-900">
-                  Cetak Label Status QC CPKB
+                  Cetak Label Status QC CPKB (Thermal 100×100 mm)
                 </h2>
-                <span className={`px-2.5 py-0.5 rounded-full border text-[10px] font-bold ${theme.badgeBg}`}>
-                  {isPassed ? 'Status: RELEASE' : isDeviation ? 'Status: RELEASE (Deviasi)' : 'Status: REJECT'}
+                <span className={`px-2.5 py-0.5 rounded-full border text-[10px] font-bold ${theme.paperBadge}`}>
+                  {isPassed ? 'Status: RELEASE (LULUS)' : isDeviation ? 'Status: RELEASE (DEVIASI)' : 'Status: REJECT (DITOLAK)'}
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                Label fisik kelulusan mutu resmi ditempelkan pada seluruh wadah bahan sebelum proses timbang/produksi.
+                Format presisi untuk Printer Thermal Roll Label 100×100 mm (Tinta Hitam Monokrom).
               </p>
             </div>
           </div>
@@ -144,10 +165,23 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
           </button>
         </div>
 
+        {/* Paper Roll Indicator Banner */}
+        <div className={`${isReleasedState ? 'bg-emerald-100 border-emerald-300 text-emerald-950' : 'bg-rose-100 border-rose-300 text-rose-950'} border-b px-6 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs shrink-0`}>
+          <div className="flex items-center gap-2 font-medium">
+            <span className={`w-3.5 h-3.5 rounded-full ${theme.paperDot} border inline-block shadow-xs shrink-0`} />
+            <span>
+              <strong>Kertas Label Thermal:</strong> Gunakan <strong>Roll {theme.paperColor}</strong> • Ukuran <strong>100 × 100 mm</strong>
+            </span>
+          </div>
+          <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-md ${theme.paperBadge}`}>
+            Tinta Cetak: Hitam Pekat (Monochrome Thermal)
+          </span>
+        </div>
+
         {/* Toolbar & Options */}
         <div className="px-6 py-3 bg-slate-50 border-b border-slate-200/80 flex flex-wrap items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-2 text-xs">
-            <span className="font-bold text-slate-700">Mode Cetak Label:</span>
+            <span className="font-bold text-slate-700">Mode Wadah:</span>
             <div className="inline-flex bg-white rounded-xl border border-slate-200 p-1 shadow-2xs">
               <button
                 type="button"
@@ -197,224 +231,206 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
               className={`px-4 py-2 ${theme.btnBg} text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition-all cursor-pointer`}
             >
               <Printer className="w-4 h-4" />
-              <span>Cetak Sekarang (Print)</span>
+              <span>Cetak Thermal ({containerList.length} Label 100×100)</span>
             </button>
           </div>
         </div>
 
         {/* Modal Body / Label Preview */}
-        <div className="p-6 overflow-y-auto bg-slate-100/70 space-y-6 flex-1">
-          <div id="qc-status-label-printable" className="space-y-6">
-            {containerList.map((containerIndex) => (
-              <div
-                key={containerIndex}
-                className={`bg-white rounded-2xl border-4 ${theme.borderOuter} p-5 shadow-md max-w-xl mx-auto break-inside-avoid print:shadow-none print:max-w-none print:border-4 print:my-4 print:p-6`}
-              >
-                {/* Header CPKB */}
-                <div className={`border-b-2 ${theme.borderAccent} pb-3 mb-3 flex items-center justify-between gap-3`}>
-                  <div className="flex items-center gap-3">
-                    <div className="p-1 bg-white rounded-xl border border-slate-200 shrink-0 shadow-2xs flex items-center justify-center">
+        <div className="p-6 overflow-y-auto bg-slate-200/70 space-y-6 flex-1 flex flex-col items-center">
+          <div className="text-xs text-slate-600 font-medium">
+            Pratinjau fisik label stiker roll {isReleasedState ? 'hijau' : 'merah'} (Skala 100mm × 100mm):
+          </div>
+
+          <div id="qc-status-label-printable" className="space-y-6 w-full flex flex-col items-center">
+            {containerList.map((containerIndex) => {
+              const isSampled = report.sampledContainers && report.sampledContainers.includes(containerIndex);
+              const lotDisplay = normalizeLotNumber(report.lotInternalNumber || report.grnNumber);
+
+              return (
+                <div
+                  key={containerIndex}
+                  className={`thermal-label-page w-[100mm] h-[100mm] min-w-[100mm] min-h-[100mm] max-w-[100mm] max-h-[100mm] ${theme.screenBg} text-black border-2 border-black rounded-lg p-[3mm] shadow-lg flex flex-col justify-between overflow-hidden select-none print:shadow-none print:rounded-none print:border print:border-black print:bg-transparent`}
+                  style={{ boxSizing: 'border-box' }}
+                >
+                  {/* 1. Header CPKB (Perusahaan & Kode Form) */}
+                  <div className="flex items-center justify-between border-b-2 border-black pb-1">
+                    <div className="flex items-center gap-2">
                       <img
                         src="/logo.png"
-                        alt="Logo Larassanti"
-                        className="h-10 w-auto max-w-[90px] object-contain"
+                        alt="Logo PT. Larassanti Makmur Sejahtera"
+                        className="h-7 w-auto max-w-[42px] object-contain filter brightness-0 shrink-0 select-none print:brightness-0"
                         referrerPolicy="no-referrer"
                       />
-                    </div>
-                    <div>
-                      <h1 className="font-black text-slate-900 text-sm tracking-tight leading-none">
-                        PT. LARASSANTI MAKMUR SEJAHTERA
-                      </h1>
-                      <p className="text-[10px] font-bold text-slate-500 mt-1 uppercase tracking-wider">
-                        SISTEM PENANDAAN STATUS MUTU BAHAN (CPKB)
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <span className="font-mono text-xs font-bold text-slate-700 block">{theme.formCode}</span>
-                  </div>
-                </div>
-
-                {/* BIG STATUS BANNER */}
-                <div className={`${theme.bgBanner} ${theme.textBanner} py-2.5 px-4 rounded-xl text-center font-black tracking-wider uppercase mb-4 shadow-xs`}>
-                  <div className="flex items-center justify-center gap-2 text-sm sm:text-base">
-                    {theme.icon}
-                    <span>{theme.title}</span>
-                  </div>
-                  <p className="text-[10px] font-bold tracking-normal text-white/90 mt-0.5 normal-case">
-                    {theme.subtitle}
-                  </p>
-                </div>
-
-                {/* Primary Data Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs text-slate-800">
-                  <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase block">No. Lot Internal</span>
-                    <span className="font-mono font-black text-slate-950 text-xs block mt-0.5">
-                      {report.lotInternalNumber || report.grnNumber}
-                    </span>
-                  </div>
-
-                  <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase block">Tgl Otorisasi QC</span>
-                    <span className="font-bold text-slate-900 block mt-0.5">
-                      {authorizationDateFormatted}
-                    </span>
-                  </div>
-
-                  <div className={`p-2.5 rounded-xl border ${theme.containerBg} flex flex-col justify-between`}>
-                    <div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-extrabold opacity-80 uppercase block">Nomor Koli / Wadah</span>
-                        {report.sampledContainers && report.sampledContainers.includes(containerIndex) ? (
-                          <span className="px-1.5 py-0.2 rounded bg-teal-600 text-white font-bold text-[9px] uppercase tracking-wider">
-                            ✓ DISAMPLING
-                          </span>
-                        ) : (
-                          <span className="px-1.5 py-0.2 rounded bg-slate-200 text-slate-700 font-semibold text-[9px] uppercase tracking-wider">
-                            SEGEL UTUH
-                          </span>
-                        )}
+                      <div>
+                        <h1 className="font-black text-[11px] tracking-tight uppercase leading-none text-black">
+                          PT. LARASSANTI MAKMUR SEJAHTERA
+                        </h1>
+                        <p className="text-[8px] font-bold tracking-wider uppercase text-black/85 mt-0.5 leading-tight">
+                          SISTEM PENANDAAN STATUS MUTU BAHAN (CPKB)
+                        </p>
                       </div>
-                      <span className="font-black text-xs block mt-0.5">
-                        Wadah ke <span className="underline decoration-2">{containerIndex}</span> dari {totalContainers}
+                    </div>
+                    <div className="text-right">
+                      <span className="font-mono text-[8.5px] font-bold border border-black px-1.5 py-0.5 rounded-xs">
+                        {theme.formCode}
                       </span>
                     </div>
-                    {report.sampledContainers && report.sampledContainers.includes(containerIndex) && report.actualSampleSize && (
-                      <span className="text-[9.5px] font-bold text-teal-800 mt-1 block">
-                        Contoh Uji: {report.actualSampleSize} {report.actualSampleUnit || (report.materialType === 'raw' ? 'gram' : 'pcs')}
-                      </span>
-                    )}
                   </div>
 
-                  <div className="col-span-2 sm:col-span-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-extrabold text-slate-400 uppercase">
-                        {report.materialType === 'raw' ? 'Bahan Baku (Raw Material)' : 'Bahan Kemas (Packaging)'}
-                      </span>
-                      <span className="font-mono font-black text-xs px-2 py-0.5 rounded bg-slate-200 text-slate-800">
+                  {/* 2. Status Banner (Inverted High-Contrast Black Bar) */}
+                  <div className="bg-black text-white px-2.5 py-1 rounded-xs flex items-center justify-between my-1">
+                    <span className="font-black text-[10px] tracking-wider uppercase flex items-center gap-1.5">
+                      <span>{theme.iconSymbol}</span>
+                      <span>{theme.title}</span>
+                    </span>
+                    <span className="text-[7.5px] font-bold tracking-normal italic">
+                      {theme.subtitle}
+                    </span>
+                  </div>
+
+                  {/* 3. Material Identity Box */}
+                  <div className="border border-black/40 rounded-xs p-1.5 bg-white/30">
+                    <div className="font-black text-[12px] leading-tight uppercase text-black line-clamp-1">
+                      {report.materialName}
+                    </div>
+                    <div className="flex items-center gap-1.5 text-[8.5px] font-bold text-black/90 mt-1">
+                      <span className="font-mono bg-black text-white px-1.5 py-0.2 rounded-xs">
                         {report.materialCode}
                       </span>
-                    </div>
-                    <span className="font-black text-slate-900 text-sm block mt-1">
-                      {report.materialName}
-                    </span>
-                  </div>
-
-                  <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase block">No. Batch / Lot Produsen</span>
-                    <span className="font-mono font-bold text-indigo-950 block mt-0.5 truncate">
-                      {report.batchNumberVendor || '-'}
-                    </span>
-                  </div>
-
-                  <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase block">Tgl Kedaluwarsa</span>
-                    <span className={`font-bold block mt-0.5 ${report.expiryDate ? 'text-rose-700' : 'text-slate-500'}`}>
-                      {report.expiryDate || 'Non-Exp (Bahan Kemas)'}
-                    </span>
-                    {report.retestDate && (
-                      <div className="mt-1 pt-1 border-t border-slate-200 text-[10px] text-teal-800 font-semibold flex items-center justify-between">
-                        <span>Retest:</span>
-                        <span className="font-mono font-bold">{report.retestDate}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase block">Total Kuantitas</span>
-                    <span className="font-mono font-black text-slate-950 text-xs block mt-0.5">
-                      {formattedQty} {report.unit}
-                    </span>
-                  </div>
-
-                  <div className="col-span-2 sm:col-span-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase block">Produsen / Supplier</span>
-                    <span className="font-medium text-slate-900 block mt-0.5 truncate text-[11px]">
-                      {report.manufacturer} <span className="text-slate-400 font-normal">({report.distributor || report.supplierName})</span>
-                    </span>
-                  </div>
-
-                  <div className="col-span-2 sm:col-span-1 p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase block">No. GRN Gudang</span>
-                    <span className="font-mono font-bold text-slate-800 block mt-0.5 truncate text-[11px]">
-                      {report.grnNumber}
-                    </span>
-                  </div>
-
-                  <div className="col-span-2 sm:col-span-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px]">
-                    <span className="text-[10px] font-extrabold text-slate-500 uppercase block">Kondisi Simpan:</span>
-                    <span className="font-bold text-slate-800">
-                      {report.storageConditions || 'Suhu Ruang Terkendali (15-30°C), Kering & Terlindung Cahaya'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Footer Signatures & QR Code */}
-                {/* Footer Signatures & Large Scannable QR Code */}
-                <div className={`mt-4 pt-3 border-t-2 border-dashed ${theme.borderAccent} flex flex-col sm:flex-row gap-4 items-center justify-between`}>
-                  <div className="flex-1 w-full grid grid-cols-2 gap-3">
-                    <div className="border border-slate-200 rounded-xl p-2.5 text-center bg-slate-50">
-                      <span className="text-[9px] font-extrabold text-slate-500 uppercase block">
-                        {report.staffSignature?.signerRole || 'Staf Analis QC'}
+                      <span className="border border-black/60 px-1 py-0.2 rounded-xs">
+                        {report.materialType === 'raw' ? 'Bahan Baku' : 'Bahan Kemas'}
                       </span>
-                      <div className="h-10 flex items-center justify-center font-serif text-slate-800 font-bold italic text-xs">
-                        {report.staffSignature?.signerName || report.sampledBy || report.inspectedBy?.name || 'Ayu'}
+                      <span className="truncate max-w-[140px] text-black/80">
+                        Produsen: {report.manufacturer}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 4. Middle Section: Specs Grid (Left) + Large QR Code (Right) */}
+                  <div className="flex items-stretch gap-2 my-1 flex-1 min-h-0">
+                    {/* Left Column: Data Grid */}
+                    <div className="flex-1 flex flex-col justify-between text-[8px]">
+                      <div className="space-y-1">
+                        <div className="flex justify-between border-b border-black/20 pb-0.5">
+                          <span className="font-bold text-black/70">No. Lot Internal:</span>
+                          <span className="font-mono font-black text-[9.5px] text-black">{lotDisplay}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-black/20 pb-0.5">
+                          <span className="font-bold text-black/70">No. GRN Gudang:</span>
+                          <span className="font-mono font-bold text-black">{report.grnNumber}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-black/20 pb-0.5">
+                          <span className="font-bold text-black/70">Tgl Otorisasi QC:</span>
+                          <span className="font-bold text-black">{authorizationDateFormatted}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-black/20 pb-0.5">
+                          <span className="font-bold text-black/70">Batch Produsen:</span>
+                          <span className="font-mono font-bold text-black truncate max-w-[110px]">{report.batchNumberVendor || '-'}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-black/20 pb-0.5">
+                          <span className="font-bold text-black/70">Kedaluwarsa:</span>
+                          <span className="font-bold text-black">
+                            {report.expiryDate || 'Non-Exp (Bahan Kemas)'}
+                            {report.retestDate ? ` (R: ${report.retestDate})` : ''}
+                          </span>
+                        </div>
+                        <div className="flex justify-between border-b border-black/20 pb-0.5">
+                          <span className="font-bold text-black/70">Total Kuantitas:</span>
+                          <span className="font-mono font-black text-[9.5px] text-black">{formattedQty} {report.unit}</span>
+                        </div>
                       </div>
-                      <span className="text-[9px] text-slate-400 block border-t border-slate-200 pt-1">
+
+                      <div className="text-[7.5px] text-black/80 pt-0.5">
+                        <span className="font-bold">Simpan: </span>
+                        <span>{report.storageConditions || '15-30°C Ruang Terkendali, Kering & Terlindung Cahaya'}</span>
+                      </div>
+                    </div>
+
+                    {/* Right Column: High-Visibility Large QR Code linking to CoA */}
+                    <div
+                      onClick={() => onViewCoa && onViewCoa(report)}
+                      className="w-[32mm] shrink-0 border-l border-black/40 pl-2 flex flex-col items-center justify-center cursor-pointer"
+                      title="Pindai QR untuk membuka Dokumen CoA Resmi"
+                    >
+                      <div className="p-1 bg-white border border-black rounded-xs">
+                        <QrCodeBadge
+                          value={getQrTargetUrl(
+                            lotDisplay,
+                            report.status,
+                            `${containerIndex}/${totalContainers}`
+                          )}
+                          size={92}
+                          className="rounded-none"
+                        />
+                      </div>
+                      <span className="font-mono text-[8px] font-black tracking-tight text-center mt-1 block leading-none text-black">
+                        {lotDisplay}-W{containerIndex}
+                      </span>
+                      <span className="text-[7px] font-bold uppercase tracking-wider text-center block mt-0.5 text-black/80 leading-none">
+                        SCAN ➔ BUKA COA
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 5. Koli / Wadah & Sampling Status Highlight Bar */}
+                  <div className="bg-black text-white px-2.5 py-1 rounded-xs flex items-center justify-between mb-1">
+                    <span className="font-black text-[9.5px] tracking-wider uppercase">
+                      WADAH KE [ {containerIndex} ] DARI {totalContainers} WADAH
+                    </span>
+                    <span className="font-bold text-[8.5px] uppercase">
+                      {isSampled ? '✓ CONTOH UJI DIAMBIL (QC)' : 'SEGEL FISIK UTUH'}
+                    </span>
+                  </div>
+
+                  {/* 6. Footer Signatures Row */}
+                  <div className="border-t-2 border-black pt-1 grid grid-cols-3 gap-1.5 text-center">
+                    <div className="border border-black/60 rounded-xs py-1 px-1 bg-white/40">
+                      <span className="block text-[7px] text-black/70 font-bold uppercase leading-none">
+                        Analis QC
+                      </span>
+                      <span className="font-serif italic font-bold text-[9px] truncate block leading-tight text-black mt-1">
+                        {analystName}
+                      </span>
+                      <span className="block text-[6.5px] text-black/60 border-t border-black/20 pt-0.5 mt-0.5">
                         Paraf & Tanggal Uji
                       </span>
                     </div>
 
-                    <div className="border border-slate-200 rounded-xl p-2.5 text-center bg-slate-50">
-                      <span className="text-[9px] font-extrabold text-slate-500 uppercase block">Quality Manager</span>
-                      <div className="h-10 flex items-center justify-center font-serif text-emerald-800 font-bold italic text-xs">
-                        {report.qmSignature?.signerName || 'Michael'}
-                      </div>
-                      <span className="text-[9px] text-slate-400 block border-t border-slate-200 pt-1">
+                    <div className="border border-black/60 rounded-xs py-1 px-1 bg-white/40">
+                      <span className="block text-[7px] text-black/70 font-bold uppercase leading-none">
+                        Quality Manager
+                      </span>
+                      <span className="font-serif italic font-bold text-[9px] truncate block leading-tight text-black mt-1">
+                        {qmName}
+                      </span>
+                      <span className="block text-[6.5px] text-black/60 border-t border-black/20 pt-0.5 mt-0.5">
                         Tanda Tangan & Cap Otorisasi
                       </span>
                     </div>
 
-                    <div className="col-span-2 text-[10px] text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-2 flex items-center gap-2">
-                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                      <span>Barcode resmi kelulusan mutu CPKB. Dapat dipindai untuk audit penelusuran digital.</span>
+                    <div className="border border-black/60 rounded-xs py-1 px-1 bg-white/40 flex flex-col justify-between">
+                      <span className="block text-[7px] text-black/70 font-bold uppercase leading-none">
+                        Status Mutu CPKB
+                      </span>
+                      <span className="font-bold text-[8px] truncate block leading-tight text-black mt-1">
+                        {isPassed ? 'Sesuai Spesifikasi' : isDeviation ? 'Lulus Deviasi' : 'Ditolak (Reject)'}
+                      </span>
+                      <span className="block text-[6.5px] text-black/60 border-t border-black/20 pt-0.5 mt-0.5">
+                        Simpan: 15-30°C
+                      </span>
                     </div>
                   </div>
-
-                  {/* High-visibility large QR Code for mobile camera scanning & Direct CoA Access */}
-                  <div 
-                    onClick={() => onViewCoa && onViewCoa(report)}
-                    className="shrink-0 flex flex-col items-center justify-center p-2.5 bg-white border-2 border-slate-300 rounded-2xl shadow-xs hover:border-emerald-500 hover:shadow-md transition-all cursor-pointer group"
-                    title="Pindai Kamera HP atau Klik untuk langsung membuka Dokumen CoA Internal Resmi"
-                  >
-                    <QrCodeBadge
-                      value={getQrTargetUrl(
-                        normalizeLotNumber(report.lotInternalNumber || report.grnNumber),
-                        report.status,
-                        `${containerIndex}/${totalContainers}`
-                      )}
-                      size={115}
-                      className="rounded-lg group-hover:scale-105 transition-transform"
-                    />
-                    <span className="font-mono text-[10px] text-slate-900 mt-1.5 font-black tracking-tight flex items-center gap-1 group-hover:text-emerald-700">
-                      <span>{normalizeLotNumber(report.lotInternalNumber || report.grnNumber)}-W{containerIndex}</span>
-                    </span>
-                    <span className="text-[8px] font-extrabold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-sm mt-0.5 uppercase tracking-wider flex items-center gap-1">
-                      <FileText className="w-2.5 h-2.5" />
-                      <span>Scan ➔ Buka CoA</span>
-                    </span>
-                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
         {/* Modal Footer */}
         <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between bg-white shrink-0">
-          <p className="text-xs text-slate-400">
-            *Label status mutu resmi dicetak sesuai standar CPKB dan wajib ditempelkan pada fisik kemasan.
+          <p className="text-xs text-slate-500">
+            *Tempelkan stiker {isReleasedState ? 'hijau' : 'merah'} 100×100 mm ini menimpa/di samping label karantina setelah otorisasi mutu CPKB.
           </p>
 
           <div className="flex items-center gap-2.5">
@@ -438,7 +454,7 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
               className={`px-5 py-2 ${theme.btnBg} text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition-all cursor-pointer`}
             >
               <Printer className="w-4 h-4" />
-              <span>Cetak Label ({containerList.length} Lembar)</span>
+              <span>Cetak Thermal ({containerList.length} Label 100×100)</span>
             </button>
           </div>
         </div>

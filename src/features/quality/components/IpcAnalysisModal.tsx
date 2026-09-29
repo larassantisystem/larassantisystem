@@ -28,6 +28,7 @@ import { IpcInspectionReportPdfModal } from './IpcInspectionReportPdfModal';
 import { IpcStatusLabelModal } from './IpcStatusLabelModal';
 import { formatDateDDMMMYYYY } from '../../../utils/dateUtils';
 import { getUserPositionTitle } from '../../../utils/userPositionUtils';
+import { generateDigitalSignatureHash } from '../utils/qcNumbering';
 
 interface IpcAnalysisModalProps {
   isOpen: boolean;
@@ -109,8 +110,21 @@ export const IpcAnalysisModal: React.FC<IpcAnalysisModalProps> = ({
               (lp) => lp.id === param.id || lp.parameterName.toLowerCase().includes(paramName.toLowerCase())
             );
 
-            // DEFAULT: Sesuai spesifikasi RnD dari Master Produk
-            const initialValue = existingParam ? existingParam.resultValue : specCondition;
+            const lowerName = paramName.toLowerCase();
+            let initialValue = specCondition;
+
+            if (existingParam) {
+              initialValue = existingParam.resultValue;
+            } else if (lowerName.includes('ph') && batch.pH) {
+              initialValue = String(batch.pH);
+            } else if ((lowerName.includes('viskos') || lowerName.includes('viscosity')) && batch.viscosity) {
+              initialValue = `${batch.viscosity.toLocaleString('id-ID')} cPs`;
+            } else if ((lowerName.includes('density') || lowerName.includes('bobot jenis') || lowerName.includes('berat jenis')) && batch.gravity) {
+              initialValue = `${batch.gravity} g/mL`;
+            } else if ((lowerName.includes('bentuk') || lowerName.includes('organo') || lowerName.includes('pemerian') || lowerName.includes('appearance')) && batch.appearance) {
+              initialValue = batch.appearance;
+            }
+
             const initialCompliant = existingParam ? existingParam.isCompliant : true;
 
             return {
@@ -269,6 +283,7 @@ export const IpcAnalysisModal: React.FC<IpcAnalysisModalProps> = ({
           signerNik: user?.nik || '-',
           signerPosition: getUserPositionTitle(user, 'Staf Analis Lab QC'),
           signedAt: nowFormatted,
+          signatureHash: generateDigitalSignatureHash(user?.nik || 'STAFF', user?.name || 'Staf QC', 'ANALYZE_IPC', batch.batchNo),
         };
       } else if (actionType === 'RELEASE_QM') {
         newStatus = 'RELEASED';
@@ -277,6 +292,7 @@ export const IpcAnalysisModal: React.FC<IpcAnalysisModalProps> = ({
           signerNik: user?.nik || '-',
           signerPosition: getUserPositionTitle(user, 'Quality Manager'),
           signedAt: nowFormatted,
+          signatureHash: generateDigitalSignatureHash(user?.nik || 'QM', user?.name || 'Quality Manager', 'RELEASE_IPC', batch.batchNo),
         };
       } else if (actionType === 'RELEASE_DEVIATION') {
         newStatus = 'RELEASED_DEVIATION';
@@ -286,6 +302,7 @@ export const IpcAnalysisModal: React.FC<IpcAnalysisModalProps> = ({
           signerNik: user?.nik || '-',
           signerPosition: getUserPositionTitle(user, 'Quality Manager'),
           signedAt: nowFormatted,
+          signatureHash: generateDigitalSignatureHash(user?.nik || 'QM', user?.name || 'Quality Manager', 'RELEASE_DEVIATION_IPC', batch.batchNo),
         };
       } else if (actionType === 'REJECT_QM') {
         newStatus = 'REJECTED';
@@ -295,6 +312,7 @@ export const IpcAnalysisModal: React.FC<IpcAnalysisModalProps> = ({
           signerNik: user?.nik || '-',
           signerPosition: getUserPositionTitle(user, 'Quality Manager'),
           signedAt: nowFormatted,
+          signatureHash: generateDigitalSignatureHash(user?.nik || 'QM', user?.name || 'Quality Manager', 'REJECT_IPC', batch.batchNo),
         };
       } else if (actionType === 'RETURN_ANALYST') {
         newStatus = 'RETEST';

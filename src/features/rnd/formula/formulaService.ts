@@ -53,6 +53,8 @@ const defaultFormulations: BulkFormulation[] = [
 ];
 
 let inMemoryFormulations: BulkFormulation[] = [...defaultFormulations];
+let lastFormulationsFetchTime = 0;
+const FORMULATIONS_CACHE_TTL_MS = 60 * 1000; // 60 detik cache di RAM
 
 // Bersihkan data demo lama dari local storage jika masih tersisa di browser
 export const purgeLegacyDemoFormulas = () => {
@@ -80,16 +82,26 @@ purgeLegacyDemoFormulas();
 export const formulaService = {
   isConfigured: isSupabaseConfigured,
 
+  invalidateCache: () => {
+    lastFormulationsFetchTime = 0;
+  },
+
   /**
    * Mengambil semua master formulasi bulk langsung dari database Supabase
    */
-  getFormulations: async (): Promise<BulkFormulation[]> => {
+  getFormulations: async (forceRefresh = false): Promise<BulkFormulation[]> => {
+    const isCacheValid = !forceRefresh && inMemoryFormulations.length > 0 && (Date.now() - lastFormulationsFetchTime < FORMULATIONS_CACHE_TTL_MS);
+    if (isCacheValid) {
+      return inMemoryFormulations;
+    }
+
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase
           .from('bulk_formulations')
-          .select('*')
-          .order('created_at', { ascending: false });
+          .select('id, code, name, product_id, product_code, product_name, version, status, bulk_quantity_kg, purpose_description, ingredients, mixing_instructions, created_by, created_at, updated_at')
+          .order('created_at', { ascending: false })
+          .limit(300);
 
         if (!error && data) {
           const mapped: BulkFormulation[] = data.map((row: any) => ({
@@ -113,6 +125,7 @@ export const formulaService = {
           }));
 
           inMemoryFormulations = mapped;
+          lastFormulationsFetchTime = Date.now();
           return mapped;
         } else if (error) {
           console.error('[formulaService] Error loading bulk_formulations from Supabase:', error.message);

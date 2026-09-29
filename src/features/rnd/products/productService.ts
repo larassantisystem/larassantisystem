@@ -28,6 +28,8 @@ purgeLegacyLocalStorageProducts();
 const defaultSeedProducts: Product[] = [];
 
 let inMemoryProducts: Product[] = [];
+let lastProductsFetchTime = 0;
+const PRODUCTS_CACHE_TTL_MS = 60 * 1000; // 60 detik cache di RAM
 let tablesInitializedInSupabase: boolean | null = null;
 
 const isTableMissingError = (err: any): boolean => {
@@ -156,12 +158,21 @@ export const productService = {
     }
   },
 
+  invalidateCache: () => {
+    lastProductsFetchTime = 0;
+  },
+
   /**
    * Mengambil semua Master Produk beserta varian dari Supabase
    * Menggunakan relasi tabel 'products' dan 'product_variants'
    */
-  getProducts: async (): Promise<Product[]> => {
+  getProducts: async (forceRefresh = false): Promise<Product[]> => {
     purgeLegacyLocalStorageProducts();
+
+    const isCacheValid = !forceRefresh && inMemoryProducts.length > 0 && (Date.now() - lastProductsFetchTime < PRODUCTS_CACHE_TTL_MS);
+    if (isCacheValid) {
+      return inMemoryProducts;
+    }
 
     if (!isSupabaseConfigured || !supabase) {
       console.warn('[productService] Supabase belum dikonfigurasi dengan URL & Anon Key. Menggunakan memori sesi.');
@@ -181,7 +192,7 @@ export const productService = {
 
         const { data, error } = await supabase
           .from('products')
-          .select('id, product_code, name, brand, category, description, unit, storage_conditions, bpom_notification_number, exp_notification_date, created_at')
+          .select('id, product_code, name, brand, category, description, unit, storage_conditions, bpom_notification_number, exp_notification_date, qc_parameters, finished_parameters, created_at')
           .order('product_code', { ascending: true })
           .range(from, to);
 
@@ -210,15 +221,16 @@ export const productService = {
       tablesInitializedInSupabase = true;
       if (allRows.length === 0) {
         inMemoryProducts = [];
+        lastProductsFetchTime = Date.now();
         return [];
       }
 
-      // Ambil seluruh varian dari tabel product_variants secara langsung
+      // Ambil seluruh varian dari tabel product_variants secara langsung dengan selective projection
       let allVariants: any[] = [];
       try {
         const { data: variantsData, error: varErr } = await supabase
           .from('product_variants')
-          .select('*');
+          .select('id, product_id, sku, variant_name, status, net_volume_grams, bulk_formula_code, packaging_bom, bpom_number, barcode, description, created_at');
         if (!varErr && variantsData) {
           allVariants = variantsData;
         }
@@ -271,6 +283,7 @@ export const productService = {
       });
 
       inMemoryProducts = mapped;
+      lastProductsFetchTime = Date.now();
       return mapped;
     } catch (err: any) {
       console.warn('[productService] Exception saat mengambil data products:', err?.message || err);

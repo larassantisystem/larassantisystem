@@ -23,21 +23,44 @@
 
   #quarantine-label-printable,
   #quarantine-label-printable *,
+  #qc-status-label-printable,
+  #qc-status-label-printable *,
   #printable-qc-report,
   #printable-qc-report * {
     visibility: visible;
   }
 
-  #quarantine-label-printable {
+  #quarantine-label-printable,
+  #qc-status-label-printable {
     position: absolute;
     left: 0;
     top: 0;
     width: 100%;
     margin: 0;
     padding: 0;
-    background: white !important;
+    background: transparent !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+
+  .thermal-label-page {
+    width: 100mm !important;
+    height: 100mm !important;
+    max-width: 100mm !important;
+    max-height: 100mm !important;
+    margin: 0 auto !important;
+    padding: 3mm 4mm !important;
+    box-sizing: border-box !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    background: transparent !important;
+    color: #000000 !important;
+    overflow: hidden !important;
+  }
+
+  .thermal-label-page:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
   }
 
   #printable-qc-report {

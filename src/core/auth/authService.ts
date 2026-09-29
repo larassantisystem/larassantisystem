@@ -47,7 +47,7 @@ export const authService = {
         if (authUser) {
           const { data: profileData } = await supabase
             .from('profiles')
-            .select('*')
+            .select('id, nik, name, department, role, position, email')
             .eq('id', authUser.id)
             .maybeSingle();
 
@@ -72,7 +72,7 @@ export const authService = {
         // Jika Supabase Auth GoTrue belum tersinkron identities, periksa langsung ke Supabase Database
         const { data: dbProfile, error: dbErr } = await supabase
           .from('profiles')
-          .select('*')
+          .select('id, nik, name, department, role, position, email')
           .or(`nik.ilike.${cleanNik},email.ilike.${primaryEmail}`)
           .maybeSingle();
 
@@ -239,7 +239,7 @@ export const authService = {
       try {
         const { data: profiles, error } = await supabase
           .from('profiles')
-          .select('*')
+          .select('id, nik, name, department, role, position, email, created_at')
           .order('created_at', { ascending: true });
 
         if (!error && profiles && profiles.length > 0) {

@@ -64,11 +64,17 @@ export const GrnEditModal: React.FC<GrnEditModalProps> = ({
 
   if (!isOpen || !record) return null;
 
-  const isLocked =
+  const isUnderQcProcess =
+    record.qcStatus === 'QUALITY_CONTROL_PROCESS' ||
+    record.qcStatus === 'AWAITING_QM_AUTHORIZATION';
+
+  const isFinalized =
     record.qcStatus === 'PASSED' ||
     record.qcStatus === 'RELEASED' ||
     record.qcStatus === 'PASSED_WITH_DEVIATION' ||
     record.qcStatus === 'REJECTED';
+
+  const isLocked = isUnderQcProcess || isFinalized;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -168,7 +174,24 @@ export const GrnEditModal: React.FC<GrnEditModalProps> = ({
         </div>
 
         {/* Lock or Revert Alert Banner */}
-        {isLocked && (
+        {isUnderQcProcess && (
+          <div className="bg-blue-50 border-b border-blue-200 p-4 text-xs text-blue-950 flex items-start gap-2.5 shrink-0">
+            <Lock className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+            <div>
+              <span className="font-bold text-blue-900 uppercase tracking-wide">
+                Data Penerimaan Terkunci (Sedang Diproses QC Lab):
+              </span>
+              <p className="text-[11px] text-blue-800 mt-0.5 leading-relaxed">
+                Lot ini sedang dalam tahap <strong>{record.qcStatus === 'QUALITY_CONTROL_PROCESS' ? 'Pengujian Laboratorium (Sedang Uji)' : 'Menunggu Otorisasi Quality Manager'}</strong>. Data penerimaan fisik dikunci demi menjaga integritas data mutu dan konsistensi perhitungan rencana sampling ({record.materialType === 'raw' ? 'n = 1 + √N' : 'MIL-STD-105E'}).
+              </p>
+              <p className="text-[10.5px] text-blue-700 mt-1 font-medium">
+                💡 Jika terdapat kesalahan data penerimaan fisik, silakan minta tim QC melakukan <strong>Revert (Kembalikan ke Gudang)</strong> terlebih dahulu.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {isFinalized && (
           <div className="bg-slate-100 border-b border-slate-200 p-4 text-xs text-slate-700 flex items-start gap-2.5 shrink-0">
             <Lock className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
             <div>

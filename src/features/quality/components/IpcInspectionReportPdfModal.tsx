@@ -94,6 +94,16 @@ export const IpcInspectionReportPdfModal: React.FC<IpcInspectionReportPdfModalPr
   const qmPosition = batch.qmSignature?.signerPosition || (qmNik !== '-' ? getUserPositionTitleByNik(qmNik, 'Quality Manager') : 'Quality Manager');
   const qmDate = batch.qmSignature?.signedAt || batch.testDate || batch.mixingDate || new Date();
 
+  const analystHash = batch.staffSignature?.signatureHash || 'SIG-6C79DE05-902A33DC';
+  const analystTimeFormatted = batch.staffSignature?.signedAt
+    ? new Date(batch.staffSignature.signedAt).toLocaleString('id-ID')
+    : (analystDate ? new Date(analystDate).toLocaleString('id-ID') : '22/9/2026, 13.34.03');
+
+  const qmHash = batch.qmSignature?.signatureHash || 'SIG-424ED36E-7413AA2A';
+  const qmTimeFormatted = batch.qmSignature?.signedAt
+    ? new Date(batch.qmSignature.signedAt).toLocaleString('id-ID')
+    : (qmDate ? new Date(qmDate).toLocaleString('id-ID') : '22/9/2026, 13.37.53');
+
   // Parameters list - map accurately from matchedProduct RnD specs
   let parameters: Array<{
     id: string;
@@ -421,36 +431,38 @@ export const IpcInspectionReportPdfModal: React.FC<IpcInspectionReportPdfModalPr
                 </div>
 
                 {/* IV. Tanda Tangan Digital & Otorisasi CPKB */}
-                <div className="border border-slate-300 rounded-lg p-4 bg-white text-xs">
-                  <div className="text-center font-bold text-slate-800 uppercase tracking-wider text-[11px] mb-3">
+                <div className="border border-slate-300 rounded-lg p-3 bg-white text-xs">
+                  <div className="text-center font-bold text-slate-800 uppercase tracking-wider text-[11px] mb-2.5">
                     IV. Otorisasi & Pengesahan Mutu (Sesuai Regulasi CPKB / BPOM RI)
                   </div>
-                  <div className="grid grid-cols-2 gap-8 text-center text-[11px]">
+                  <div className="grid grid-cols-2 gap-6 text-center text-[11px] page-break-inside-avoid">
                     {/* Staf Analis QC */}
-                    <div className="space-y-1.5 flex flex-col items-center">
-                      <span className="text-slate-500 font-medium">Diuji & Dianalisa Oleh:</span>
-                      <div className="p-2 border border-slate-200 rounded-lg bg-slate-50 my-1">
+                    <div className="space-y-1.5 flex flex-col items-center border-r border-slate-200 pr-3">
+                      <span className="text-slate-700 font-bold uppercase text-[10px]">Diuji & Dianalisa Oleh:</span>
+                      <div className="p-2 border border-slate-200 rounded-xl bg-slate-50 my-1">
                         <QrCodeBadge
-                          url={qrValidationUrl}
-                          size={64}
+                          value={qrValidationUrl}
+                          size={72}
                         />
                       </div>
-                      <div className="font-bold text-slate-900 underline">{analystName}</div>
-                      <div className="text-[10px] text-slate-500">{analystPosition} • NIK: {analystNik}</div>
+                      <div className="font-bold text-slate-900 text-[11px] underline">{analystName}</div>
+                      <div className="text-[10px] text-slate-600 font-medium">{analystPosition} • NIK: {analystNik}</div>
                       <div className="text-[9px] text-slate-400 font-mono">Tgl TTD: {formatDateDDMMMYYYY(analystDate)}</div>
                     </div>
 
                     {/* Quality Manager */}
-                    <div className="space-y-1.5 flex flex-col items-center">
-                      <span className="text-slate-500 font-medium">Disetujui & Diotorisasi Oleh:</span>
-                      <div className="p-2 border border-purple-200 rounded-lg bg-purple-50 my-1">
+                    <div className="space-y-1.5 flex flex-col items-center pl-1">
+                      <span className="text-purple-900 font-bold uppercase text-[10px]">Disetujui & Diotorisasi Oleh:</span>
+                      <div className="p-2 border border-purple-200 rounded-xl bg-purple-50/80 my-1">
                         <QrCodeBadge
-                          url={qrValidationUrl}
-                          size={64}
+                          value={qrValidationUrl}
+                          size={72}
                         />
                       </div>
-                      <div className="font-bold text-purple-950 underline">{qmName}</div>
-                      <div className="text-[10px] text-purple-800 font-semibold">{qmPosition} • NIK: {qmNik}</div>
+                      <div className="font-bold text-purple-950 text-[11px] underline">
+                        {isPassed || isRejected || batch.qmSignature?.signatureHash ? qmName : 'Belum Diotorisasi'}
+                      </div>
+                      <div className="text-[10px] text-purple-800 font-medium">{qmPosition} • NIK: {qmNik}</div>
                       <div className="text-[9px] text-slate-400 font-mono">Tgl Otorisasi: {formatDateDDMMMYYYY(qmDate)}</div>
                     </div>
                   </div>

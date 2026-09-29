@@ -7,6 +7,7 @@ import { canWriteModule, isReadOnlyModule } from '../../core/auth/permissionGuar
 import { driveClient, DriveUploadedFile } from '../../core/drive-service/driveClient';
 import { ensureUUID, generateUUID } from '../../utils/uuid';
 import { auditLogger } from '../../core/utils/auditLogger';
+import { materialService } from '../../features/rnd/materials/materialService';
 import {
   FlaskConical,
   Search,
@@ -123,6 +124,7 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
   // Substitutes search & filter state
   const [substituteSearchQuery, setSubstituteSearchQuery] = useState('');
   const [filterSimilarCategoryOnly, setFilterSimilarCategoryOnly] = useState(false);
+  const [filterSameInciOnly, setFilterSameInciOnly] = useState(true);
 
   // Form states (Bagian B - QC Parameters)
   const [rmQcParams, setRmQcParams] = useState<QCParameter[]>([]);
@@ -152,6 +154,108 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
   const [importedFileName, setImportedFileName] = useState<string>('');
   const [isSubmittingImport, setIsSubmittingImport] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // INCI Auto-Link Mutual Substitutes states
+  const [showInciSyncModal, setShowInciSyncModal] = useState(false);
+  const [isSyncingInci, setIsSyncingInci] = useState(false);
+  const [inciSyncPreview, setInciSyncPreview] = useState<{
+    groups: Array<{ inci: string; materials: RawMaterial[] }>;
+    totalToUpdate: number;
+    singlesCount: number;
+  }>({ groups: [], totalToUpdate: 0, singlesCount: 0 });
+
+  // Buka modal pratinjau Auto-Link INCI
+  const openInciSyncModal = () => {
+    const isValidInci = (val?: string): boolean => {
+      if (!val) return false;
+      const trimmed = val.trim();
+      if (!trimmed) return false;
+      if (/^[-–—\s]+$/.test(trimmed)) return false;
+      const lower = trimmed.toLowerCase();
+      if (['n/a', 'na', 'none', 'tidak ada', 'null', 'undefined'].includes(lower)) return false;
+      return true;
+    };
+
+    const inciMap = new Map<string, RawMaterial[]>();
+    let singlesCount = 0;
+
+    for (const rm of rawMaterials) {
+      if (!isValidInci(rm.chemicalName)) {
+        singlesCount++;
+        continue;
+      }
+      const key = rm.chemicalName.trim().toLowerCase();
+      if (!inciMap.has(key)) {
+        inciMap.set(key, []);
+      }
+      inciMap.get(key)!.push(rm);
+    }
+
+    const multiGroups: Array<{ inci: string; materials: RawMaterial[] }> = [];
+    let totalToUpdate = 0;
+
+    for (const [_, items] of inciMap.entries()) {
+      if (items.length >= 2) {
+        multiGroups.push({
+          inci: items[0].chemicalName.trim(),
+          materials: items,
+        });
+        totalToUpdate += items.length;
+      } else {
+        singlesCount += items.length;
+      }
+    }
+
+    setInciSyncPreview({
+      groups: multiGroups,
+      totalToUpdate,
+      singlesCount,
+    });
+    setShowInciSyncModal(true);
+  };
+
+  // Eksekusi sinkronisasi substitusi dua arah ke Supabase
+  const handleExecuteInciSync = async () => {
+    if (!canWrite) {
+      alert('Akses Ditolak: Anda memiliki izin Hanya Lihat (Read-Only) pada modul R&D.');
+      return;
+    }
+    setIsSyncingInci(true);
+    try {
+      const res = await materialService.syncMutualSubstitutesByInci(
+        rawMaterials,
+        user?.name || user?.username || 'Staff RnD'
+      );
+
+      if (res.success) {
+        if (onBatchSaveRM && res.updatedMaterials.length > 0) {
+          await onBatchSaveRM(res.updatedMaterials);
+        }
+
+        auditLogger.logAction({
+          action: 'UPDATE',
+          module: 'RND',
+          actorNik: user?.nik || 'admin',
+          actorName: user?.name || user?.username || 'Staff RnD',
+          targetNik: 'ALL',
+          details: `Auto-link substitusi INCI sama: ${res.updatedCount} bahan diperbarui dalam ${res.groupsCount} kelompok INCI.`,
+        });
+
+        setShowInciSyncModal(false);
+        setSuccessToast(
+          `Berhasil menyinkronkan ${res.updatedCount} bahan baku di Supabase (${res.groupsCount} kelompok INCI). Bahan dengan INCI identik kini telah saling terhubung sebagai Approved Substitutes.`
+        );
+        setTimeout(() => setSuccessToast(null), 6000);
+      } else {
+        alert(`Gagal menyinkronkan: ${res.error || 'Terjadi kesalahan sistem.'}`);
+      }
+    } catch (err: any) {
+      console.error('Error syncing INCI substitutes:', err);
+      alert(`Gagal menyinkronkan: ${err.message || String(err)}`);
+    } finally {
+      setIsSyncingInci(false);
+    }
+  };
 
   // RBAC Permission Check
   const canWrite = canWriteModule(user, 'rnd');
@@ -223,6 +327,8 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
     setShowDriveUrlInput(false);
     setValidationErrors([]);
     setSubstituteSearchQuery('');
+    setFilterSimilarCategoryOnly(false);
+    setFilterSameInciOnly(true);
     
     // Otomatis terisi 7 parameter utama (Bentuk, Warna, Bau, pH, Kelarutan, Densitas, Viskositas)
     setRmQcParams([
@@ -286,6 +392,8 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
     setShowDriveUrlInput(false);
     setValidationErrors([]);
     setSubstituteSearchQuery('');
+    setFilterSimilarCategoryOnly(false);
+    setFilterSameInciOnly(true);
     
     // Jika data lama tidak memiliki qcParameters, sediakan parameter default
     setRmQcParams(rm.qcParameters && rm.qcParameters.length > 0 
@@ -828,6 +936,17 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
           {/* Tombol Import Excel */}
           {canWrite ? (
             <>
+              {/* Tombol Auto-Link INCI Sama */}
+              <button
+                type="button"
+                onClick={openInciSyncModal}
+                className="px-3 py-1.5 rounded-lg border border-purple-200 bg-purple-50 hover:bg-purple-100 text-xs font-bold text-purple-900 flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                title="Sinkronkan bahan baku yang memiliki nama INCI sama agar otomatis saling menjadi bahan pengganti resmi (Approved Substitutes)"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-purple-700" />
+                <span>Auto-Link INCI Sama</span>
+              </button>
+
               <button
                 onClick={() => {
                   setPasteData('');
@@ -1432,15 +1551,15 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
 
                   {!isSingleSpecificMaterial && (
                     <div className="space-y-2">
-                      {/* Search Bar Bahan Pengganti */}
-                      <div className="flex items-center gap-2">
-                        <div className="relative flex-1">
+                      {/* Search Bar & Toggle Filter Bahan Pengganti */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="relative flex-1 min-w-[200px]">
                           <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-slate-400" />
                           <input
                             type="text"
                             value={substituteSearchQuery}
                             onChange={(e) => setSubstituteSearchQuery(e.target.value)}
-                            placeholder="Cari kode, nama dagang, atau nama kimia bahan pengganti..."
+                            placeholder="Cari kode, nama dagang, atau nama kimia..."
                             className="w-full bg-white border border-slate-200 rounded-xl py-1.5 pl-9 pr-8 text-xs text-slate-800 focus:outline-none focus:border-purple-600"
                           />
                           {substituteSearchQuery && (
@@ -1454,6 +1573,21 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
                             </button>
                           )}
                         </div>
+
+                        {/* Opsi 2: Toggle Filter INCI Sama Saja (Default) vs Semua Bahan */}
+                        <button
+                          type="button"
+                          onClick={() => setFilterSameInciOnly(!filterSameInciOnly)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                            filterSameInciOnly
+                              ? 'bg-purple-100 border-purple-300 text-purple-900 shadow-2xs'
+                              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                          }`}
+                          title={filterSameInciOnly ? 'Menampilkan bahan dengan nama INCI/Kimia yang sama (Rekomendasi CPKB)' : 'Menampilkan seluruh bahan'}
+                        >
+                          <span>{filterSameInciOnly ? '🔬 INCI Sama Saja' : '🌐 Semua Bahan'}</span>
+                        </button>
+
                         <button
                           type="button"
                           onClick={() => setFilterSimilarCategoryOnly(!filterSimilarCategoryOnly)}
@@ -1463,85 +1597,146 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
                               : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
                           }`}
                         >
-                          {filterSimilarCategoryOnly ? 'Kategori Cocok Saja' : 'Semua Kategori'}
+                          {filterSimilarCategoryOnly ? 'Kategori Cocok' : 'Semua Kategori'}
                         </button>
                       </div>
 
-                      {/* Info jumlah hasil filter */}
+                      {/* Notifikasi Indikator Filter INCI */}
+                      {filterSameInciOnly &&
+                        (rmChemName || '').trim() &&
+                        !/^[-–—\s]+$/.test((rmChemName || '').trim()) &&
+                        !['n/a', 'na', 'none', 'tidak ada', 'null', 'undefined'].includes((rmChemName || '').trim().toLowerCase()) && (
+                        <div className="text-[10px] text-purple-800 bg-purple-50/80 border border-purple-200 rounded-lg px-2.5 py-1.5 flex items-center justify-between">
+                          <span>
+                            🔬 <strong>Menyaring INCI Sama:</strong> "<em>{(rmChemName || '').trim()}</em>"
+                          </span>
+                          <span className="font-semibold text-purple-600 text-[9px] uppercase">
+                            Standar CPKB & BPOM
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Info jumlah hasil filter saat ada pencarian teks */}
                       {substituteSearchQuery.trim() && (
                         <div className="text-[10px] text-slate-500 px-1">
-                          Ditemukan {
-                            rawMaterials
-                              .filter((rm) => rm.code !== rmCode)
-                              .filter((rm) => {
-                                const q = substituteSearchQuery.toLowerCase();
-                                return (
-                                  rm.code.toLowerCase().includes(q) ||
-                                  rm.name.toLowerCase().includes(q) ||
-                                  rm.chemicalName.toLowerCase().includes(q)
-                                );
-                              }).length
-                          } bahan baku sesuai kata kunci "{substituteSearchQuery}"
+                          Kata kunci: "{substituteSearchQuery}"
                         </div>
                       )}
 
                       {/* List Item Bahan Pengganti */}
-                      <div className="bg-white border border-slate-200 rounded-xl p-2 max-h-40 overflow-y-auto space-y-1 divide-y divide-slate-100">
-                        {rawMaterials
+                      {(() => {
+                        const isValidInci = (val?: string): boolean => {
+                          if (!val) return false;
+                          const trimmed = val.trim();
+                          if (!trimmed) return false;
+                          if (/^[-–—\s]+$/.test(trimmed)) return false;
+                          const lower = trimmed.toLowerCase();
+                          if (['n/a', 'na', 'none', 'tidak ada', 'null', 'undefined'].includes(lower)) return false;
+                          return true;
+                        };
+
+                        const hasValidCurrentInci = isValidInci(rmChemName);
+                        const normalizedCurrentInci = (rmChemName || '').trim().toLowerCase();
+
+                        const candidateList = rawMaterials
                           .filter((rm) => rm.code !== rmCode)
                           .filter((rm) => {
-                            if (!filterSimilarCategoryOnly) return true;
-                            const itemCats = rm.categories || [rm.category];
-                            return rmCategories.some((c) => itemCats.includes(c));
-                          })
-                          .filter((rm) => {
-                            if (!substituteSearchQuery.trim()) return true;
-                            const q = substituteSearchQuery.toLowerCase();
-                            return (
-                              rm.code.toLowerCase().includes(q) ||
-                              rm.name.toLowerCase().includes(q) ||
-                              rm.chemicalName.toLowerCase().includes(q)
-                            );
-                          })
-                          .map((rm) => {
-                            const isChecked = rmSubstitutes.includes(rm.code);
-                            return (
-                              <div
-                                key={rm.id}
-                                onClick={() => toggleRmSubstitute(rm.code)}
-                                className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors ${
-                                  isChecked ? 'bg-purple-50/70 text-purple-900 font-bold' : 'hover:bg-slate-50 text-slate-700'
-                                }`}
-                              >
-                                <div className="flex items-center gap-2.5">
-                                  <input
-                                    type="checkbox"
-                                    checked={isChecked}
-                                    onChange={() => {}} // handled by parent onClick
-                                    className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 pointer-events-none"
-                                  />
-                                  <div>
-                                    <div className="text-xs">
-                                      <span className="font-mono text-purple-700 font-bold">{rm.code}</span> - {rm.name}
-                                    </div>
-                                    <div className="text-[10px] text-slate-400 italic">
-                                      {rm.chemicalName || 'INCI tidak dicatat'}
+                            if (filterSameInciOnly) {
+                              if (!hasValidCurrentInci) return false;
+                              const itemInci = (rm.chemicalName || '').trim().toLowerCase();
+                              if (!isValidInci(itemInci) || itemInci !== normalizedCurrentInci) return false;
+                            }
+                            if (filterSimilarCategoryOnly) {
+                              const itemCats = rm.categories || [rm.category];
+                              if (!rmCategories.some((c) => itemCats.includes(c))) return false;
+                            }
+                            if (substituteSearchQuery.trim()) {
+                              const q = substituteSearchQuery.toLowerCase();
+                              return (
+                                rm.code.toLowerCase().includes(q) ||
+                                rm.name.toLowerCase().includes(q) ||
+                                (rm.chemicalName && rm.chemicalName.toLowerCase().includes(q))
+                              );
+                            }
+                            return true;
+                          });
+
+                        if (filterSameInciOnly && !hasValidCurrentInci) {
+                          return (
+                            <div className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-xl p-3 text-center space-y-1">
+                              <p className="font-bold">💡 Kolom Nama Kimia / INCI diisi tanda strip ("---") atau belum diisi</p>
+                              <p className="text-[11px] text-amber-700">
+                                Bahan tanpa nama INCI resmi dianggap sebagai <strong>Bahan Tunggal Spesifik</strong> (tidak memiliki substitusi resmi). Silakan centang opsi "Bahan Tunggal Spesifik" di atas atau klik tombol <strong>"🌐 Semua Bahan"</strong>.
+                              </p>
+                            </div>
+                          );
+                        }
+
+                        if (candidateList.length === 0) {
+                          return (
+                            <div className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-xl p-3 text-center space-y-1.5">
+                              {filterSameInciOnly ? (
+                                <>
+                                  <p className="font-bold text-slate-800">
+                                    Tidak ada bahan baku lain dengan nama INCI "<em>{(rmChemName || '').trim()}</em>"
+                                  </p>
+                                  <p className="text-[11px] text-slate-500">
+                                    Bahan ini dapat ditandai sebagai <strong>"Bahan Tunggal Spesifik"</strong> (tidak memiliki substitusi resmi), atau klik <strong>"🌐 Semua Bahan"</strong> untuk melihat katalog lainnya.
+                                  </p>
+                                </>
+                              ) : (
+                                <p className="text-slate-400 italic">
+                                  Tidak ada bahan baku yang cocok dengan filter atau kata kunci pencarian.
+                                </p>
+                              )}
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div className="bg-white border border-slate-200 rounded-xl p-2 max-h-48 overflow-y-auto space-y-1 divide-y divide-slate-100">
+                            {candidateList.map((rm) => {
+                              const isChecked = rmSubstitutes.includes(rm.code);
+                              return (
+                                <div
+                                  key={rm.id}
+                                  onClick={() => toggleRmSubstitute(rm.code)}
+                                  className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors ${
+                                    isChecked ? 'bg-purple-50/70 text-purple-900 font-bold' : 'hover:bg-slate-50 text-slate-700'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2.5">
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={() => {}} // handled by parent onClick
+                                      className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 pointer-events-none"
+                                    />
+                                    <div>
+                                      <div className="text-xs">
+                                        <span className="font-mono text-purple-700 font-bold">{rm.code}</span> - {rm.name}
+                                      </div>
+                                      <div className="text-[10px] text-slate-400 italic">
+                                        {rm.chemicalName || 'INCI tidak dicatat'}
+                                      </div>
                                     </div>
                                   </div>
+                                  <div className="flex items-center gap-1.5">
+                                    {rm.manufacturer && (
+                                      <span className="text-[9px] text-slate-400 truncate max-w-[100px]">
+                                        {rm.manufacturer}
+                                      </span>
+                                    )}
+                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 text-slate-600 uppercase border border-slate-200">
+                                      {rm.category}
+                                    </span>
+                                  </div>
                                 </div>
-                                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 text-slate-600 uppercase border border-slate-200">
-                                  {rm.category}
-                                </span>
-                              </div>
-                            );
-                          })}
-
-                        {rawMaterials.filter((rm) => rm.code !== rmCode).length === 0 && (
-                          <p className="text-xs text-slate-400 p-2 text-center italic">
-                            Belum ada master bahan baku lain yang terdaftar dalam database.
-                          </p>
-                        )}
-                      </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
@@ -2505,6 +2700,168 @@ export const RndMaterialsTab: React.FC<RndMaterialsTabProps> = ({
                   <>
                     <Trash2 className="w-3.5 h-3.5" />
                     <span>Konfirmasi Hapus</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Modal Sinkronisasi Otomatis Substitusi INCI Sama */}
+      {showInciSyncModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-purple-50/70">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-purple-700 text-white flex items-center justify-center shadow-xs">
+                  <RefreshCw className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-purple-950">
+                    Sinkronisasi Otomatis Substitusi INCI Sama
+                  </h3>
+                  <p className="text-[11px] text-purple-700 mt-0.5">
+                    Bahan baku dengan Nama Kimia / INCI identik akan saling ditautkan sebagai Approved Substitutes.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowInciSyncModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-white/80 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 overflow-y-auto space-y-4 flex-1">
+              {/* Ringkasan Statistik */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-xl bg-purple-50 border border-purple-200 text-purple-900">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-purple-600">
+                    Kelompok INCI Sama Ditemukan
+                  </div>
+                  <div className="text-xl font-black font-mono mt-0.5">
+                    {inciSyncPreview.groups.length} <span className="text-xs font-normal">Grup INCI</span>
+                  </div>
+                  <div className="text-[10px] text-purple-700 mt-0.5">
+                    Mencakup {inciSyncPreview.totalToUpdate} bahan yang akan saling substitusi
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    Bahan INCI Tunggal (Unik)
+                  </div>
+                  <div className="text-xl font-black font-mono mt-0.5">
+                    {inciSyncPreview.singlesCount} <span className="text-xs font-normal">Bahan</span>
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">
+                    Tetap sebagai Bahan Tunggal Spesifik
+                  </div>
+                </div>
+              </div>
+
+              {/* Pratinjau Daftar Kelompok */}
+              <div>
+                <div className="text-xs font-extrabold text-slate-800 uppercase tracking-wide mb-2 flex items-center justify-between">
+                  <span>Daftar Bahan Yang Akan Saling Ditautkan:</span>
+                  <span className="text-[10px] font-mono text-purple-700 font-bold">
+                    Standar CPKB & BPOM
+                  </span>
+                </div>
+
+                {inciSyncPreview.groups.length === 0 ? (
+                  <div className="p-6 text-center border border-dashed border-slate-200 rounded-xl bg-slate-50 text-xs text-slate-500 space-y-1">
+                    <p className="font-bold text-slate-700">Belum ada bahan dengan nama INCI kembar.</p>
+                    <p className="text-[11px] text-slate-400">
+                      Seluruh bahan baku yang terdaftar saat ini memiliki nama INCI yang unik / belum ada duplikat nama kimia.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+                    {inciSyncPreview.groups.map((group, gIdx) => (
+                      <div
+                        key={gIdx}
+                        className="p-3 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-2"
+                      >
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-purple-600 shrink-0" />
+                            <span className="text-xs font-black text-slate-900">
+                              INCI: <em>"{group.inci}"</em>
+                            </span>
+                          </div>
+                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-800 border border-purple-200">
+                            {group.materials.length} Bahan Saling Substitusi
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                          {group.materials.map((m) => (
+                            <div
+                              key={m.id}
+                              className="p-2 rounded-lg bg-slate-50 border border-slate-200/80 flex flex-col justify-between"
+                            >
+                              <div>
+                                <span className="font-mono font-bold text-purple-700 text-[11px]">
+                                  {m.code}
+                                </span>{' '}
+                                <span className="font-bold text-slate-800 text-[11px]">{m.name}</span>
+                              </div>
+                              <div className="text-[10px] text-slate-400 mt-1 flex items-center justify-between">
+                                <span>Pabrikan: {m.manufacturer || '-'}</span>
+                                <span className="uppercase text-[9px] font-semibold text-slate-500">
+                                  {m.category}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Penjelasan Integritas CPKB */}
+              <div className="p-3 bg-purple-50/60 border border-purple-100 rounded-xl text-[11px] text-purple-900 space-y-1">
+                <p className="font-bold flex items-center gap-1.5">
+                  <span>ℹ️</span> Kepatuhan Sistem CPKB BPOM:
+                </p>
+                <p className="text-[10.5px] text-purple-800 leading-relaxed">
+                  Tindakan ini akan memperbarui relasi <code>approved_substitutes</code> langsung ke database Supabase secara transaksi massal. Formulasi produk dan BoM yang merujuk pada bahan-bahan ini otomatis dapat menggunakan alternatif dari kelompok INCI yang sama.
+                </p>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-end gap-2.5 bg-slate-50">
+              <button
+                type="button"
+                disabled={isSyncingInci}
+                onClick={() => setShowInciSyncModal(false)}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={isSyncingInci || inciSyncPreview.groups.length === 0}
+                onClick={handleExecuteInciSync}
+                className="px-5 py-2 rounded-xl bg-purple-700 hover:bg-purple-800 disabled:bg-slate-300 text-white text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-md shadow-purple-700/20"
+              >
+                {isSyncingInci ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Menyinkronkan ke Supabase...</span>
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Terapkan ke Database Supabase</span>
                   </>
                 )}
               </button>

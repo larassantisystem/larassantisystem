@@ -2,8 +2,10 @@ import { supabase, isSupabaseConfigured } from '../../../core/auth/supabaseClien
 import { RawMaterial } from '../../../types';
 import { ensureUUID } from '../../../utils/uuid';
 
-// In-memory cache untuk performa UI (BUKAN local storage)
+// In-memory cache untuk performa UI & efisiensi EGRESS Supabase (BUKAN local storage)
 let inMemoryRawMaterials: RawMaterial[] = [];
+let lastFetchTime = 0;
+const CACHE_TTL_MS = 60 * 1000; // 60 detik cache di RAM browser
 
 // Bersihkan data lama jika ada di browser
 if (typeof window !== 'undefined' && window.localStorage) {
@@ -15,6 +17,10 @@ if (typeof window !== 'undefined' && window.localStorage) {
 }
 
 export const materialService = {
+  invalidateCache: () => {
+    lastFetchTime = 0;
+  },
+
   checkConnection: async (): Promise<{ configured: boolean; connected: boolean; message: string }> => {
     if (!isSupabaseConfigured || !supabase) {
       return {
@@ -50,61 +56,22 @@ export const materialService = {
     return inMemoryRawMaterials;
   },
 
-  getMaterials: async (): Promise<RawMaterial[]> => {
+  getMaterials: async (forceRefresh = false): Promise<RawMaterial[]> => {
+    const isCacheValid = !forceRefresh && inMemoryRawMaterials.length > 0 && (Date.now() - lastFetchTime < CACHE_TTL_MS);
+    if (isCacheValid) {
+      return inMemoryRawMaterials;
+    }
+
     if (isSupabaseConfigured && supabase) {
       try {
-        let allData: any[] = [];
-        let from = 0;
-        const step = 1000;
-        let hasMore = true;
-        let fetchError = false;
+        const { data, error } = await supabase
+          .from('raw_materials')
+          .select('id, code, spec_number, name, chemical_name, category, categories, other_category_specification, storage_conditions, sds_doc_number, sds_file_url, sds_file_name, approved_substitutes, manufacturer, qc_parameters, supplier_lead_time_days, reorder_point, last_modified_by, last_modified_at')
+          .order('code', { ascending: true })
+          .limit(1000);
 
-        // Fetch in batches of 1000 to bypass Supabase PostgREST default max-rows limit (1000 items)
-        while (hasMore) {
-          let batchSuccess = false;
-          let batchError: any = null;
-
-          for (let attempt = 0; attempt < 3; attempt++) {
-            try {
-              const { data, error } = await supabase
-                .from('raw_materials')
-                .select('*')
-                .order('code', { ascending: true })
-                .range(from, from + step - 1);
-
-              if (error) {
-                batchError = error;
-                await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
-                continue;
-              }
-
-              if (data && data.length > 0) {
-                allData = allData.concat(data);
-                if (data.length < step) {
-                  hasMore = false;
-                } else {
-                  from += step;
-                }
-              } else {
-                hasMore = false;
-              }
-              batchSuccess = true;
-              break;
-            } catch (netErr) {
-              batchError = netErr;
-              await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
-            }
-          }
-
-          if (!batchSuccess) {
-            console.warn('[Supabase Audit] Warning fetching raw_materials batch:', batchError?.message || batchError);
-            fetchError = true;
-            break;
-          }
-        }
-
-        if (!fetchError && (allData.length > 0 || from === 0)) {
-          const mapped: RawMaterial[] = allData.map((m: any) => ({
+        if (!error && data) {
+          const mapped: RawMaterial[] = data.map((m: any) => ({
             id: m.id,
             code: m.code,
             specNumber: m.spec_number || m.specNumber || `SP-BB-${m.code}`,
@@ -126,7 +93,10 @@ export const materialService = {
             lastModifiedAt: m.last_modified_at || m.lastModifiedAt,
           }));
           inMemoryRawMaterials = mapped;
+          lastFetchTime = Date.now();
           return mapped;
+        } else if (error) {
+          console.warn('[Supabase Audit] Error fetching raw_materials:', error.message);
         }
       } catch (err) {
         console.error('[Supabase Audit] Supabase raw materials fetch exception:', err);
@@ -324,5 +294,114 @@ export const materialService = {
   getAllMaterials: async (): Promise<{ data: RawMaterial[] | null; error: string | null }> => {
     const list = await materialService.getMaterials();
     return { data: list, error: null };
+  },
+
+  // Sinkronisasi otomatis dua arah untuk bahan dengan INCI sama
+  syncMutualSubstitutesByInci: async (
+    currentList?: RawMaterial[],
+    modifierName = 'Staff RnD'
+  ): Promise<{
+    success: boolean;
+    updatedCount: number;
+    groupsCount: number;
+    updatedMaterials: RawMaterial[];
+    error?: string;
+  }> => {
+    const list = currentList && currentList.length > 0 ? currentList : await materialService.getMaterials(true);
+    if (!list || list.length === 0) {
+      return { success: true, updatedCount: 0, groupsCount: 0, updatedMaterials: [] };
+    }
+
+    // Helper: Validasi nama INCI bukan strip ('---', '--', '-') atau kosong/placeholder
+    const isValidInciName = (val?: string): boolean => {
+      if (!val) return false;
+      const trimmed = val.trim();
+      if (!trimmed) return false;
+      if (/^[-–—\s]+$/.test(trimmed)) return false;
+      const lower = trimmed.toLowerCase();
+      if (['n/a', 'na', 'none', 'tidak ada', 'null', 'undefined'].includes(lower)) return false;
+      return true;
+    };
+
+    // 1. Grouping hanya untuk bahan dengan nama INCI valid (bukan strip '---')
+    const inciMap = new Map<string, RawMaterial[]>();
+    for (const rm of list) {
+      if (!isValidInciName(rm.chemicalName)) continue;
+      const inci = (rm.chemicalName || '').trim().toLowerCase();
+      if (!inciMap.has(inci)) {
+        inciMap.set(inci, []);
+      }
+      inciMap.get(inci)!.push(rm);
+    }
+
+    let updatedCount = 0;
+    let groupsCount = 0;
+    const updatedMaterials: RawMaterial[] = [];
+
+    // 2. Hitung substitusi timbal-balik (mutual) untuk setiap bahan
+    for (const rm of list) {
+      const hasValidInci = isValidInciName(rm.chemicalName);
+      const inci = hasValidInci ? (rm.chemicalName || '').trim().toLowerCase() : '';
+      const siblings = inci ? (inciMap.get(inci) || []).filter((s) => s.code !== rm.code) : [];
+
+      if (siblings.length > 0) {
+        const newSubstituteCodes = Array.from(new Set(siblings.map((s) => s.code.trim().toUpperCase())));
+        
+        const currentSubCodes = (rm.approvedSubstitutes || []).map((c) => c.trim().toUpperCase()).sort();
+        const nextSubCodes = [...newSubstituteCodes].sort();
+        const isChanged =
+          currentSubCodes.length !== nextSubCodes.length ||
+          currentSubCodes.some((val, idx) => val !== nextSubCodes[idx]) ||
+          rm.isSingleSpecificMaterial === true;
+
+        if (isChanged) {
+          updatedCount++;
+          const updatedItem: RawMaterial = {
+            ...rm,
+            approvedSubstitutes: newSubstituteCodes,
+            isSingleSpecificMaterial: false,
+            lastModifiedBy: modifierName,
+            lastModifiedAt: new Date().toISOString(),
+          };
+          updatedMaterials.push(updatedItem);
+        }
+      } else {
+        // Bahan tanpa saudara kembar INCI, atau yang INCI-nya '---'/placeholder:
+        // Otomatis dianggap sebagai Bahan Tunggal Spesifik (0 Substitusi)
+        const needsSingleMark =
+          rm.isSingleSpecificMaterial !== true ||
+          (rm.approvedSubstitutes && rm.approvedSubstitutes.length > 0);
+
+        if (needsSingleMark) {
+          updatedCount++;
+          const updatedItem: RawMaterial = {
+            ...rm,
+            approvedSubstitutes: [],
+            isSingleSpecificMaterial: true,
+            lastModifiedBy: modifierName,
+            lastModifiedAt: new Date().toISOString(),
+          };
+          updatedMaterials.push(updatedItem);
+        }
+      }
+    }
+
+    for (const [_, items] of inciMap.entries()) {
+      if (items.length >= 2) {
+        groupsCount++;
+      }
+    }
+
+    if (updatedMaterials.length > 0) {
+      await materialService.saveMaterials(updatedMaterials);
+      materialService.invalidateCache();
+    }
+
+    return {
+      success: true,
+      updatedCount,
+      groupsCount,
+      updatedMaterials,
+    };
   },
 };
