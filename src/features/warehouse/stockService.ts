@@ -282,8 +282,20 @@ export const stockService = {
    */
   getMovementLedger: async (): Promise<StockMovementLedger[]> => {
     let movements: StockMovementLedger[] = [];
+    const seenSignatures = new Set<string>();
+    const seenIds = new Set<string>();
 
-    // 1. Kueri dari tabel public.stock_movements di Supabase (Opsi 2)
+    const getSignature = (m: Partial<StockMovementLedger>): string => {
+      const lot = (m.lotInternalNumber || '').trim().toUpperCase();
+      const ref = (m.referenceNumber || '').trim().toUpperCase();
+      const type = (m.movementType || '').trim();
+      const change = Number(m.qtyChange ?? 0).toFixed(3);
+      // Cocokkan hingga level menit untuk menghindari duplikasi lintas ID
+      const timeMinute = (m.timestamp || '').slice(0, 16);
+      return `${lot}|${ref}|${type}|${change}|${timeMinute}`;
+    };
+
+    // 1. Kueri dari tabel public.stock_movements di Supabase (Opsi 2 - Single Source of Truth Cloud)
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase
@@ -292,33 +304,42 @@ export const stockService = {
           .order('timestamp', { ascending: false });
 
         if (!error && data && data.length > 0) {
-          movements = data.map((d: any) => ({
-            id: d.id,
-            timestamp: d.timestamp || d.created_at,
-            materialCode: d.material_code,
-            materialName: d.material_name,
-            materialType: (d.material_type || 'raw') as MaterialStockType,
-            lotInternalNumber: d.lot_internal_number,
-            movementType: d.movement_type as any,
-            referenceNumber: d.reference_number || '-',
-            qtyBefore: Number(d.qty_before) || 0,
-            qtyChange: Number(d.qty_change) || 0,
-            qtyAfter: Number(d.qty_after) || 0,
-            unit: d.unit || 'kg',
-            performer: {
-              name: d.performer_name || 'Petugas Gudang',
-              role: d.performer_role || 'Staff Gudang',
-              department: d.performer_department || 'Warehouse',
-            },
-            notes: d.notes || '',
-          }));
+          for (const d of data) {
+            const mappedItem: StockMovementLedger = {
+              id: d.id,
+              timestamp: d.timestamp || d.created_at,
+              materialCode: d.material_code,
+              materialName: d.material_name,
+              materialType: (d.material_type || 'raw') as MaterialStockType,
+              lotInternalNumber: d.lot_internal_number,
+              movementType: d.movement_type as any,
+              referenceNumber: d.reference_number || '-',
+              qtyBefore: Number(d.qty_before) || 0,
+              qtyChange: Number(d.qty_change) || 0,
+              qtyAfter: Number(d.qty_after) || 0,
+              unit: d.unit || 'kg',
+              performer: {
+                name: d.performer_name || 'Petugas Gudang',
+                role: d.performer_role || 'Staff Gudang',
+                department: d.performer_department || 'Warehouse',
+              },
+              notes: d.notes || '',
+            };
+
+            const sig = getSignature(mappedItem);
+            if (!seenIds.has(mappedItem.id) && !seenSignatures.has(sig)) {
+              movements.push(mappedItem);
+              seenIds.add(mappedItem.id);
+              seenSignatures.add(sig);
+            }
+          }
         }
       } catch (err) {
         console.warn('[stockService] Could not fetch from stock_movements:', err);
       }
     }
 
-    // 2. Fallback / Merge dengan qcPayload.stockLedger pada GRN (Dual Persistence)
+    // 2. Fallback / Merge dengan qcPayload.stockLedger pada GRN (Hanya jika belum ada di cloud ledger)
     const grns = await warehouseService.getGrnRecords();
     const grnLedger: StockMovementLedger[] = [];
     grns.forEach((grn) => {
@@ -327,13 +348,14 @@ export const stockService = {
       }
     });
 
-    const existingIds = new Set(movements.map((m) => m.id));
-    grnLedger.forEach((item) => {
-      if (!existingIds.has(item.id)) {
+    for (const item of grnLedger) {
+      const sig = getSignature(item);
+      if (!seenIds.has(item.id) && !seenSignatures.has(sig)) {
         movements.push(item);
-        existingIds.add(item.id);
+        seenIds.add(item.id);
+        seenSignatures.add(sig);
       }
-    });
+    }
 
     return movements.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   },
