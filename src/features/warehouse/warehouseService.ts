@@ -768,6 +768,25 @@ export const warehouseService = {
     return true;
   },
 
+  /**
+   * Mengosongkan seluruh data GRN dan mutasi stok di Supabase & in-memory cache
+   */
+  clearAllWarehouseData: async (): Promise<boolean> => {
+    inMemoryGrnRecords = [];
+    lastGrnFetchTime = 0;
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await Promise.allSettled([
+          supabase.from('warehouse_grn').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+          supabase.from('stock_movements').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+        ]);
+      } catch (e) {
+        console.warn('[warehouseService] Error clearing data from Supabase:', e);
+      }
+    }
+    return true;
+  },
+
   calculateStats: (records: GrnRecord[]): GrnStats => {
     return {
       totalIncoming: records.length,
