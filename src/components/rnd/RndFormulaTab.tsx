@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
+import * as XLSX from 'xlsx';
 import { BulkFormulation, FormulationIngredient, Product, RawMaterial } from '../../types';
 import { useAuth } from '../../core/auth/AuthContext';
 import { canWriteModule } from '../../core/auth/permissionGuard';
@@ -112,10 +113,19 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
   const [authPasswordError, setAuthPasswordError] = useState<string | null>(null);
   const [isVerifyingPassword, setIsVerifyingPassword] = useState(false);
 
-  // --- IMPORT EXCEL MODAL ---
+  // --- IMPORT EXCEL & CSV MASTER BOM STATE ---
   const [showImportModal, setShowImportModal] = useState(false);
+  const [importTab, setImportTab] = useState<'file' | 'paste'>('file');
+  const [importFile, setImportFile] = useState<File | null>(null);
   const [importCsvText, setImportCsvText] = useState('');
+  const [importPreview, setImportPreview] = useState<BulkFormulation[]>([]);
+  const [importValidationIssues, setImportValidationIssues] = useState<Array<{ bomCode: string; issue: string; type: 'warning' | 'error' }>>([]);
+  const [isParsingImport, setIsParsingImport] = useState(false);
+  const [isSubmittingImport, setIsSubmittingImport] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
+  const [expandedPreviewBoms, setExpandedPreviewBoms] = useState<Record<string, boolean>>({});
+  const excelFileInputRef = useRef<HTMLInputElement>(null);
 
   // --- CPB MODAL STATE ---
   const [showCpbModal, setShowCpbModal] = useState(false);
@@ -757,77 +767,397 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
     }
   };
 
-  // --- IMPORT EXCEL CSV HANDLER ---
-  const handleExecuteImportCsv = () => {
-    if (!importCsvText.trim()) {
-      setImportError('Masukkan data teks CSV atau Excel terlebih dahulu.');
+  // --- DOWNLOAD TEMPLATE EXCEL MASTER BOM ---
+  const handleDownloadTemplate = () => {
+    const templateData = [
+      [
+        'Kode BOM',
+        'Kode Produk',
+        'Nama Produk',
+        'Versi Formula',
+        'Kode Bahan Baku',
+        'Nama Bahan Baku',
+        'Persentase (%)',
+        'Fase Pengolahan',
+        'Instruksi / Catatan Teknis'
+      ],
+      // Contoh Formula 1: Brightening Facial Serum 30ml (Total 100.00%)
+      [
+        'BOM-PJ0001-V1.0',
+        'PJ0001',
+        'Brightening Facial Serum 30ml',
+        'v1.0',
+        'RM-AQUA',
+        'Aqua Demineralisata',
+        74.50,
+        'Fase A',
+        'Pelarut utama, panaskan hingga 70°C'
+      ],
+      [
+        'BOM-PJ0001-V1.0',
+        'PJ0001',
+        'Brightening Facial Serum 30ml',
+        'v1.0',
+        'RM-GLYC',
+        'Glycerin 99.5%',
+        5.00,
+        'Fase A',
+        'Humektan pelembap kulit'
+      ],
+      [
+        'BOM-PJ0001-V1.0',
+        'PJ0001',
+        'Brightening Facial Serum 30ml',
+        'v1.0',
+        'RM-NIAC',
+        'Niacinamide PC',
+        4.00,
+        'Fase B',
+        'Bahan aktif pencerah, larutkan suhu ruang'
+      ],
+      [
+        'BOM-PJ0001-V1.0',
+        'PJ0001',
+        'Brightening Facial Serum 30ml',
+        'v1.0',
+        'RM-HA',
+        'Sodium Hyaluronate',
+        0.50,
+        'Fase B',
+        'Anti-aging & hidrasi mendalam'
+      ],
+      [
+        'BOM-PJ0001-V1.0',
+        'PJ0001',
+        'Brightening Facial Serum 30ml',
+        'v1.0',
+        'RM-BUTYL',
+        'Butylene Glycol',
+        15.00,
+        'Fase C',
+        'Co-solvent dan penetration enhancer'
+      ],
+      [
+        'BOM-PJ0001-V1.0',
+        'PJ0001',
+        'Brightening Facial Serum 30ml',
+        'v1.0',
+        'RM-PHENOXY',
+        'Phenoxyethanol',
+        1.00,
+        'Fase D',
+        'Sistem pengawet ramah kulit'
+      ],
+      // Contoh Formula 2: Aloe Vera Soothing Gel 100g (Total 100.00%)
+      [
+        'BOM-PJ0002-V1.0',
+        'PJ0002',
+        'Aloe Vera Soothing Gel 100g',
+        'v1.0',
+        'RM-AQUA',
+        'Aqua Demineralisata',
+        91.00,
+        'Fase A',
+        'Basis pelarut gel'
+      ],
+      [
+        'BOM-PJ0002-V1.0',
+        'PJ0002',
+        'Aloe Vera Soothing Gel 100g',
+        'v1.0',
+        'RM-CARBOMER',
+        'Carbomer 940',
+        1.50,
+        'Fase A',
+        'Gelling agent, dispersi hingga mengembang'
+      ],
+      [
+        'BOM-PJ0002-V1.0',
+        'PJ0002',
+        'Aloe Vera Soothing Gel 100g',
+        'v1.0',
+        'RM-TEA',
+        'Triethanolamine 99%',
+        1.50,
+        'Fase B',
+        'Penetral pH & pengental gel'
+      ],
+      [
+        'BOM-PJ0002-V1.0',
+        'PJ0002',
+        'Aloe Vera Soothing Gel 100g',
+        'v1.0',
+        'RM-ALOE',
+        'Aloe Barbadensis Leaf Extract',
+        5.00,
+        'Fase C',
+        'Ekstrak aktif lidah buaya'
+      ],
+      [
+        'BOM-PJ0002-V1.0',
+        'PJ0002',
+        'Aloe Vera Soothing Gel 100g',
+        'v1.0',
+        'RM-PHENOXY',
+        'Phenoxyethanol',
+        1.00,
+        'Fase D',
+        'Pengawet kosmetik'
+      ]
+    ];
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(templateData);
+
+    ws['!cols'] = [
+      { wch: 20 }, // Kode BOM
+      { wch: 15 }, // Kode Produk
+      { wch: 32 }, // Nama Produk
+      { wch: 14 }, // Versi Formula
+      { wch: 18 }, // Kode Bahan Baku
+      { wch: 28 }, // Nama Bahan Baku
+      { wch: 16 }, // Persentase (%)
+      { wch: 16 }, // Fase Pengolahan
+      { wch: 42 }, // Instruksi / Catatan Teknis
+    ];
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Template Master BOM');
+    XLSX.writeFile(wb, 'Template_Import_Master_BOM.xlsx');
+  };
+
+  // --- PARSE MATRIX DATA (EXCEL / SPREADSHEET AOA) ---
+  const parseMatrixData = (rawRows: any[][]) => {
+    if (!rawRows || rawRows.length < 2) {
+      setImportError('File atau teks tidak memiliki data yang cukup (minimal 1 baris header dan 1 baris data).');
+      setImportPreview([]);
+      setImportValidationIssues([]);
       return;
     }
 
-    try {
-      const lines = importCsvText.trim().split('\n');
-      if (lines.length < 2) {
-        setImportError('Data harus memiliki minimal 1 baris header dan 1 baris data.');
-        return;
+    const headerRow = rawRows[0].map((c) => String(c || '').trim().toLowerCase());
+    
+    let colBomCode = headerRow.findIndex((h) => h.includes('bom') || h.includes('kode formula'));
+    let colProductCode = headerRow.findIndex((h) => (h.includes('produk') || h.includes('product')) && h.includes('kode'));
+    let colProductName = headerRow.findIndex((h) => (h.includes('produk') || h.includes('product')) && (h.includes('nama') || h.includes('name')));
+    let colVersion = headerRow.findIndex((h) => h.includes('versi') || h.includes('version'));
+    let colRmCode = headerRow.findIndex((h) => (h.includes('bahan') || h.includes('material') || h.includes('raw')) && h.includes('kode'));
+    let colRmName = headerRow.findIndex((h) => (h.includes('bahan') || h.includes('material')) && h.includes('nama'));
+    let colPercentage = headerRow.findIndex((h) => h.includes('persen') || h.includes('%') || h.includes('percentage'));
+    let colPhase = headerRow.findIndex((h) => h.includes('fase') || h.includes('phase'));
+    let colInstructions = headerRow.findIndex((h) => h.includes('instruksi') || h.includes('mixing') || h.includes('catatan') || h.includes('prosedur'));
+
+    if (colBomCode === -1) colBomCode = 0;
+    if (colProductCode === -1) colProductCode = 1;
+    if (colProductName === -1) colProductName = 2;
+    if (colVersion === -1) colVersion = 3;
+    if (colRmCode === -1) colRmCode = 4;
+    if (colRmName === -1) colRmName = 5;
+    if (colPercentage === -1) colPercentage = 6;
+    if (colPhase === -1) colPhase = 7;
+    if (colInstructions === -1) colInstructions = 8;
+
+    const importedMap = new Map<string, BulkFormulation>();
+    const issues: Array<{ bomCode: string; issue: string; type: 'warning' | 'error' }> = [];
+
+    for (let i = 1; i < rawRows.length; i++) {
+      const row = rawRows[i];
+      if (!row || row.length === 0) continue;
+
+      const bomCodeRaw = String(row[colBomCode] || '').trim();
+      const pCodeRaw = String(row[colProductCode] || '').trim();
+      const rmCodeRaw = String(row[colRmCode] || '').trim();
+
+      if (!bomCodeRaw && !rmCodeRaw) continue;
+
+      if (!bomCodeRaw) {
+        issues.push({
+          bomCode: `Baris ${i + 1}`,
+          issue: `Baris ${i + 1} diabaikan karena Kode BOM kosong.`,
+          type: 'error'
+        });
+        continue;
       }
 
-      // Parser sederhana: NomorBOM,KodeProduk,NamaProduk,Versi,KodeBahan,Persen,Fase
-      const importedMap = new Map<string, BulkFormulation>();
+      const bomCode = bomCodeRaw.toUpperCase();
+      const pCode = (pCodeRaw || 'PJ0001').toUpperCase();
+      const matchedProduct = products.find((p) => p.code?.toUpperCase() === pCode || p.id === pCode);
+      const pName = String(row[colProductName] || matchedProduct?.name || pCode).trim();
+      const ver = String(row[colVersion] || 'v1.0').trim();
+      const phase = String(row[colPhase] || 'Fase A').trim();
+      const instruction = String(row[colInstructions] || '').trim();
 
-      for (let i = 1; i < lines.length; i++) {
-        const row = lines[i].split(',').map((c) => c.trim().replace(/^"|"$/g, ''));
-        if (row.length < 5) continue;
+      let pct = 0;
+      const rawPctStr = String(row[colPercentage] ?? '').replace(',', '.').replace('%', '').trim();
+      pct = parseFloat(rawPctStr) || 0;
 
-        const bomCode = row[0].toUpperCase();
-        const pCode = row[1].toUpperCase();
-        const pName = row[2] || pCode;
-        const ver = row[3] || 'v1.0';
-        const rmCode = row[4].toUpperCase();
-        const pct = parseFloat(row[5]) || 0;
-        const phase = row[6] || 'Fase A';
+      if (!importedMap.has(bomCode)) {
+        importedMap.set(bomCode, {
+          id: `bom-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          code: bomCode,
+          name: `${pName} (${ver})`,
+          productId: matchedProduct?.id || '',
+          productCode: pCode,
+          productName: pName,
+          version: ver,
+          status: 'ACTIVE',
+          bulkQuantityKg: 100,
+          purposeDescription: `Master BOM Ruahan CPKB untuk produk ${pName} basis 100 kg.`,
+          mixingInstructions: instruction || 'Prosedur standar mixing pengolahan bulk ruahan CPKB.',
+          ingredients: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+      }
 
-        if (!importedMap.has(bomCode)) {
-          importedMap.set(bomCode, {
-            id: `bom-${Date.now()}-${i}`,
-            code: bomCode,
-            name: pName,
-            productCode: pCode,
-            productName: pName,
-            version: ver,
-            status: 'ACTIVE',
-            bulkQuantityKg: 100,
-            purposeDescription: 'Import Batch Master BOM standar CPKB',
-            mixingInstructions: 'Prosedur standar mixing pengolahan bulk ruahan CPKB.',
-            ingredients: [],
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
+      const targetForm = importedMap.get(bomCode)!;
+
+      if (instruction && (!targetForm.mixingInstructions || targetForm.mixingInstructions.includes('Prosedur standar'))) {
+        targetForm.mixingInstructions = instruction;
+      }
+
+      if (rmCodeRaw) {
+        const rmCode = rmCodeRaw.toUpperCase();
+        const matchedRM = rawMaterials.find((r) => r.code?.toUpperCase() === rmCode);
+        const rmDesc = String(row[colRmName] || matchedRM?.name || '').trim();
+
+        if (!matchedRM) {
+          issues.push({
+            bomCode,
+            issue: `Kode bahan baku "${rmCode}" belum terdaftar di Master Bahan Baku R&D.`,
+            type: 'warning'
           });
         }
 
-        const targetF = importedMap.get(bomCode)!;
-        targetF.ingredients.push({
+        targetForm.ingredients.push({
           rawMaterialCode: rmCode,
           percentage: pct,
           qtyBasisKg: Number(((pct * 100) / 100).toFixed(4)),
           phase: phase,
+          description: rmDesc,
         });
       }
+    }
 
-      const importedList = Array.from(importedMap.values());
-      if (importedList.length === 0) {
-        setImportError('Tidak ada baris data valid yang berhasil diproses.');
-        return;
+    const formulationList = Array.from(importedMap.values());
+
+    // Validasi total persen per BOM
+    formulationList.forEach((f) => {
+      const sumPct = f.ingredients.reduce((acc, curr) => acc + curr.percentage, 0);
+      const rounded = Math.round(sumPct * 100) / 100;
+      if (Math.abs(rounded - 100) > 0.05) {
+        issues.push({
+          bomCode: f.code,
+          issue: `Total persentase formula adalah ${rounded}%, belum pas 100.00% (Standar CPKB mengharuskan total formula 100%).`,
+          type: 'warning'
+        });
+      }
+    });
+
+    if (formulationList.length === 0) {
+      setImportError('Tidak ditemukan baris data Master BOM yang valid dalam file.');
+    } else {
+      setImportError(null);
+    }
+
+    setImportPreview(formulationList);
+    setImportValidationIssues(issues);
+  };
+
+  // --- HANDLE FILE UPLOAD (EXCEL/CSV) ---
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportFile(file);
+    setIsParsingImport(true);
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = new Uint8Array(evt.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const rawJson: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+        parseMatrixData(rawJson);
+      } catch (err: any) {
+        setImportError(`Gagal membaca file Excel: ${err.message || 'Format tidak valid'}`);
+      } finally {
+        setIsParsingImport(false);
+      }
+    };
+    reader.onerror = () => {
+      setImportError('Gagal membaca berkas.');
+      setIsParsingImport(false);
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  // --- HANDLE PASTE TEXT PARSING ---
+  const handleParsePasteText = () => {
+    if (!importCsvText.trim()) {
+      setImportError('Silakan tempel teks tabel dari Excel terlebih dahulu.');
+      return;
+    }
+
+    setIsParsingImport(true);
+    try {
+      const lines = importCsvText.trim().split('\n');
+      const rawRows: string[][] = lines.map((line) => {
+        if (line.includes('\t')) {
+          return line.split('\t').map((c) => c.trim().replace(/^"|"$/g, ''));
+        }
+        if (line.includes(';')) {
+          return line.split(';').map((c) => c.trim().replace(/^"|"$/g, ''));
+        }
+        return line.split(',').map((c) => c.trim().replace(/^"|"$/g, ''));
+      });
+
+      parseMatrixData(rawRows);
+    } catch (err: any) {
+      setImportError(`Gagal membaca teks: ${err.message || 'Format tidak valid'}`);
+    } finally {
+      setIsParsingImport(false);
+    }
+  };
+
+  // --- EXECUTE IMPORT TO SUPABASE ---
+  const handleExecuteImport = async () => {
+    if (!canWrite) {
+      alert('Akses Ditolak: Anda memiliki izin Hanya Lihat (Read-Only) pada modul R&D.');
+      return;
+    }
+    if (importPreview.length === 0 || isSubmittingImport) return;
+
+    setIsSubmittingImport(true);
+    try {
+      const res = await formulaService.saveBulkFormulations(importPreview);
+      if (!res.success) {
+        throw new Error(res.error || 'Gagal menyimpan ke database Supabase');
       }
 
-      // Simpan semua ke database
-      importedList.forEach((f) => onSaveFormula(f));
+      importPreview.forEach((f) => onSaveFormula(f));
+
+      auditLogger.logAction({
+        action: 'CREATE',
+        module: 'RND',
+        actorNik: user?.nik || 'admin',
+        actorName: user?.name || user?.username || 'Staff RnD',
+        targetNik: 'ALL',
+        details: `Import massal ${importPreview.length} Master BOM formulasi standar CPKB via Excel.`,
+      });
 
       setShowImportModal(false);
+      setImportFile(null);
       setImportCsvText('');
+      setImportPreview([]);
+      setImportValidationIssues([]);
       setImportError(null);
-      showToast(`Berhasil mengimpor ${importedList.length} Master BOM ke database.`, 'success');
+      showToast(`Berhasil mengimpor ${importPreview.length} Master BOM ke database Supabase.`, 'success');
     } catch (err: any) {
-      setImportError(`Gagal membaca format data: ${err.message}`);
+      console.error('Import error:', err);
+      setImportError(`Gagal menyimpan data ke Supabase: ${err.message || String(err)}`);
+    } finally {
+      setIsSubmittingImport(false);
     }
   };
 
@@ -1067,11 +1397,31 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
             <option value="ARCHIVED">ARCHIVED</option>
           </select>
 
+          {/* Button Unduh Template Excel BOM */}
+          <button
+            type="button"
+            onClick={handleDownloadTemplate}
+            className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+            title="Unduh Template Excel Resmi Master BOM Standar CPKB"
+          >
+            <Download className="w-3.5 h-3.5 text-slate-600" />
+            <span>Unduh Template BOM</span>
+          </button>
+
           {/* Button Import Excel */}
           <button
             type="button"
-            onClick={() => setShowImportModal(true)}
+            onClick={() => {
+              setImportTab('file');
+              setImportFile(null);
+              setImportCsvText('');
+              setImportPreview([]);
+              setImportValidationIssues([]);
+              setImportError(null);
+              setShowImportModal(true);
+            }}
             className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+            title="Import Master BOM dari File Excel atau Salin Data"
           >
             <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
             <span>Import Excel</span>
@@ -2478,76 +2828,359 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
       {/* MODAL: IMPORT EXCEL / CSV MASTER BOM                                      */}
       {/* ========================================================================= */}
       {showImportModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
-          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-xl shadow-2xl p-6 text-slate-800 relative space-y-4">
-            <div className="flex items-start justify-between pb-3 border-b border-slate-100">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] text-slate-800 relative">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-emerald-50/60">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-700 text-white flex items-center justify-center font-bold shadow-xs">
                   <FileSpreadsheet className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-extrabold text-slate-900">Import Master BOM Formulasi (Excel/CSV)</h3>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Unggah atau tempel data komposisi formula matriks berformat CSV/Excel.
+                  <h3 className="text-sm font-extrabold text-slate-900">
+                    Import Master BOM Formulasi (Excel / Spreadsheet)
+                  </h3>
+                  <p className="text-[11px] text-emerald-800 mt-0.5">
+                    Unggah file .xlsx / .csv atau salin-tempel langsung dari Microsoft Excel atau Google Sheets.
                   </p>
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setShowImportModal(false)}
-                className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Template Info */}
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 text-[11px] text-slate-600 space-y-1 font-mono">
-              <div className="font-bold text-slate-700">Format Kolom CSV yang Diharapkan:</div>
-              <div>NomorBOM,KodeProduk,NamaProduk,Versi,KodeBahan,Persen,Fase</div>
-              <div className="text-slate-400 text-[10px]">
-                Contoh: BOM-PJ0099-V1.0,PJ0099,Hair Tonic,v1.0,B0001,85.50,Fase A
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleDownloadTemplate}
+                  className="px-3 py-1.5 rounded-xl border border-emerald-300 bg-white hover:bg-emerald-50 text-emerald-800 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+                  title="Unduh berkas template Excel resmi berstandar CPKB"
+                >
+                  <Download className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>Unduh Template BOM</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowImportModal(false)}
+                  className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-white/80 transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
             </div>
 
-            {/* CSV Textarea */}
-            <div className="space-y-1.5">
-              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-                Tempel Data CSV di Sini
-              </label>
-              <textarea
-                rows={6}
-                value={importCsvText}
-                onChange={(e) => setImportCsvText(e.target.value)}
-                placeholder="NomorBOM,KodeProduk,NamaProduk,Versi,KodeBahan,Persen,Fase..."
-                className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 font-mono text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-teal-600"
-              />
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-4 flex-1">
+              {/* Tab Selector */}
+              <div className="flex items-center border border-slate-200 p-1 rounded-2xl bg-slate-50 w-full sm:w-fit">
+                <button
+                  type="button"
+                  onClick={() => setImportTab('file')}
+                  className={`flex-1 sm:flex-initial px-4 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                    importTab === 'file'
+                      ? 'bg-white text-emerald-800 shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Unggah File Excel (.xlsx / .csv)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setImportTab('paste')}
+                  className={`flex-1 sm:flex-initial px-4 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                    importTab === 'paste'
+                      ? 'bg-white text-emerald-800 shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Salin-Tempel dari Excel</span>
+                </button>
+              </div>
+
+              {/* Tab 1: File Dropzone */}
+              {importTab === 'file' && (
+                <div className="space-y-3">
+                  <input
+                    ref={excelFileInputRef}
+                    type="file"
+                    accept=".xlsx, .xls, .csv"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDraggingFile(true);
+                    }}
+                    onDragLeave={() => setIsDraggingFile(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setIsDraggingFile(false);
+                      const file = e.dataTransfer.files?.[0];
+                      if (file) {
+                        setImportFile(file);
+                        const fakeEvent = { target: { files: [file] } } as any;
+                        handleFileChange(fakeEvent);
+                      }
+                    }}
+                    onClick={() => excelFileInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-2 ${
+                      isDraggingFile
+                        ? 'border-emerald-500 bg-emerald-50/80 scale-[0.99]'
+                        : 'border-slate-300 hover:border-emerald-400 bg-slate-50 hover:bg-emerald-50/20'
+                    }`}
+                  >
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                      <FileSpreadsheet className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-800">
+                        {importFile ? importFile.name : 'Klik untuk memilih file Excel, atau seret & lepas file ke sini'}
+                      </p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Mendukung format .xlsx, .xls, dan .csv (Ukuran maks: 10 MB)
+                      </p>
+                    </div>
+                    {importFile && (
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                        Ukuran: {(importFile.size / 1024).toFixed(1)} KB — Siap diproses
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 2: Paste Text */}
+              {importTab === 'paste' && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-[11px] text-slate-600">
+                    <span className="font-bold uppercase tracking-wider text-slate-700">
+                      Tempel (Paste) Data dari Excel:
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      Otomatis mengenali pemisah Tab, Koma, atau Titik Koma
+                    </span>
+                  </div>
+                  <textarea
+                    rows={6}
+                    value={importCsvText}
+                    onChange={(e) => setImportCsvText(e.target.value)}
+                    placeholder="Kode BOM	Kode Produk	Nama Produk	Versi	Kode Bahan Baku	Nama Bahan Baku	Persentase (%)	Fase..."
+                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 font-mono text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-emerald-600"
+                  />
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      disabled={isParsingImport || !importCsvText.trim()}
+                      onClick={handleParsePasteText}
+                      className="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-900 disabled:bg-slate-300 text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      {isParsingImport ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Membaca Data...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Periksa & Baca Data</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Error Alert */}
               {importError && (
-                <p className="text-[11px] font-bold text-rose-600 flex items-center gap-1">
-                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                  <span>{importError}</span>
-                </p>
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl text-xs font-semibold text-rose-700 flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <div className="flex-1">{importError}</div>
+                </div>
+              )}
+
+              {/* Section Preview & Validasi */}
+              {importPreview.length > 0 && (
+                <div className="space-y-3 pt-2 border-t border-slate-100">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                      <span>🔍</span> Pratinjau Master BOM Terdeteksi ({importPreview.length} Formula)
+                    </h4>
+                    <span className="text-[10px] font-mono text-emerald-800 font-bold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                      Siap Disimpan
+                    </span>
+                  </div>
+
+                  {/* Summary Metric Badges */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-center">
+                      <div className="text-[10px] text-slate-500 font-bold uppercase">Total Master BOM</div>
+                      <div className="text-base font-black text-slate-800 font-mono mt-0.5">
+                        {importPreview.length} Formula
+                      </div>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-center">
+                      <div className="text-[10px] text-slate-500 font-bold uppercase">Total Baris Bahan</div>
+                      <div className="text-base font-black text-slate-800 font-mono mt-0.5">
+                        {importPreview.reduce((sum, f) => sum + f.ingredients.length, 0)} Bahan
+                      </div>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-center">
+                      <div className="text-[10px] text-emerald-700 font-bold uppercase">Persentase Seimbang (100%)</div>
+                      <div className="text-base font-black text-emerald-800 font-mono mt-0.5">
+                        {
+                          importPreview.filter(
+                            (f) => Math.abs(f.ingredients.reduce((s, c) => s + c.percentage, 0) - 100) <= 0.05
+                          ).length
+                        } / {importPreview.length}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Validation Issues Alert */}
+                  {importValidationIssues.length > 0 && (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl space-y-1.5 text-xs text-amber-900">
+                      <div className="font-extrabold flex items-center gap-1.5">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>Catatan Validasi CPKB ({importValidationIssues.length} Hal Ditemukan):</span>
+                      </div>
+                      <ul className="list-disc list-inside space-y-0.5 text-[11px] text-amber-800 pl-1 max-h-24 overflow-y-auto">
+                        {importValidationIssues.map((issue, idx) => (
+                          <li key={idx}>
+                            <strong>[{issue.bomCode}]:</strong> {issue.issue}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* List BOM Cards */}
+                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                    {importPreview.map((form) => {
+                      const totalPct = form.ingredients.reduce((acc, curr) => acc + curr.percentage, 0);
+                      const isBalanced = Math.abs(totalPct - 100) <= 0.05;
+                      const isExpanded = !!expandedPreviewBoms[form.code];
+
+                      return (
+                        <div
+                          key={form.code}
+                          className="border border-slate-200 rounded-2xl p-3 bg-white shadow-2xs space-y-2"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-xs font-extrabold text-teal-800 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-lg">
+                                {form.code}
+                              </span>
+                              <span className="text-xs font-extrabold text-slate-900">{form.productName}</span>
+                              <span className="text-[10px] font-mono text-slate-500 font-bold">
+                                ({form.version})
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                  isBalanced
+                                    ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                                    : 'bg-amber-100 text-amber-800 border-amber-200'
+                                }`}
+                              >
+                                Total: {totalPct.toFixed(2)}% {isBalanced ? '✓' : '⚠️'}
+                              </span>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setExpandedPreviewBoms((prev) => ({
+                                    ...prev,
+                                    [form.code]: !prev[form.code],
+                                  }))
+                                }
+                                className="px-2 py-1 rounded-lg border border-slate-200 text-[10px] font-bold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+                              >
+                                {isExpanded ? 'Tutup Rincian' : `Lihat ${form.ingredients.length} Bahan`}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Expanded Ingredients Table */}
+                          {isExpanded && (
+                            <div className="border border-slate-100 rounded-xl overflow-hidden mt-2 bg-slate-50/50">
+                              <table className="w-full text-left text-[11px]">
+                                <thead className="bg-slate-100 text-[10px] font-bold text-slate-600 uppercase">
+                                  <tr>
+                                    <th className="py-1 px-2.5">Fase</th>
+                                    <th className="py-1 px-2.5">Kode Bahan</th>
+                                    <th className="py-1 px-2.5">Deskripsi / Nama</th>
+                                    <th className="py-1 px-2.5 text-right">Persen (%)</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                  {form.ingredients.map((ing, ingIdx) => (
+                                    <tr key={ingIdx} className="hover:bg-white">
+                                      <td className="py-1 px-2.5 font-bold text-slate-500">{ing.phase}</td>
+                                      <td className="py-1 px-2.5 font-mono font-bold text-teal-700">
+                                        {ing.rawMaterialCode}
+                                      </td>
+                                      <td className="py-1 px-2.5 text-slate-700">
+                                        {ing.description || '-'}
+                                      </td>
+                                      <td className="py-1 px-2.5 text-right font-mono font-bold text-slate-900">
+                                        {ing.percentage.toFixed(2)}%
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               )}
             </div>
 
-            {/* Actions */}
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+            {/* Modal Footer */}
+            <div className="px-6 py-3.5 border-t border-slate-100 flex items-center justify-between bg-slate-50">
               <button
                 type="button"
-                onClick={() => setShowImportModal(false)}
-                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-100"
+                onClick={handleDownloadTemplate}
+                className="text-xs font-bold text-emerald-800 hover:text-emerald-950 flex items-center gap-1.5 cursor-pointer"
               >
-                Batal
+                <Download className="w-3.5 h-3.5 text-emerald-700" />
+                <span>Unduh File Template Excel</span>
               </button>
-              <button
-                type="button"
-                onClick={handleExecuteImportCsv}
-                className="px-4 py-2 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-extrabold text-xs flex items-center gap-1.5"
-              >
-                <Upload className="w-4 h-4" />
-                <span>Eksekusi Import</span>
-              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={isSubmittingImport}
+                  onClick={() => setShowImportModal(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  disabled={importPreview.length === 0 || isSubmittingImport}
+                  onClick={handleExecuteImport}
+                  className="px-5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 disabled:bg-slate-300 text-white font-extrabold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md shadow-emerald-700/20"
+                >
+                  {isSubmittingImport ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Menyimpan ke Supabase...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4" />
+                      <span>Simpan & Import ke Supabase ({importPreview.length} BOM)</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

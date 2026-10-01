@@ -277,8 +277,8 @@ export const EmployeeManagementModule: React.FC<EmployeeManagementModuleProps> =
           updatePayload.password = formPassword.trim();
         }
 
-        const success = authService.updateEmployee(cleanNik, updatePayload);
-        if (success) {
+        const resUpdate = await authService.updateEmployee(cleanNik, updatePayload);
+        if (resUpdate.success) {
           setActionSuccess(`Data karyawan ${formName} (${cleanNik}) dan hak akses otoritas berhasil diperbarui.`);
           setIsModalOpen(false);
 
@@ -298,7 +298,7 @@ export const EmployeeManagementModule: React.FC<EmployeeManagementModuleProps> =
 
           await fetchEmployees();
         } else {
-          setActionError('Gagal memperbarui data karyawan.');
+          setActionError(resUpdate.error || 'Gagal memperbarui data karyawan.');
         }
       } else {
         // Add Mode
@@ -357,8 +357,8 @@ export const EmployeeManagementModule: React.FC<EmployeeManagementModuleProps> =
       return;
     }
 
-    const success = authService.deleteEmployee(deletingEmployee.nik);
-    if (success) {
+    const resDelete = await authService.deleteEmployee(deletingEmployee.nik);
+    if (resDelete.success) {
       setActionSuccess(`Akun karyawan ${deletingEmployee.name} (${deletingEmployee.nik}) telah dinonaktifkan.`);
       
       // Audit log

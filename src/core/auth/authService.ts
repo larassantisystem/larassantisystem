@@ -48,23 +48,50 @@ export const authService = {
           const { data: profileData } = await supabase
             .from('profiles')
             .select('id, nik, name, department, role, position, email')
-            .eq('id', authUser.id)
+            .or(`id.eq.${authUser.id},nik.ilike.${cleanNik},email.ilike.${primaryEmail}`)
             .maybeSingle();
 
           const isAdminUser = profileData?.role === 'admin' || cleanNik.toLowerCase() === 'admin' || profileData?.nik?.toLowerCase() === 'admin' || authUser.user_metadata?.role === 'admin';
           const resolvedNik = isAdminUser ? 'admin' : (profileData?.nik || (authUser.user_metadata?.nik as string) || cleanNik);
+          const resolvedDept = isAdminUser 
+            ? 'admin' 
+            : ((profileData?.department as UserProfile['department']) || (authUser.user_metadata?.department as UserProfile['department']) || 'rnd');
+          const resolvedRole = isAdminUser 
+            ? 'admin' 
+            : ((profileData?.role as UserProfile['role']) || (authUser.user_metadata?.role as UserProfile['role']) || 'staff');
+          const resolvedName = profileData?.name || authUser.user_metadata?.full_name || (isAdminUser ? 'ADMIN' : `Karyawan ${cleanNik}`);
+
+          // Jika record profil di database Supabase belum ada, otomatis sinkronkan ke tabel profiles
+          if (!profileData) {
+            try {
+              await supabase.from('profiles').upsert({
+                id: authUser.id,
+                nik: resolvedNik,
+                name: resolvedName,
+                department: resolvedDept,
+                role: resolvedRole,
+                email: authUser.email || primaryEmail,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              }, { onConflict: 'id' });
+            } catch (syncErr) {
+              console.warn('[authService] Auto-sync profile to Supabase exception:', syncErr);
+            }
+          }
 
           const userProfile: UserProfile = {
             id: profileData?.id || authUser.id,
             nik: resolvedNik,
-            name: profileData?.name || authUser.user_metadata?.full_name || (isAdminUser ? 'ADMIN' : `Karyawan ${cleanNik}`),
-            department: isAdminUser ? 'admin' : (profileData?.department || 'rnd'),
-            role: isAdminUser ? 'admin' : (profileData?.role || 'staff'),
+            name: resolvedName,
+            department: resolvedDept,
+            role: resolvedRole,
             position: profileData?.position,
             email: authUser.email || primaryEmail,
           };
 
-          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(userProfile));
+          if (typeof window !== 'undefined' && window.localStorage) {
+            window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(userProfile));
+          }
           return { user: userProfile, error: null };
         }
 
@@ -82,18 +109,22 @@ export const authService = {
           if (validPasswords.includes(password) || password.length >= 4) {
             const isAdminUser = dbProfile.role === 'admin' || cleanNik.toLowerCase() === 'admin' || dbProfile.nik?.toLowerCase() === 'admin';
             const resolvedNik = isAdminUser ? 'admin' : (dbProfile.nik || cleanNik);
+            const resolvedDept = (isAdminUser ? 'admin' : (dbProfile.department || 'rnd')) as UserProfile['department'];
+            const resolvedRole = (isAdminUser ? 'admin' : (dbProfile.role || 'staff')) as UserProfile['role'];
 
             const userProfile: UserProfile = {
               id: dbProfile.id,
               nik: resolvedNik,
               name: dbProfile.name || (isAdminUser ? 'ADMIN' : `Karyawan ${cleanNik}`),
-              department: isAdminUser ? 'admin' : (dbProfile.department || 'rnd'),
-              role: isAdminUser ? 'admin' : (dbProfile.role || 'staff'),
+              department: resolvedDept,
+              role: resolvedRole,
               position: dbProfile.position,
               email: dbProfile.email || primaryEmail,
             };
 
-            localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(userProfile));
+            if (typeof window !== 'undefined' && window.localStorage) {
+              window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(userProfile));
+            }
             return { user: userProfile, error: null };
           } else {
             return { user: null, error: 'Kata sandi yang dimasukkan salah. Silakan coba lagi.' };
@@ -322,136 +353,160 @@ export const authService = {
   }): Promise<{ success: boolean; error?: string }> => {
     const rawNik = employee.nik.trim();
     const cleanNik = rawNik.toLowerCase() === 'admin' ? 'admin' : (rawNik.toUpperCase().startsWith('LMS') ? rawNik.toUpperCase() : `LMS${rawNik.toUpperCase()}`);
-    const password = employee.password || 'password123';
-    const email = cleanNik === 'admin' ? 'admin@larassanti.co.id' : `${cleanNik}@larassanti.co.id`;
+    const password = employee.password || 'laras123';
+    const email = cleanNik === 'admin' ? 'admin@larassanti.co.id' : `${cleanNik.toLowerCase()}@larassanti.co.id`;
 
-    // Ensure specific access map is updated
-    if (employee.specificAccess && employee.specificAccess.length > 0) {
-      const accessMapRaw = localStorage.getItem('cosmo_ddmp_specific_access_map');
-      const accessMap = accessMapRaw ? JSON.parse(accessMapRaw) : {};
-      accessMap[cleanNik.toLowerCase()] = employee.specificAccess;
-      localStorage.setItem('cosmo_ddmp_specific_access_map', JSON.stringify(accessMap));
-    }
-
-    // Ensure removed from deactivated list if re-registering
-    const deactivatedRaw = localStorage.getItem('cosmo_ddmp_deactivated_niks');
-    if (deactivatedRaw) {
-      const deactivatedNiks: string[] = JSON.parse(deactivatedRaw);
-      const filtered = deactivatedNiks.filter((n) => n.toLowerCase() !== cleanNik.toLowerCase());
-      localStorage.setItem('cosmo_ddmp_deactivated_niks', JSON.stringify(filtered));
-    }
-
-    // 1. Try to register in Supabase Auth if configured
+    // 1. Registrasi ke Supabase Auth GoTrue (jika dikonfigurasi)
+    let authUserId: string | null = null;
     if (isSupabaseConfigured && supabase) {
       try {
-        const { error } = await supabase.auth.signUp({
+        const { data: signUpData, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
             data: {
               nik: cleanNik,
-              full_name: employee.name,
+              full_name: employee.name.trim(),
               department: employee.department,
               role: employee.role,
             },
           },
         });
+        if (signUpData?.user?.id) {
+          authUserId = signUpData.user.id;
+        }
         if (error) {
-          console.warn('Supabase signUp warning:', error.message);
+          console.warn('Supabase signUp note:', error.message);
         }
       } catch (err: any) {
         console.warn('Supabase registration exception', err);
       }
     }
 
-    // Save to local custom users storage for instantaneous overlay and login
-    const customUsersRaw = localStorage.getItem('cosmo_ddmp_registered_users');
-    const customUsers = customUsersRaw ? JSON.parse(customUsersRaw) : [];
-    
-    const existingIdx = customUsers.findIndex((u: any) => u.nik.toLowerCase() === cleanNik.toLowerCase());
-    const newUser = {
-      id: `usr-custom-${Date.now()}`,
-      nik: cleanNik,
-      name: employee.name,
-      department: employee.department,
-      role: employee.role,
-      password: password,
-      specificAccess: employee.specificAccess || [],
-      createdAt: new Date().toISOString(),
-    };
-
-    if (existingIdx >= 0) {
-      customUsers[existingIdx] = newUser;
-    } else {
-      customUsers.push(newUser);
-    }
-
-    localStorage.setItem('cosmo_ddmp_registered_users', JSON.stringify(customUsers));
-    return { success: true };
-  },
-
-  updateEmployee: (nik: string, updatedData: Partial<UserProfile & { password?: string }>) => {
-    const cleanNik = nik.trim().toLowerCase();
-
-    // 1. Update specific access map
-    if (updatedData.specificAccess !== undefined) {
-      const accessMapRaw = localStorage.getItem('cosmo_ddmp_specific_access_map');
-      const accessMap = accessMapRaw ? JSON.parse(accessMapRaw) : {};
-      accessMap[cleanNik] = updatedData.specificAccess;
-      localStorage.setItem('cosmo_ddmp_specific_access_map', JSON.stringify(accessMap));
-    }
-
-    // 2. Update custom users list
-    const raw = localStorage.getItem('cosmo_ddmp_registered_users');
-    const list = raw ? JSON.parse(raw) : [];
-    const idx = list.findIndex((u: any) => u.nik.toLowerCase() === cleanNik);
-    if (idx !== -1) {
-      list[idx] = { ...list[idx], ...updatedData };
-    } else {
-      list.push({
-        id: `usr-${cleanNik}`,
-        nik: updatedData.nik || nik,
-        name: updatedData.name || `Karyawan ${nik}`,
-        department: updatedData.department || 'rnd',
-        role: updatedData.role || 'staff',
-        email: updatedData.email || `${cleanNik}@larassanti.co.id`,
-        specificAccess: updatedData.specificAccess || [],
-        ...updatedData,
-      });
-    }
-    localStorage.setItem('cosmo_ddmp_registered_users', JSON.stringify(list));
-
-    // 3. If currently logged in user is updated, sync local storage session
-    const currentSession = authService.getCurrentUser();
-    if (currentSession && currentSession.nik.toLowerCase() === cleanNik) {
-      const updatedSession = { ...currentSession, ...updatedData };
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updatedSession));
-    }
-
-    return true;
-  },
-
-  deleteEmployee: (nik: string) => {
-    const cleanNik = nik.trim().toLowerCase();
-    const raw = localStorage.getItem('cosmo_ddmp_registered_users');
-    if (raw) {
+    // 2. Transaksi Nyata Langsung ke PostgreSQL Supabase (Tabel public.profiles)
+    if (isSupabaseConfigured && supabase) {
       try {
-        const list = JSON.parse(raw);
-        const filtered = list.filter((u: any) => u.nik.toLowerCase() !== cleanNik);
-        localStorage.setItem('cosmo_ddmp_registered_users', JSON.stringify(filtered));
-      } catch (e) {
-        console.error(e);
+        // Cek apakah NIK ini sudah ada di tabel profiles
+        const { data: existingProfile } = await supabase
+          .from('profiles')
+          .select('id')
+          .ilike('nik', cleanNik)
+          .maybeSingle();
+
+        if (existingProfile?.id) {
+          const { error: updateErr } = await supabase
+            .from('profiles')
+            .update({
+              name: employee.name.trim(),
+              department: employee.department,
+              role: employee.role,
+              email,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', existingProfile.id);
+
+          if (updateErr) {
+            console.error('[authService] Error updating profile in Supabase:', updateErr);
+            return { success: false, error: updateErr.message };
+          }
+        } else {
+          // Buat baris profile baru dengan ID UUID
+          const profileId = authUserId || crypto.randomUUID();
+          const { error: insertErr } = await supabase
+            .from('profiles')
+            .insert({
+              id: profileId,
+              nik: cleanNik,
+              name: employee.name.trim(),
+              department: employee.department,
+              role: employee.role,
+              email,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            });
+
+          if (insertErr) {
+            console.error('[authService] Error inserting profile in Supabase:', insertErr);
+            return { success: false, error: insertErr.message };
+          }
+        }
+      } catch (dbErr: any) {
+        console.error('[authService] Supabase profile upsert exception:', dbErr);
+        return { success: false, error: dbErr.message || String(dbErr) };
       }
     }
 
-    const deactivatedRaw = localStorage.getItem('cosmo_ddmp_deactivated_niks');
-    const deactivatedNiks: string[] = deactivatedRaw ? JSON.parse(deactivatedRaw) : [];
-    if (!deactivatedNiks.includes(cleanNik)) {
-      deactivatedNiks.push(cleanNik);
-      localStorage.setItem('cosmo_ddmp_deactivated_niks', JSON.stringify(deactivatedNiks));
+    return { success: true };
+  },
+
+  updateEmployee: async (nik: string, updatedData: Partial<UserProfile & { password?: string }>): Promise<{ success: boolean; error?: string }> => {
+    const cleanNik = nik.trim().toLowerCase() === 'admin' ? 'admin' : (nik.toUpperCase().startsWith('LMS') ? nik.toUpperCase() : `LMS${nik.toUpperCase()}`);
+
+    // Update langsung ke database PostgreSQL Supabase (tabel public.profiles)
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const payload: any = {
+          updated_at: new Date().toISOString(),
+        };
+        if (updatedData.name) payload.name = updatedData.name.trim();
+        if (updatedData.department) payload.department = updatedData.department;
+        if (updatedData.role) payload.role = updatedData.role;
+        if (updatedData.position) payload.position = updatedData.position;
+        if (updatedData.email) payload.email = updatedData.email;
+
+        const { error: dbErr } = await supabase
+          .from('profiles')
+          .update(payload)
+          .ilike('nik', cleanNik);
+
+        if (dbErr) {
+          console.error('[authService] Error updating profile in Supabase:', dbErr);
+          return { success: false, error: dbErr.message };
+        }
+      } catch (err: any) {
+        console.error('[authService] Supabase profile update exception:', err);
+        return { success: false, error: err.message || String(err) };
+      }
     }
 
-    return true;
+    // Jika user yang aktif saat ini diedit, sinkronkan sesi
+    const currentSession = authService.getCurrentUser();
+    if (currentSession && currentSession.nik.toLowerCase() === cleanNik.toLowerCase()) {
+      const updatedSession = { ...currentSession, ...updatedData };
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updatedSession));
+      }
+    }
+
+    return { success: true };
+  },
+
+  deleteEmployee: async (nik: string): Promise<{ success: boolean; error?: string }> => {
+    const cleanNik = nik.trim().toLowerCase() === 'admin' ? 'admin' : (nik.toUpperCase().startsWith('LMS') ? nik.toUpperCase() : `LMS${nik.toUpperCase()}`);
+
+    if (cleanNik.toLowerCase() === 'admin') {
+      return { success: false, error: 'Akun Super Admin tidak boleh dinonaktifkan.' };
+    }
+
+    // Hapus langsung dari tabel public.profiles di Supabase
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { error: dbErr } = await supabase
+          .from('profiles')
+          .delete()
+          .ilike('nik', cleanNik);
+
+        if (dbErr) {
+          console.error('[authService] Error deleting profile from Supabase:', dbErr);
+          return { success: false, error: dbErr.message };
+        }
+      } catch (err: any) {
+        console.error('[authService] Supabase profile delete exception:', err);
+        return { success: false, error: err.message || String(err) };
+      }
+    }
+
+    return { success: true };
   },
 
   /**

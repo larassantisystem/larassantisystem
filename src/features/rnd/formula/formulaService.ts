@@ -210,6 +210,71 @@ export const formulaService = {
   },
 
   /**
+   * Menyimpan kumpulan formulasi bulk ke Supabase secara batch
+   */
+  saveBulkFormulations: async (formulas: BulkFormulation[]): Promise<{ success: boolean; error?: string; savedCount?: number }> => {
+    if (!formulas || formulas.length === 0) return { success: true, savedCount: 0 };
+
+    const payloads = formulas.map((formula) => ({
+      id: formula.id,
+      code: formula.code.trim().toUpperCase(),
+      name: formula.name.trim(),
+      product_id: formula.productId || null,
+      product_code: formula.productCode.trim().toUpperCase(),
+      product_name: formula.productName.trim(),
+      version: formula.version || 'v1.0',
+      status: formula.status || 'ACTIVE',
+      bulk_quantity_kg: formula.bulkQuantityKg || 100,
+      purpose_description: formula.purposeDescription || '',
+      ingredients: formula.ingredients || [],
+      mixing_instructions: formula.mixingInstructions || '',
+      dynamic_process_steps: formula.dynamicProcessSteps || null,
+      technical_notes: formula.technicalNotes || '',
+      created_by: formula.createdBy || '',
+      updated_at: new Date().toISOString(),
+    }));
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { error } = await supabase
+          .from('bulk_formulations')
+          .upsert(payloads, { onConflict: 'id' });
+
+        if (error) {
+          console.error('[formulaService] Error batch upserting bulk_formulations:', error);
+          if (error.code === 'PGRST204' || error.message?.includes('column')) {
+            const fallbackPayloads = payloads.map((p) => {
+              const cp = { ...p };
+              delete (cp as any).dynamic_process_steps;
+              delete (cp as any).technical_notes;
+              return cp;
+            });
+            const { error: fallbackError } = await supabase
+              .from('bulk_formulations')
+              .upsert(fallbackPayloads, { onConflict: 'id' });
+            if (fallbackError) {
+              return { success: false, error: fallbackError.message };
+            }
+          } else {
+            return { success: false, error: error.message };
+          }
+        }
+      } catch (dbErr: any) {
+        console.error('[formulaService] Batch save exception:', dbErr);
+        return { success: false, error: dbErr.message || String(dbErr) };
+      }
+    }
+
+    // Update in-memory
+    const map = new Map<string, BulkFormulation>();
+    inMemoryFormulations.forEach((f) => map.set(f.code.toUpperCase(), f));
+    formulas.forEach((f) => map.set(f.code.toUpperCase(), { ...f, updatedAt: new Date().toISOString() }));
+    inMemoryFormulations = Array.from(map.values());
+
+    return { success: true, savedCount: formulas.length };
+  },
+
+  /**
    * Menghapus formulasi dari database Supabase
    */
   deleteFormulation: async (id: string, code?: string): Promise<{ success: boolean; error?: string }> => {

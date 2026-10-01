@@ -3,29 +3,16 @@ import { useAuth } from './AuthContext';
 import {
   Lock,
   Mail,
-  Building2,
   ShieldCheck,
-  FlaskConical,
-  CalendarDays,
-  CheckCircle2,
-  Package,
-  TrendingUp,
-  AlertCircle,
   Eye,
   EyeOff,
   ArrowRight,
-  X,
   Boxes,
   Award,
-  RotateCcw,
-  Users,
-  Factory,
-  ChevronDown,
-  ChevronUp,
   ShieldAlert,
-  Sparkles,
   Camera,
   QrCode,
+  X,
 } from 'lucide-react';
 import { Logo } from '../../components/Logo';
 import { UniversalQrScannerModal } from '../../components/UniversalQrScannerModal';
@@ -216,11 +203,6 @@ export const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Demo Accounts Filter & Accordion State
-  const [demoDeptFilter, setDemoDeptFilter] = useState<string>('all');
-  const [showDemoAccounts, setShowDemoAccounts] = useState(true);
-  const [selectedAccountNik, setSelectedAccountNik] = useState<string>('admin');
   const [showScanner, setShowScanner] = useState<boolean>(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -241,47 +223,6 @@ export const LoginPage: React.FC = () => {
 
     if (!result.success) {
       setErrorMessage(result.error || 'Autentikasi gagal. NIK/Username atau Kata Sandi yang dimasukkan tidak sesuai.');
-    }
-  };
-
-  const handleSelectDemoAccount = (acc: SupabaseAccountItem, autoLogin = false) => {
-    setUsername(acc.nik);
-    setPassword('laras123');
-    setSelectedAccountNik(acc.nik);
-    if (autoLogin) {
-      setIsSubmitting(true);
-      login(acc.nik, 'laras123').then((res) => {
-        setIsSubmitting(false);
-        if (!res.success) {
-          setErrorMessage(res.error || 'Gagal masuk dengan akun demo.');
-        }
-      });
-    }
-  };
-
-  const filteredDemoAccounts = SUPABASE_REGISTERED_ACCOUNTS.filter((acc) => {
-    if (demoDeptFilter === 'all') return true;
-    return acc.deptKey === demoDeptFilter;
-  });
-
-  const getDeptColorClass = (key: SupabaseAccountItem['deptKey']) => {
-    switch (key) {
-      case 'admin':
-        return 'text-amber-400 border-amber-500/30 bg-amber-500/10';
-      case 'rnd':
-        return 'text-purple-300 border-purple-500/30 bg-purple-500/10';
-      case 'quality':
-        return 'text-amber-300 border-amber-500/30 bg-amber-500/10';
-      case 'warehouse':
-        return 'text-orange-300 border-orange-500/30 bg-orange-500/10';
-      case 'production':
-        return 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10';
-      case 'ppic':
-        return 'text-blue-300 border-blue-500/30 bg-blue-500/10';
-      case 'management':
-        return 'text-indigo-300 border-indigo-500/30 bg-indigo-500/10';
-      default:
-        return 'text-slate-300 border-slate-500/30 bg-slate-500/10';
     }
   };
 
@@ -430,7 +371,7 @@ export const LoginPage: React.FC = () => {
                   Portal Masuk
                 </h2>
                 <p className="text-xs text-purple-200/70 mt-0.5">
-                  Silakan masuk dengan NIK terdaftar atau pilih akun demo resmi
+                  Silakan masuk dengan NIK dan kata sandi akun terdaftar
                 </p>
               </div>
               <div className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold">
@@ -453,10 +394,7 @@ export const LoginPage: React.FC = () => {
                     type="text"
                     required
                     value={username}
-                    onChange={(e) => {
-                      setUsername(e.target.value);
-                      setSelectedAccountNik(e.target.value);
-                    }}
+                    onChange={(e) => setUsername(e.target.value)}
                     placeholder="Masukkan NIK atau admin (contoh: admin, LMS10001)"
                     className="w-full rounded-2xl border border-purple-700/50 bg-purple-950/40 pl-10 pr-4 py-2.5 text-xs text-white placeholder-purple-300/40 focus:bg-purple-950/80 focus:border-purple-400 focus:outline-none focus:ring-1 focus:ring-purple-400 transition-all font-mono font-bold"
                   />
@@ -508,122 +446,6 @@ export const LoginPage: React.FC = () => {
                 )}
               </button>
             </form>
-
-            {/* INTERACTIVE DEMO ACCOUNTS ACCORDION (REAL SUPABASE ACCOUNTS) */}
-            <div className="mt-5 pt-4 border-t border-purple-900/50">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Users className="w-4 h-4 text-purple-400" />
-                  <span className="text-xs font-bold text-white tracking-tight">
-                    Akun Demo Terdaftar di Supabase ({SUPABASE_REGISTERED_ACCOUNTS.length})
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowDemoAccounts(!showDemoAccounts)}
-                  className="text-[11px] font-bold text-purple-300 hover:text-white flex items-center gap-1 cursor-pointer transition-colors"
-                >
-                  <span>{showDemoAccounts ? 'Sembunyikan' : 'Tampilkan Akun'}</span>
-                  {showDemoAccounts ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                </button>
-              </div>
-
-              {showDemoAccounts && (
-                <div className="space-y-2.5 animate-in fade-in">
-                  {/* Department Filter Pills */}
-                  <div className="flex flex-wrap gap-1.5 pb-1">
-                    {[
-                      { id: 'all', label: 'Semua (20)' },
-                      { id: 'admin', label: 'Admin' },
-                      { id: 'rnd', label: 'RnD' },
-                      { id: 'quality', label: 'QC' },
-                      { id: 'warehouse', label: 'Gudang' },
-                      { id: 'production', label: 'Produksi' },
-                      { id: 'ppic', label: 'PPIC' },
-                      { id: 'management', label: 'Direksi' },
-                    ].map((tab) => (
-                      <button
-                        key={tab.id}
-                        type="button"
-                        onClick={() => setDemoDeptFilter(tab.id)}
-                        className={`px-2.5 py-1 rounded-xl text-[10px] font-bold transition-all cursor-pointer ${
-                          demoDeptFilter === tab.id
-                            ? 'bg-purple-600 text-white shadow-xs'
-                            : 'bg-purple-950/50 hover:bg-purple-900/60 text-purple-300/80 border border-purple-800/40'
-                        }`}
-                      >
-                        {tab.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Scrollable List of Demo Accounts */}
-                  <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1 select-none">
-                    {filteredDemoAccounts.map((acc) => {
-                      const isSelected = selectedAccountNik.toLowerCase() === acc.nik.toLowerCase();
-                      const colorBadge = getDeptColorClass(acc.deptKey);
-
-                      return (
-                        <div
-                          key={acc.nik}
-                          onClick={() => handleSelectDemoAccount(acc, false)}
-                          className={`p-2.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
-                            isSelected
-                              ? 'bg-purple-900/60 border-purple-400 shadow-md shadow-purple-950/40'
-                              : 'bg-purple-950/30 hover:bg-purple-900/40 border-purple-800/40'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <span className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-black border ${colorBadge}`}>
-                              {acc.nik}
-                            </span>
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-xs font-bold text-white truncate">{acc.name}</span>
-                                <span className="text-[10px] text-purple-300/70 font-semibold truncate">
-                                  • {acc.role}
-                                </span>
-                              </div>
-                              <p className="text-[10px] text-purple-300/50 truncate">
-                                {acc.desc}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            {isSelected && (
-                              <span className="hidden sm:inline-flex px-1.5 py-0.5 rounded-md bg-purple-500/20 text-purple-300 text-[9px] font-bold">
-                                Terpilih
-                              </span>
-                            )}
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleSelectDemoAccount(acc, true);
-                              }}
-                              className="px-2.5 py-1 rounded-xl bg-purple-600/80 hover:bg-purple-500 active:bg-purple-700 text-white text-[10px] font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1"
-                              title="Masuk langsung dengan akun ini"
-                            >
-                              <span>Masuk</span>
-                              <ArrowRight className="w-2.5 h-2.5" />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Demo Password Hint */}
-                  <div className="pt-2 flex items-center justify-between text-[10px] text-purple-300/60 font-mono">
-                    <span>Password default seluruh akun:</span>
-                    <span className="font-bold text-purple-300 bg-purple-950/80 px-2 py-0.5 rounded-md border border-purple-800/60">
-                      laras123
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
 
             {/* Card Footer: SSL & Audit Trail */}
             <div className="mt-4 pt-3.5 border-t border-purple-900/50 flex items-center justify-between text-[10px] text-purple-300/60 font-semibold">
