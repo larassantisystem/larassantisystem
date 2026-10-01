@@ -140,7 +140,7 @@ export const QcRevertModal: React.FC<QcRevertModalProps> = ({
               className="w-full text-sm border border-slate-300 rounded-xl px-3 py-2.5 focus:outline-hidden focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-slate-800 placeholder-slate-400"
             />
             <p className="text-[10.5px] text-slate-500 mt-1">
-              Verifikasi kata sandi diperlukan sebagai tanda tangan otorisasi pengembalian dokumen ke gudang. (Kata sandi demo: <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-slate-700 font-semibold">laras123</code> atau <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-slate-700 font-semibold">admin</code>)
+              Verifikasi kata sandi diperlukan sebagai tanda tangan otorisasi pengembalian dokumen ke gudang. Gunakan kata sandi akun login Anda.
             </p>
           </div>
 

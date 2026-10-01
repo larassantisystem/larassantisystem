@@ -38,8 +38,13 @@ export const LotDetailModal: React.FC<LotDetailModalProps> = ({
     if (isOpen && material) {
       setIsLoadingLedger(true);
       stockService.getMovementLedger().then((logs) => {
+        const cleanMatCode = (material.materialCode || '').trim().toUpperCase();
+        const cleanMatName = (material.materialName || '').trim().toLowerCase();
         const filtered = logs.filter(
-          (log) => log.materialCode === material.materialCode || log.materialName === material.materialName
+          (log) =>
+            (log.materialCode && log.materialCode.trim().toUpperCase() === cleanMatCode) ||
+            (log.materialName && log.materialName.trim().toLowerCase() === cleanMatName) ||
+            material.lots.some((lot) => lot.lotInternalNumber === log.lotInternalNumber)
         );
         setLedgerHistory(filtered);
         setIsLoadingLedger(false);

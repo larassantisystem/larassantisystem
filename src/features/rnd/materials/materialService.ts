@@ -5,7 +5,7 @@ import { ensureUUID } from '../../../utils/uuid';
 // In-memory cache untuk performa UI & efisiensi EGRESS Supabase (BUKAN local storage)
 let inMemoryRawMaterials: RawMaterial[] = [];
 let lastFetchTime = 0;
-const CACHE_TTL_MS = 60 * 1000; // 60 detik cache di RAM browser
+const CACHE_TTL_MS = 15 * 60 * 1000; // 15 menit cache di RAM browser untuk menghemat egress
 
 // Bersihkan data lama jika ada di browser
 if (typeof window !== 'undefined' && window.localStorage) {
@@ -64,14 +64,41 @@ export const materialService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data, error } = await supabase
-          .from('raw_materials')
-          .select('id, code, spec_number, name, chemical_name, category, categories, other_category_specification, storage_conditions, sds_doc_number, sds_file_url, sds_file_name, approved_substitutes, manufacturer, qc_parameters, supplier_lead_time_days, reorder_point, last_modified_by, last_modified_at')
-          .order('code', { ascending: true })
-          .limit(1000);
+        const allFetchedRows: any[] = [];
+        const pageSize = 1000;
+        let page = 0;
+        let hasMore = true;
 
-        if (!error && data) {
-          const mapped: RawMaterial[] = data.map((m: any) => ({
+        // Auto-batching pagination: mengambil seluruh baris (termasuk jika >1000 baris) melewati batas PostgREST
+        while (hasMore) {
+          const from = page * pageSize;
+          const to = from + pageSize - 1;
+
+          const { data, error } = await supabase
+            .from('raw_materials')
+            .select('id, code, spec_number, name, chemical_name, category, categories, other_category_specification, storage_conditions, sds_doc_number, sds_file_url, sds_file_name, approved_substitutes, manufacturer, qc_parameters, supplier_lead_time_days, reorder_point, last_modified_by, last_modified_at')
+            .order('code', { ascending: true })
+            .range(from, to);
+
+          if (error) {
+            console.warn('[Supabase Audit] Error fetching raw_materials page', page, error.message);
+            break;
+          }
+
+          if (data && data.length > 0) {
+            allFetchedRows.push(...data);
+            if (data.length < pageSize) {
+              hasMore = false;
+            } else {
+              page++;
+            }
+          } else {
+            hasMore = false;
+          }
+        }
+
+        if (allFetchedRows.length > 0) {
+          const mapped: RawMaterial[] = allFetchedRows.map((m: any) => ({
             id: m.id,
             code: m.code,
             specNumber: m.spec_number || m.specNumber || `SP-BB-${m.code}`,
@@ -95,8 +122,6 @@ export const materialService = {
           inMemoryRawMaterials = mapped;
           lastFetchTime = Date.now();
           return mapped;
-        } else if (error) {
-          console.warn('[Supabase Audit] Error fetching raw_materials:', error.message);
         }
       } catch (err) {
         console.error('[Supabase Audit] Supabase raw materials fetch exception:', err);

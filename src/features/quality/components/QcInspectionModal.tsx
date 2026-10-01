@@ -828,7 +828,7 @@ export const QcInspectionModal: React.FC<QcInspectionModalProps> = ({
                 />
                 <p className="text-[11px] text-slate-400 mt-1 flex items-center gap-1">
                   <HelpCircle className="w-3.5 h-3.5" />
-                  Gunakan password login Anda (misal: password123 / laras123 / admin)
+                  Gunakan kata sandi akun login Anda
                 </p>
               </div>
 

@@ -5,7 +5,7 @@ import { ensureUUID } from '../../../utils/uuid';
 // In-memory cache untuk performa UI & efisiensi EGRESS Supabase (BUKAN local storage)
 let inMemoryPackaging: PackagingMaterial[] = [];
 let lastFetchTime = 0;
-const CACHE_TTL_MS = 60 * 1000; // 60 detik cache di RAM browser
+const CACHE_TTL_MS = 15 * 60 * 1000; // 15 menit cache di RAM browser untuk menghemat egress
 
 // Bersihkan data lama jika ada di browser
 if (typeof window !== 'undefined' && window.localStorage) {
@@ -64,14 +64,41 @@ export const packagingService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data, error } = await supabase
-          .from('packaging_materials')
-          .select('id, code, spec_number, name, type, unit, unit_capacity_grams, supplier, manufacturer, storage_location, storage_conditions, qc_parameters, reorder_point, last_modified_by, last_modified_at')
-          .order('code', { ascending: true })
-          .limit(1000);
+        const allFetchedRows: any[] = [];
+        const pageSize = 1000;
+        let page = 0;
+        let hasMore = true;
 
-        if (!error && data) {
-          const mapped: PackagingMaterial[] = data.map((p: any) => ({
+        // Auto-batching pagination: mengambil seluruh baris (termasuk >1000 baris) melewati batas PostgREST
+        while (hasMore) {
+          const from = page * pageSize;
+          const to = from + pageSize - 1;
+
+          const { data, error } = await supabase
+            .from('packaging_materials')
+            .select('id, code, spec_number, name, type, unit, unit_capacity_grams, supplier, manufacturer, storage_location, storage_conditions, qc_parameters, reorder_point, last_modified_by, last_modified_at')
+            .order('code', { ascending: true })
+            .range(from, to);
+
+          if (error) {
+            console.warn('[Supabase Audit] Error fetching packaging_materials page', page, error.message);
+            break;
+          }
+
+          if (data && data.length > 0) {
+            allFetchedRows.push(...data);
+            if (data.length < pageSize) {
+              hasMore = false;
+            } else {
+              page++;
+            }
+          } else {
+            hasMore = false;
+          }
+        }
+
+        if (allFetchedRows.length > 0) {
+          const mapped: PackagingMaterial[] = allFetchedRows.map((p: any) => ({
             id: p.id,
             code: p.code,
             specNumber: p.spec_number || p.specNumber || `SP-BK-${p.code}`,
@@ -91,8 +118,6 @@ export const packagingService = {
           inMemoryPackaging = mapped;
           lastFetchTime = Date.now();
           return mapped;
-        } else if (error) {
-          console.warn('[Supabase Audit] Error fetching packaging_materials:', error.message);
         }
       } catch (err) {
         console.error('[Supabase Audit] Supabase packaging materials fetch exception:', err);

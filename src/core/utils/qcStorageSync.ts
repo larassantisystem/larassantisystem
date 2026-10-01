@@ -29,6 +29,8 @@ export interface SerializedQcPayload {
   revertedBy?: string;
   revertedAt?: string;
   updatedAt?: string;
+  stockLedger?: any[];
+  currentQuantity?: number;
 }
 
 /**
@@ -66,6 +68,8 @@ export function packGrnNotes(userNotes?: string | null, qcReport?: Partial<QcIns
     revertedBy: qcReport.revertedBy,
     revertedAt: qcReport.revertedAt,
     updatedAt: qcReport.updatedAt || new Date().toISOString(),
+    stockLedger: (qcReport as any).stockLedger || undefined,
+    currentQuantity: (qcReport as any).currentQuantity !== undefined ? Number((qcReport as any).currentQuantity) : undefined,
   };
 
   const json = JSON.stringify(payload);

@@ -29,22 +29,32 @@ export interface DepartmentNotificationCounts {
 }
 
 let inMemoryReadNotificationIds: string[] = [];
+let cachedNotifications: DepartmentNotificationItem[] = [];
+let lastNotificationsFetchTime = 0;
+const NOTIF_CACHE_TTL_MS = 25 * 1000; // 25 detik in-memory cache untuk mencegah duplicate request
 
 export const departmentNotificationService = {
+  invalidateCache: () => {
+    lastNotificationsFetchTime = 0;
+  },
+
   /**
    * Fetch all active notifications based on current system state
    */
-  getNotifications: async (): Promise<DepartmentNotificationItem[]> => {
+  getNotifications: async (forceRefresh = false): Promise<DepartmentNotificationItem[]> => {
+    if (!forceRefresh && cachedNotifications.length > 0 && (Date.now() - lastNotificationsFetchTime < NOTIF_CACHE_TTL_MS)) {
+      return cachedNotifications;
+    }
+
     const readIds = [...inMemoryReadNotificationIds];
 
     const items: DepartmentNotificationItem[] = [];
 
     try {
-      // 1. Fetch system state in parallel
-      const [qcReports, grnRecords, stockLots, qcEventNotifs, formulations] = await Promise.all([
+      // 1. Fetch system state in parallel (hemat egress: tidak perlu query stockLots lengkap)
+      const [qcReports, grnRecords, qcEventNotifs, formulations] = await Promise.all([
         qualityService.getReports().catch(() => []),
         warehouseService.getGrnRecords().catch(() => []),
-        stockService.getStockLots().catch(() => []),
         Promise.resolve(qualityService.getNotifications()),
         formulaService.getFormulations().catch(() => []),
       ]);
@@ -140,8 +150,8 @@ export const departmentNotificationService = {
       }
 
       // --- 3. Warehouse Notifications ---
-      const passedLots = stockLots.filter(
-        (l) => (l.qcStatus === 'RELEASED' || (l.qcStatus as any) === 'PASSED') && l.storageLocation?.includes('Karantina')
+      const passedLots = grnRecords.filter(
+        (g) => (g.qcStatus === 'RELEASED' || (g.qcStatus as any) === 'PASSED') && g.storageLocation?.includes('Karantina')
       );
       if (passedLots.length > 0) {
         items.push({
@@ -172,7 +182,7 @@ export const departmentNotificationService = {
         });
       }
 
-      const rejectLots = stockLots.filter((l) => l.qcStatus === 'REJECTED');
+      const rejectLots = grnRecords.filter((g) => g.qcStatus === 'REJECTED');
       if (rejectLots.length > 0) {
         items.push({
           id: `wh-reject-${rejectLots.length}`,
@@ -278,7 +288,7 @@ export const departmentNotificationService = {
       });
 
       // --- 7. Production Notifications ---
-      const availableReleased = stockLots.filter((l) => l.qcStatus === 'RELEASED' || (l.qcStatus as any) === 'PASSED');
+      const availableReleased = grnRecords.filter((g) => g.qcStatus === 'RELEASED' || (g.qcStatus as any) === 'PASSED');
       if (availableReleased.length > 0) {
         items.push({
           id: `prod-weigh-${availableReleased.length}`,
@@ -309,6 +319,8 @@ export const departmentNotificationService = {
       console.error('Error computing departmental notifications:', err);
     }
 
+    cachedNotifications = items;
+    lastNotificationsFetchTime = Date.now();
     return items;
   },
 

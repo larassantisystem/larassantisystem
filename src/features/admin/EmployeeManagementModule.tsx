@@ -218,7 +218,7 @@ export const EmployeeManagementModule: React.FC<EmployeeManagementModuleProps> =
     setFormName(emp.name);
     setFormDept(emp.department);
     setFormRole(emp.role);
-    setFormPassword(''); // blank means do not change
+    setFormPassword(emp.password || '');
     const hasAccess = (emp.specificAccess && emp.specificAccess.length > 0) || false;
     setEnableCustomAccess(hasAccess);
     setFormSpecificAccess(emp.specificAccess ? [...emp.specificAccess] : []);

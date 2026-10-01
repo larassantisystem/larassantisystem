@@ -298,6 +298,52 @@ export const warehouseService = {
   },
 
   /**
+   * Audit tabel public.stock_movements di Supabase (Opsi 2)
+   */
+  auditStockMovementsStatus: async (): Promise<{
+    isConfigured: boolean;
+    tableExists: boolean;
+    movementsCount: number;
+    error: string | null;
+  }> => {
+    if (!isSupabaseConfigured || !supabase) {
+      return {
+        isConfigured: false,
+        tableExists: false,
+        movementsCount: 0,
+        error: 'Supabase URL atau Anon Key belum terkonfigurasi.',
+      };
+    }
+    try {
+      const { count, error } = await supabase
+        .from('stock_movements')
+        .select('*', { count: 'exact', head: true });
+
+      if (error) {
+        return {
+          isConfigured: true,
+          tableExists: false,
+          movementsCount: 0,
+          error: `[${error.code}] ${error.message}`,
+        };
+      }
+      return {
+        isConfigured: true,
+        tableExists: true,
+        movementsCount: count ?? 0,
+        error: null,
+      };
+    } catch (err: any) {
+      return {
+        isConfigured: true,
+        tableExists: false,
+        movementsCount: 0,
+        error: err.message || String(err),
+      };
+    }
+  },
+
+  /**
    * Sync all local records to Supabase table
    */
   syncLocalToSupabase: async (): Promise<{

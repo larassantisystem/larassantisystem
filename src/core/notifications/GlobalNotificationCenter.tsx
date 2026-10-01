@@ -72,7 +72,7 @@ export const GlobalNotificationCenter: React.FC<GlobalNotificationCenterProps> =
 
   useEffect(() => {
     refreshData();
-    const interval = setInterval(refreshData, 10000); // Poll every 10s
+    const interval = setInterval(refreshData, 60000); // Poll every 60s untuk efisiensi egress
     return () => clearInterval(interval);
   }, []);
 

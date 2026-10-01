@@ -34,6 +34,7 @@ export interface UserProfile {
   jobTitle?: string;
   jabatan?: string;
   email: string;
+  password?: string;
   avatarUrl?: string;
   lastLogin?: string;
   specificAccess?: ModulePermission[];

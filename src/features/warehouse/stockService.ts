@@ -13,18 +13,65 @@ import { materialService } from '../rnd/materials/materialService';
 import { packagingService } from '../rnd/materials/packagingService';
 import { normalizeLotNumber } from '../quality/utils/qcNumbering';
 import { formatToIsoDateString } from '../../core/utils/dateUtils';
+import { supabase, isSupabaseConfigured } from '../../core/auth/supabaseClient';
 
 export const stockService = {
+  /**
+   * Simpan riwayat mutasi stok ke tabel public.stock_movements di Supabase (Opsi 2)
+   */
+  saveStockMovement: async (movement: StockMovementLedger): Promise<void> => {
+    if (!isSupabaseConfigured || !supabase) return;
+    try {
+      const payload: Record<string, any> = {
+        timestamp: movement.timestamp || new Date().toISOString(),
+        material_code: movement.materialCode,
+        material_name: movement.materialName,
+        material_type: movement.materialType || 'raw',
+        lot_internal_number: movement.lotInternalNumber,
+        movement_type: movement.movementType,
+        reference_number: movement.referenceNumber || '-',
+        qty_before: Number(movement.qtyBefore) || 0,
+        qty_change: Number(movement.qtyChange) || 0,
+        qty_after: Number(movement.qtyAfter) || 0,
+        unit: movement.unit || 'kg',
+        performer_name: movement.performer?.name || 'Petugas Gudang',
+        performer_role: movement.performer?.role || 'Staff Gudang',
+        performer_department: movement.performer?.department || 'Warehouse',
+        notes: movement.notes || '',
+        created_at: new Date().toISOString(),
+      };
+
+      const { error } = await supabase.from('stock_movements').insert(payload);
+      if (error) {
+        console.warn('[stockService] Supabase stock_movements notice:', error.message);
+      } else {
+        console.log('[stockService] Stock movement logged to Supabase:', movement.referenceNumber);
+      }
+    } catch (err) {
+      console.warn('[stockService] Exception logging movement to Supabase:', err);
+    }
+  },
   /**
    * Get all active stock lots and synchronize with latest GRNs and QC inspection states
    */
   getStockLots: async (): Promise<StockLotItem[]> => {
-    // Fetch GRNs, QC Reports, and master materials for name resolution
-    const [grns, qcReports, rawMaterials, packMaterials] = await Promise.all([
+    // Fast resolution: Gunakan local in-memory master materials terlebih dahulu untuk mencegah download 1.84MB berulang kali
+    let rawMaterials = materialService.getLocalMaterials();
+    let packMaterials = packagingService.getLocalPackagingMaterials();
+
+    const masterPromises: Promise<any>[] = [];
+    if (rawMaterials.length === 0) {
+      masterPromises.push(materialService.getMaterials().then(res => { rawMaterials = res; }).catch(() => []));
+    }
+    if (packMaterials.length === 0) {
+      masterPromises.push(packagingService.getPackagingMaterials().then(res => { packMaterials = res; }).catch(() => []));
+    }
+
+    // Fetch GRNs and QC Reports
+    const [grns, qcReports] = await Promise.all([
       warehouseService.getGrnRecords(),
       qualityService.getReports(),
-      materialService.getMaterials().catch(() => []),
-      packagingService.getPackagingMaterials().catch(() => []),
+      ...masterPromises,
     ]);
 
     const rawMap = new Map<string, string>();
@@ -231,17 +278,64 @@ export const stockService = {
   },
 
   /**
-   * Get Stock Ledger movement history
+   * Get Stock Ledger movement history (Prioritas: tabel public.stock_movements Supabase Opsi 2)
    */
   getMovementLedger: async (): Promise<StockMovementLedger[]> => {
+    let movements: StockMovementLedger[] = [];
+
+    // 1. Kueri dari tabel public.stock_movements di Supabase (Opsi 2)
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('stock_movements')
+          .select('*')
+          .order('timestamp', { ascending: false });
+
+        if (!error && data && data.length > 0) {
+          movements = data.map((d: any) => ({
+            id: d.id,
+            timestamp: d.timestamp || d.created_at,
+            materialCode: d.material_code,
+            materialName: d.material_name,
+            materialType: (d.material_type || 'raw') as MaterialStockType,
+            lotInternalNumber: d.lot_internal_number,
+            movementType: d.movement_type as any,
+            referenceNumber: d.reference_number || '-',
+            qtyBefore: Number(d.qty_before) || 0,
+            qtyChange: Number(d.qty_change) || 0,
+            qtyAfter: Number(d.qty_after) || 0,
+            unit: d.unit || 'kg',
+            performer: {
+              name: d.performer_name || 'Petugas Gudang',
+              role: d.performer_role || 'Staff Gudang',
+              department: d.performer_department || 'Warehouse',
+            },
+            notes: d.notes || '',
+          }));
+        }
+      } catch (err) {
+        console.warn('[stockService] Could not fetch from stock_movements:', err);
+      }
+    }
+
+    // 2. Fallback / Merge dengan qcPayload.stockLedger pada GRN (Dual Persistence)
     const grns = await warehouseService.getGrnRecords();
-    const ledger: StockMovementLedger[] = [];
+    const grnLedger: StockMovementLedger[] = [];
     grns.forEach((grn) => {
       if (grn.qcPayload?.stockLedger && Array.isArray(grn.qcPayload.stockLedger)) {
-        ledger.push(...grn.qcPayload.stockLedger);
+        grnLedger.push(...grn.qcPayload.stockLedger);
       }
     });
-    return ledger.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    const existingIds = new Set(movements.map((m) => m.id));
+    grnLedger.forEach((item) => {
+      if (!existingIds.has(item.id)) {
+        movements.push(item);
+        existingIds.add(item.id);
+      }
+    });
+
+    return movements.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   },
 
   /**
@@ -311,6 +405,9 @@ export const stockService = {
       currentQuantity: qtyAfter,
       qcPayload: updatedQcPayload,
     });
+
+    // Simpan juga ke tabel public.stock_movements di Supabase (Opsi 2)
+    await stockService.saveStockMovement(newLog);
 
     return true;
   },
@@ -398,6 +495,7 @@ export const stockService = {
     };
 
     await warehouseService.saveGrnRecord(virtualGrn as any);
+    await stockService.saveStockMovement(newLog);
   },
 
   /**
@@ -532,6 +630,7 @@ export const stockService = {
         await warehouseService.updateGrnRecord(targetGrn.id, {
           qcPayload: updatedQcPayload,
         });
+        await stockService.saveStockMovement(newLog);
       } else {
         // Create new virtual GRN for specific lot
         await stockService.createVirtualOpnameGrn({
@@ -617,6 +716,7 @@ export const stockService = {
                 stockLedger: [log, ...(existingQc.stockLedger || [])],
               },
             });
+            await stockService.saveStockMovement(log);
           }
         }
 
@@ -655,6 +755,7 @@ export const stockService = {
           currentQuantity: targetQty,
           qcPayload: updatedQcPayload,
         });
+        await stockService.saveStockMovement(newLog);
       } else {
         // No RELEASED GRNs exist for this material -> create new virtual GRN
         await stockService.createVirtualOpnameGrn({
@@ -908,6 +1009,7 @@ export const stockService = {
       storageLocation: cleanNewLoc,
       qcPayload: updatedQcPayload,
     });
+    await stockService.saveStockMovement(newLog);
 
     // Construct and return the updated lot
     const updatedLots = await stockService.getStockLots();

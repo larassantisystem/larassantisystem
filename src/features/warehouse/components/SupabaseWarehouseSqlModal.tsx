@@ -13,6 +13,7 @@ export const SupabaseWarehouseSqlModal: React.FC<SupabaseWarehouseSqlModalProps>
   onClose,
   onDataChanged,
 }) => {
+  const [activeTab, setActiveTab] = useState<'stock_movements' | 'warehouse_grn'>('stock_movements');
   const [copied, setCopied] = useState(false);
   const [auditLoading, setAuditLoading] = useState(false);
   const [auditResult, setAuditResult] = useState<{
@@ -20,6 +21,12 @@ export const SupabaseWarehouseSqlModal: React.FC<SupabaseWarehouseSqlModalProps>
     tableExists: boolean;
     supabaseCount: number;
     localCount: number;
+    error: string | null;
+  } | null>(null);
+  const [movementsAudit, setMovementsAudit] = useState<{
+    isConfigured: boolean;
+    tableExists: boolean;
+    movementsCount: number;
     error: string | null;
   } | null>(null);
 
@@ -30,8 +37,12 @@ export const SupabaseWarehouseSqlModal: React.FC<SupabaseWarehouseSqlModalProps>
     setAuditLoading(true);
     setSyncStatus(null);
     try {
-      const res = await warehouseService.auditDatabaseStatus();
-      setAuditResult(res);
+      const [resGrn, resMovements] = await Promise.all([
+        warehouseService.auditDatabaseStatus(),
+        warehouseService.auditStockMovementsStatus(),
+      ]);
+      setAuditResult(resGrn);
+      setMovementsAudit(resMovements);
     } catch (e: any) {
       setAuditResult({
         isConfigured: false,
@@ -74,16 +85,14 @@ export const SupabaseWarehouseSqlModal: React.FC<SupabaseWarehouseSqlModalProps>
 
   if (!isOpen) return null;
 
-  const sqlScript = `-- ==============================================================================
+  const sqlWarehouseGrn = `-- ==============================================================================
 -- SUPABASE DDL MIGRATION SCRIPT: WAREHOUSE & GOODS RECEIVED NOTE (GRN)
 -- Modul Gudang Logistik & Quality Control CPKB
 -- File: supabase_schema_warehouse.sql
 -- ==============================================================================
 
--- 1. Pastikan ekstensi UUID aktif
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- 2. Buat tabel warehouse_grn jika belum ada
 CREATE TABLE IF NOT EXISTS public.warehouse_grn (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     grn_number VARCHAR(100) UNIQUE NOT NULL,
@@ -123,7 +132,6 @@ CREATE TABLE IF NOT EXISTS public.warehouse_grn (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 3. Tambahkan kolom yang mungkin belum ada bila tabel pernah dibuat dengan skema berbeda
 ALTER TABLE public.warehouse_grn ADD COLUMN IF NOT EXISTS current_quantity NUMERIC(12, 3);
 UPDATE public.warehouse_grn SET current_quantity = quantity_received WHERE current_quantity IS NULL;
 ALTER TABLE public.warehouse_grn ADD COLUMN IF NOT EXISTS po_number VARCHAR(100);
@@ -149,65 +157,81 @@ ALTER TABLE public.warehouse_grn ADD COLUMN IF NOT EXISTS sampling_date_time TIM
 ALTER TABLE public.warehouse_grn ADD COLUMN IF NOT EXISTS coa_drive_file_id TEXT;
 ALTER TABLE public.warehouse_grn ADD COLUMN IF NOT EXISTS coa_drive_view_link TEXT;
 
--- 4. Lepaskan batasan NOT NULL pada kolom opsional / alias agar penulisan selalu berhasil
-ALTER TABLE public.warehouse_grn ALTER COLUMN purchase_order_number DROP NOT NULL;
-ALTER TABLE public.warehouse_grn ALTER COLUMN supplier_batch_number DROP NOT NULL;
-ALTER TABLE public.warehouse_grn ALTER COLUMN expiration_date DROP NOT NULL;
-ALTER TABLE public.warehouse_grn ALTER COLUMN received_by_nik DROP NOT NULL;
-ALTER TABLE public.warehouse_grn ALTER COLUMN seal_condition DROP NOT NULL;
-ALTER TABLE public.warehouse_grn ALTER COLUMN packaging_condition DROP NOT NULL;
-ALTER TABLE public.warehouse_grn ALTER COLUMN distributor DROP NOT NULL;
-ALTER TABLE public.warehouse_grn ALTER COLUMN manufacturer DROP NOT NULL;
-ALTER TABLE public.warehouse_grn ALTER COLUMN storage_location DROP NOT NULL;
-ALTER TABLE public.warehouse_grn ALTER COLUMN delivery_note_number DROP NOT NULL;
-ALTER TABLE public.warehouse_grn DROP CONSTRAINT IF EXISTS warehouse_grn_qc_status_check;
-
--- 5. Tambahkan Index untuk performa query
 CREATE INDEX IF NOT EXISTS idx_warehouse_grn_code ON public.warehouse_grn (material_code);
 CREATE INDEX IF NOT EXISTS idx_warehouse_grn_status ON public.warehouse_grn (qc_status);
 CREATE INDEX IF NOT EXISTS idx_warehouse_grn_date ON public.warehouse_grn (received_date DESC);
 CREATE INDEX IF NOT EXISTS idx_warehouse_grn_grn_number ON public.warehouse_grn (grn_number);
 
--- 6. Aktifkan Row Level Security (RLS)
 ALTER TABLE public.warehouse_grn ENABLE ROW LEVEL SECURITY;
 
--- 7. Buat Kebijakan Akses (RLS Policy) - Akses penuh untuk aplikasi internal
 DROP POLICY IF EXISTS "Public full access on warehouse_grn" ON public.warehouse_grn;
-
 CREATE POLICY "Public full access on warehouse_grn"
 ON public.warehouse_grn
 FOR ALL
 USING (true)
+WITH CHECK (true);`;
+
+  const sqlStockMovements = `-- ==============================================================================
+-- SUPABASE DDL MIGRATION SCRIPT: STOCK MOVEMENTS & AUDIT TRAIL KARTU STOK (OPSI 2)
+-- Modul Gudang Logistik & Quality Control CPKB / BPOM
+-- File: supabase_schema_stock_movements.sql
+-- ==============================================================================
+
+-- 1. Buat tabel public.stock_movements jika belum ada
+CREATE TABLE IF NOT EXISTS public.stock_movements (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    material_code VARCHAR(100) NOT NULL,
+    material_name VARCHAR(255) NOT NULL,
+    material_type VARCHAR(50) NOT NULL DEFAULT 'raw',
+    lot_internal_number VARCHAR(100) NOT NULL,
+    movement_type VARCHAR(100) NOT NULL,
+    reference_number VARCHAR(150),
+    qty_before NUMERIC(14, 4) NOT NULL DEFAULT 0,
+    qty_change NUMERIC(14, 4) NOT NULL DEFAULT 0,
+    qty_after NUMERIC(14, 4) NOT NULL DEFAULT 0,
+    unit VARCHAR(50) NOT NULL DEFAULT 'kg',
+    performer_name VARCHAR(150),
+    performer_role VARCHAR(150),
+    performer_department VARCHAR(150),
+    notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 2. Buat Index untuk performa penarikan Kartu Stok & Audit Trail CPKB
+CREATE INDEX IF NOT EXISTS idx_stock_movements_lot ON public.stock_movements (lot_internal_number);
+CREATE INDEX IF NOT EXISTS idx_stock_movements_code ON public.stock_movements (material_code);
+CREATE INDEX IF NOT EXISTS idx_stock_movements_time ON public.stock_movements (timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_stock_movements_ref ON public.stock_movements (reference_number);
+
+-- 3. Aktifkan Row Level Security (RLS)
+ALTER TABLE public.stock_movements ENABLE ROW LEVEL SECURITY;
+
+-- 4. Kebijakan Akses (RLS Policy) - Akses penuh untuk transaksi operasional internal
+DROP POLICY IF EXISTS "Public full access on stock_movements" ON public.stock_movements;
+CREATE POLICY "Public full access on stock_movements"
+ON public.stock_movements
+FOR ALL
+USING (true)
 WITH CHECK (true);
 
--- 8. Trigger otomatis untuk update timestamp updated_at
-CREATE OR REPLACE FUNCTION public.trigger_set_timestamp_warehouse_grn()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = NOW();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+COMMENT ON TABLE public.stock_movements IS 'Buku besar transaksi mutasi kartu stok gudang bahan baku dan kemas (CPKB / BPOM)';`;
 
-DROP TRIGGER IF EXISTS set_timestamp_warehouse_grn ON public.warehouse_grn;
-
-CREATE TRIGGER set_timestamp_warehouse_grn
-BEFORE UPDATE ON public.warehouse_grn
-FOR EACH ROW
-EXECUTE FUNCTION public.trigger_set_timestamp_warehouse_grn();`;
+  const activeSqlScript = activeTab === 'stock_movements' ? sqlStockMovements : sqlWarehouseGrn;
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(sqlScript);
+    navigator.clipboard.writeText(activeSqlScript);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   const handleDownload = () => {
-    const blob = new Blob([sqlScript], { type: 'text/sql' });
+    const filename = activeTab === 'stock_movements' ? 'supabase_schema_stock_movements.sql' : 'supabase_schema_warehouse.sql';
+    const blob = new Blob([activeSqlScript], { type: 'text/sql' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'supabase_schema_warehouse.sql';
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -224,14 +248,14 @@ EXECUTE FUNCTION public.trigger_set_timestamp_warehouse_grn();`;
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-bold text-base text-white">
-                  Audit Koneksi & Skrip DDL: warehouse_grn
+                  Audit Koneksi & Skrip DDL Supabase: GRN & Kartu Stok (Opsi 2)
                 </h3>
                 <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">
                   Database Audit & Migration
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Pemeriksaan integrasi penyimpanan cloud Supabase dan skrip migrasi tabel penerimaan barang.
+                Pemeriksaan integrasi penyimpanan cloud Supabase dan skrip migrasi tabel penerimaan barang & buku besar kartu stok.
               </p>
             </div>
           </div>
@@ -267,7 +291,7 @@ EXECUTE FUNCTION public.trigger_set_timestamp_warehouse_grn();`;
             </div>
 
             {auditResult ? (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs">
                 <div className="p-3 bg-white border border-slate-200 rounded-xl">
                   <span className="text-[10px] text-slate-400 font-bold block mb-1 uppercase">Koneksi Supabase</span>
                   <div className="flex items-center gap-1.5">
@@ -291,12 +315,29 @@ EXECUTE FUNCTION public.trigger_set_timestamp_warehouse_grn();`;
                     {auditResult.tableExists ? (
                       <>
                         <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <span className="font-bold text-emerald-700">Tabel Siap di Cloud</span>
+                        <span className="font-bold text-emerald-700">Tabel Siap ({auditResult.supabaseCount} GRN)</span>
                       </>
                     ) : (
                       <>
                         <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
                         <span className="font-bold text-amber-700">Belum Ada di Supabase</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-3 bg-white border border-slate-200 rounded-xl">
+                  <span className="text-[10px] text-slate-400 font-bold block mb-1 uppercase">Tabel stock_movements (Opsi 2)</span>
+                  <div className="flex items-center gap-1.5">
+                    {movementsAudit?.tableExists ? (
+                      <>
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span className="font-bold text-emerald-700">Tabel Siap ({movementsAudit.movementsCount} Mutasi)</span>
+                      </>
+                    ) : (
+                      <>
+                        <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
+                        <span className="font-bold text-amber-700">Belum Ada (Jalankan SQL)</span>
                       </>
                     )}
                   </div>
@@ -312,6 +353,32 @@ EXECUTE FUNCTION public.trigger_set_timestamp_warehouse_grn();`;
                 </div>
               </div>
             ) : null}
+
+            {/* Tab Selector untuk Skrip SQL */}
+            <div className="flex items-center gap-2 pt-2 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => setActiveTab('stock_movements')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  activeTab === 'stock_movements'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                1. Skrip Tabel stock_movements (Kartu Stok - Opsi 2)
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('warehouse_grn')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  activeTab === 'warehouse_grn'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                2. Skrip Tabel warehouse_grn (GRN Gudang)
+              </button>
+            </div>
 
             {auditResult?.error && (
               <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-start gap-2">
@@ -387,7 +454,7 @@ EXECUTE FUNCTION public.trigger_set_timestamp_warehouse_grn();`;
             </div>
 
             <pre className="p-4 pt-12 bg-slate-950 text-emerald-400 font-mono text-[11px] rounded-2xl overflow-x-auto border border-slate-800 max-h-80 leading-relaxed">
-              {sqlScript}
+              {activeSqlScript}
             </pre>
           </div>
         </div>

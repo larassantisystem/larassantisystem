@@ -47,7 +47,7 @@ export const authService = {
         if (authUser) {
           const { data: profileData } = await supabase
             .from('profiles')
-            .select('id, nik, name, department, role, position, email')
+            .select('id, nik, name, department, role, position, email, password')
             .or(`id.eq.${authUser.id},nik.ilike.${cleanNik},email.ilike.${primaryEmail}`)
             .maybeSingle();
 
@@ -71,6 +71,7 @@ export const authService = {
                 department: resolvedDept,
                 role: resolvedRole,
                 email: authUser.email || primaryEmail,
+                password,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
               }, { onConflict: 'id' });
@@ -87,6 +88,7 @@ export const authService = {
             role: resolvedRole,
             position: profileData?.position,
             email: authUser.email || primaryEmail,
+            password: profileData?.password || password,
           };
 
           if (typeof window !== 'undefined' && window.localStorage) {
@@ -95,40 +97,41 @@ export const authService = {
           return { user: userProfile, error: null };
         }
 
-        // 3. Fallback Langsung ke Transaksi Database Supabase: Periksa tabel public.profiles
-        // Jika Supabase Auth GoTrue belum tersinkron identities, periksa langsung ke Supabase Database
+        // 3. Autentikasi Langsung ke Database Supabase: Periksa tabel public.profiles
+        // Verifikasi langsung ke kolom password di tabel public.profiles
         const { data: dbProfile, error: dbErr } = await supabase
           .from('profiles')
-          .select('id, nik, name, department, role, position, email')
+          .select('id, nik, name, department, role, position, email, password')
           .or(`nik.ilike.${cleanNik},email.ilike.${primaryEmail}`)
           .maybeSingle();
 
         if (dbProfile && !dbErr) {
-          // Verifikasi kata sandi standar sistem atau admin
-          const validPasswords = ['laras123', 'admin', 'password123'];
-          if (validPasswords.includes(password) || password.length >= 4) {
-            const isAdminUser = dbProfile.role === 'admin' || cleanNik.toLowerCase() === 'admin' || dbProfile.nik?.toLowerCase() === 'admin';
-            const resolvedNik = isAdminUser ? 'admin' : (dbProfile.nik || cleanNik);
-            const resolvedDept = (isAdminUser ? 'admin' : (dbProfile.department || 'rnd')) as UserProfile['department'];
-            const resolvedRole = (isAdminUser ? 'admin' : (dbProfile.role || 'staff')) as UserProfile['role'];
-
-            const userProfile: UserProfile = {
-              id: dbProfile.id,
-              nik: resolvedNik,
-              name: dbProfile.name || (isAdminUser ? 'ADMIN' : `Karyawan ${cleanNik}`),
-              department: resolvedDept,
-              role: resolvedRole,
-              position: dbProfile.position,
-              email: dbProfile.email || primaryEmail,
-            };
-
-            if (typeof window !== 'undefined' && window.localStorage) {
-              window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(userProfile));
-            }
-            return { user: userProfile, error: null };
-          } else {
+          // Verifikasi kata sandi langsung terhadap kolom password di table profiles Supabase
+          const expectedPassword = dbProfile.password || 'laras123';
+          if (password !== expectedPassword) {
             return { user: null, error: 'Kata sandi yang dimasukkan salah. Silakan coba lagi.' };
           }
+
+          const isAdminUser = dbProfile.role === 'admin' || cleanNik.toLowerCase() === 'admin' || dbProfile.nik?.toLowerCase() === 'admin';
+          const resolvedNik = isAdminUser ? 'admin' : (dbProfile.nik || cleanNik);
+          const resolvedDept = (isAdminUser ? 'admin' : (dbProfile.department || 'rnd')) as UserProfile['department'];
+          const resolvedRole = (isAdminUser ? 'admin' : (dbProfile.role || 'staff')) as UserProfile['role'];
+
+          const userProfile: UserProfile = {
+            id: dbProfile.id,
+            nik: resolvedNik,
+            name: dbProfile.name || (isAdminUser ? 'ADMIN' : `Karyawan ${cleanNik}`),
+            department: resolvedDept,
+            role: resolvedRole,
+            position: dbProfile.position,
+            email: dbProfile.email || primaryEmail,
+            password: dbProfile.password || password,
+          };
+
+          if (typeof window !== 'undefined' && window.localStorage) {
+            window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(userProfile));
+          }
+          return { user: userProfile, error: null };
         }
 
         // Jika tidak ditemukan di database profiles dan Auth gagal
@@ -270,7 +273,7 @@ export const authService = {
       try {
         const { data: profiles, error } = await supabase
           .from('profiles')
-          .select('id, nik, name, department, role, position, email, created_at')
+          .select('id, nik, name, department, role, position, email, password, created_at')
           .order('created_at', { ascending: true });
 
         if (!error && profiles && profiles.length > 0) {
@@ -285,6 +288,7 @@ export const authService = {
               role: (isAdmin ? 'admin' : (p.role || 'staff')) as UserProfile['role'],
               position: p.position || p.job_title || p.jabatan || p.jobTitle,
               email: p.email || (cleanNik === 'admin' ? 'lms00000@larassanti.co.id' : `${cleanNik.toLowerCase()}@larassanti.co.id`),
+              password: p.password || 'laras123',
               specificAccess: accessMap[cleanNik.toLowerCase()] || [],
             };
           });
@@ -401,6 +405,7 @@ export const authService = {
               department: employee.department,
               role: employee.role,
               email,
+              password,
               updated_at: new Date().toISOString(),
             })
             .eq('id', existingProfile.id);
@@ -421,6 +426,7 @@ export const authService = {
               department: employee.department,
               role: employee.role,
               email,
+              password,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
             });
@@ -453,6 +459,7 @@ export const authService = {
         if (updatedData.role) payload.role = updatedData.role;
         if (updatedData.position) payload.position = updatedData.position;
         if (updatedData.email) payload.email = updatedData.email;
+        if (updatedData.password) payload.password = updatedData.password.trim();
 
         const { error: dbErr } = await supabase
           .from('profiles')
@@ -511,6 +518,7 @@ export const authService = {
 
   /**
    * Verifies the password of a specific user (for electronic signature & authorization confirmation)
+   * Menggunakan langsung kolom password milik pengguna di tabel public.profiles Supabase
    */
   verifyPassword: async (nik: string, passwordInput: string): Promise<{ valid: boolean; error?: string }> => {
     const cleanNik = nik.trim();
@@ -518,8 +526,28 @@ export const authService = {
       return { valid: false, error: 'Kata sandi tidak boleh kosong.' };
     }
 
-    // 1. If Supabase is configured, try Supabase auth
+    // 1. Kueri langsung ke kolom password di tabel profiles Supabase
     if (isSupabaseConfigured && supabase) {
+      try {
+        const { data: dbProfile, error: dbErr } = await supabase
+          .from('profiles')
+          .select('password')
+          .ilike('nik', cleanNik)
+          .maybeSingle();
+
+        if (dbProfile && !dbErr) {
+          const expectedPassword = dbProfile.password || 'laras123';
+          if (passwordInput === expectedPassword) {
+            return { valid: true };
+          } else {
+            return { valid: false, error: 'Kata sandi tidak sesuai dengan akun Anda.' };
+          }
+        }
+      } catch (err) {
+        console.warn('[authService] Verify password DB exception:', err);
+      }
+
+      // Supabase Auth fallback
       const constructEmail = (rawNik: string) => {
         const clean = rawNik.trim();
         if (clean.includes('@')) return clean.toLowerCase();
@@ -538,45 +566,15 @@ export const authService = {
           return { valid: true };
         }
       } catch {
-        // fall through to local check
+        // fall through
       }
     }
 
-    // 2. Check DEMO_USERS
+    // 2. Demo users fallback (hanya jika data demo lokal)
     const foundDemo = DEMO_USERS.find(
-      (u) => u.nik.toLowerCase() === cleanNik.toLowerCase() &&
-        (passwordInput === u.defaultPassword || passwordInput === 'laras123' || passwordInput === 'admin' || passwordInput === 'password123')
+      (u) => u.nik.toLowerCase() === cleanNik.toLowerCase() && passwordInput === u.defaultPassword
     );
     if (foundDemo) {
-      return { valid: true };
-    }
-
-    // 3. Check custom registered users in localStorage
-    if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
-      const customUsersRaw = localStorage.getItem('cosmo_ddmp_registered_users');
-      if (customUsersRaw) {
-        try {
-          const list = JSON.parse(customUsersRaw);
-          const match = list.find((u: any) => u.nik?.toLowerCase() === cleanNik.toLowerCase());
-          if (match) {
-            if (match.password && match.password === passwordInput) {
-              return { valid: true };
-            }
-            if (!match.password && (passwordInput === 'laras123' || passwordInput === 'admin' || passwordInput === 'password123')) {
-              return { valid: true };
-            }
-          }
-        } catch (e) {
-          console.error('Error parsing custom users for verifyPassword', e);
-        }
-      }
-    }
-
-    // 4. Fallback for admin or standard test credentials
-    if (cleanNik.toLowerCase() === 'admin' && (passwordInput === 'admin' || passwordInput === 'laras123' || passwordInput === 'password123')) {
-      return { valid: true };
-    }
-    if (passwordInput === 'laras123' || passwordInput === 'password123') {
       return { valid: true };
     }
 

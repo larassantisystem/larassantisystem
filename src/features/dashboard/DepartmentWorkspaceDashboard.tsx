@@ -138,7 +138,7 @@ export const DepartmentWorkspaceDashboard: React.FC<DepartmentWorkspaceDashboard
 
   useEffect(() => {
     loadData();
-    const timer = setInterval(loadData, 15000);
+    const timer = setInterval(loadData, 60000); // 60 detik untuk efisiensi egress Supabase
     return () => clearInterval(timer);
   }, []);
 

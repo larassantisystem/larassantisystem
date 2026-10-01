@@ -13,6 +13,8 @@ import {
   Camera,
   QrCode,
   X,
+  AlertCircle,
+  RotateCcw,
 } from 'lucide-react';
 import { Logo } from '../../components/Logo';
 import { UniversalQrScannerModal } from '../../components/UniversalQrScannerModal';

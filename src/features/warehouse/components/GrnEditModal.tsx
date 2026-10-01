@@ -543,7 +543,7 @@ export const GrnEditModal: React.FC<GrnEditModalProps> = ({
                   <Lock className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-3" />
                 </div>
                 <p className="text-[10px] text-slate-500 mt-1">
-                  Password demo: <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-slate-700 font-semibold">budi123</code> / <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-slate-700 font-semibold">laras123</code> / <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-slate-700 font-semibold">admin</code>
+                  Masukkan kata sandi akun login Anda untuk otorisasi tindakan ini.
                 </p>
               </div>
 

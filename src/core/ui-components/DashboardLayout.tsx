@@ -152,7 +152,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
   useEffect(() => {
     refreshNotificationCounts();
-    const timer = setInterval(refreshNotificationCounts, 10000);
+    const timer = setInterval(refreshNotificationCounts, 60000); // 60 detik untuk efisiensi egress
     return () => clearInterval(timer);
   }, [user]);
   
