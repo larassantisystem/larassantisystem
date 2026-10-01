@@ -83,10 +83,12 @@ export const stockService = {
       }
 
       const initialQty = grn.quantityReceived;
-      // Extract current quantity from qcPayload if available, else fallback to initial
-      const currentQty = grn.qcPayload?.currentQuantity !== undefined
-        ? grn.qcPayload.currentQuantity
-        : initialQty;
+      // Extract current quantity from grn.currentQuantity, then qcPayload, else fallback to initial
+      const currentQty = grn.currentQuantity !== undefined
+        ? grn.currentQuantity
+        : (grn.qcPayload?.currentQuantity !== undefined
+            ? grn.qcPayload.currentQuantity
+            : initialQty);
 
       // Determine storage location based on state and grn record
       let storageLocation = grn.storageLocation;
@@ -261,9 +263,11 @@ export const stockService = {
       throw new Error(`Nomor Lot ${payload.lotInternalNumber} tidak ditemukan.`);
     }
 
-    const currentQty = targetGrn.qcPayload?.currentQuantity !== undefined
-      ? targetGrn.qcPayload.currentQuantity
-      : targetGrn.quantityReceived;
+    const currentQty = targetGrn.currentQuantity !== undefined
+      ? targetGrn.currentQuantity
+      : (targetGrn.qcPayload?.currentQuantity !== undefined
+          ? targetGrn.qcPayload.currentQuantity
+          : targetGrn.quantityReceived);
 
     if (currentQty < payload.deductQuantity) {
       throw new Error(
@@ -304,6 +308,7 @@ export const stockService = {
     };
 
     await warehouseService.updateGrnRecord(targetGrn.id, {
+      currentQuantity: qtyAfter,
       qcPayload: updatedQcPayload,
     });
 
@@ -605,6 +610,7 @@ export const stockService = {
             };
 
             await warehouseService.updateGrnRecord(g.id, {
+              currentQuantity: newQ,
               qcPayload: {
                 ...existingQc,
                 currentQuantity: newQ,
@@ -646,6 +652,7 @@ export const stockService = {
         };
 
         await warehouseService.updateGrnRecord(targetGrn.id, {
+          currentQuantity: targetQty,
           qcPayload: updatedQcPayload,
         });
       } else {

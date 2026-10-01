@@ -27,6 +27,7 @@ export interface GrnRecord {
   expiryDate?: string;
   retestDate?: string;
   quantityReceived: number;
+  currentQuantity?: number;
   unit: string;
   containerCount: number;
   containerType: string;

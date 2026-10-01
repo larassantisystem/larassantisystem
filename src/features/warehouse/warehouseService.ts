@@ -94,6 +94,17 @@ function buildPrimarySupabasePayload(record: GrnRecord): Record<string, any> {
   if (record.coaDriveFileId && !knownMissingColumns.has('coa_drive_file_id')) payload.coa_drive_file_id = record.coaDriveFileId;
   if (record.coaDriveViewLink && !knownMissingColumns.has('coa_drive_view_link')) payload.coa_drive_view_link = record.coaDriveViewLink;
 
+  const resolvedCurrentQty = Number(
+    record.currentQuantity !== undefined
+      ? record.currentQuantity
+      : (record.qcPayload?.currentQuantity !== undefined
+          ? record.qcPayload.currentQuantity
+          : record.quantityReceived)
+  );
+  if (!isNaN(resolvedCurrentQty) && !knownMissingColumns.has('current_quantity')) {
+    payload.current_quantity = resolvedCurrentQty;
+  }
+
   return payload;
 }
 
@@ -350,7 +361,7 @@ export const warehouseService = {
         const { data, error } = await withTimeout(
           supabase
             .from('warehouse_grn')
-            .select('id, grn_number, internal_lot_number, material_type, material_id, material_code, material_name, delivery_note_number, purchase_order_number, po_number, supplier_batch_number, batch_number, received_date, expiry_date, expiration_date, retest_date, quantity_received, unit, container_count, container_type, storage_location, storage_conditions, qc_status, qc_parameters_count, received_by, created_at, notes, seal_condition, packaging_condition, coa_attachment, manufacturer, distributor')
+            .select('*')
             .order('created_at', { ascending: false })
             .limit(300),
           5000
@@ -415,6 +426,11 @@ export const warehouseService = {
                   ? calculateAutoRetestDate('raw', d.expiration_date || d.expiry_date || d.expiryDate, d.received_date || d.receivedDate)
                   : undefined),
               quantityReceived: Number(d.quantity_received || d.quantityReceived || 0),
+              currentQuantity: d.current_quantity !== undefined && d.current_quantity !== null
+                ? Number(d.current_quantity)
+                : (qcPayload?.currentQuantity !== undefined
+                    ? Number(qcPayload.currentQuantity)
+                    : Number(d.quantity_received || d.quantityReceived || 0)),
               unit: d.unit || 'kg',
               containerCount: Number(d.container_count || d.containerCount || 1),
               containerType: d.container_type || d.containerType || 'Drum / Zak',
@@ -501,6 +517,7 @@ export const warehouseService = {
       id: `grn-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
       grnNumber,
       internalLotNumber,
+      currentQuantity: record.currentQuantity !== undefined ? Number(record.currentQuantity) : Number(record.quantityReceived),
       createdAt: new Date().toISOString(),
     };
 
@@ -619,6 +636,13 @@ export const warehouseService = {
     const updatedRecord: GrnRecord = {
       ...matchedItem,
       ...updatedData,
+      currentQuantity: updatedData.currentQuantity !== undefined
+        ? Number(updatedData.currentQuantity)
+        : (updatedData.qcPayload?.currentQuantity !== undefined
+            ? Number(updatedData.qcPayload.currentQuantity)
+            : (matchedItem.currentQuantity !== undefined
+                ? Number(matchedItem.currentQuantity)
+                : Number(matchedItem.quantityReceived))),
       qcPayload: updatedData.qcPayload !== undefined ? updatedData.qcPayload : (matchedItem.qcPayload || remotePayload),
     };
 

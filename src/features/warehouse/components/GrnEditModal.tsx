@@ -64,6 +64,8 @@ export const GrnEditModal: React.FC<GrnEditModalProps> = ({
 
   if (!isOpen || !record) return null;
 
+  const isManager = user?.role === 'manager' || user?.role === 'admin';
+
   const isUnderQcProcess =
     record.qcStatus === 'QUALITY_CONTROL_PROCESS' ||
     record.qcStatus === 'AWAITING_QM_AUTHORIZATION';
@@ -74,10 +76,14 @@ export const GrnEditModal: React.FC<GrnEditModalProps> = ({
     record.qcStatus === 'PASSED_WITH_DEVIATION' ||
     record.qcStatus === 'REJECTED';
 
-  const isLocked = isUnderQcProcess || isFinalized;
+  const isLocked = isUnderQcProcess || isFinalized || !isManager;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isManager) {
+      setErrorMsg('Akses Ditolak: Perubahan data Penerimaan Barang (GRN) hanya dapat dilakukan oleh Manager atau Administrator.');
+      return;
+    }
     if (isLocked) {
       onClose();
       return;
@@ -114,6 +120,12 @@ export const GrnEditModal: React.FC<GrnEditModalProps> = ({
 
     setIsSubmitting(true);
     try {
+      if (!isManager) {
+        setAuthPasswordError('Akses Ditolak: Akun Anda tidak memiliki wewenang Manager untuk mengubah data GRN.');
+        setIsSubmitting(false);
+        return;
+      }
+
       const actorNik = user?.nik || 'admin';
       const verify = await authService.verifyPassword(actorNik, authPassword);
       if (!verify.valid) {
@@ -154,7 +166,11 @@ export const GrnEditModal: React.FC<GrnEditModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-bold text-base leading-tight">
-                  {isLocked ? 'Detail Data Penerimaan (Terkunci)' : 'Edit Penerimaan Barang (GRN)'}
+                  {!isManager
+                    ? 'Detail Data Penerimaan (Mode Baca - Khusus Manager)'
+                    : isLocked
+                    ? 'Detail Data Penerimaan (Terkunci)'
+                    : 'Edit Penerimaan Barang (GRN)'}
                 </h3>
                 <span className="font-mono text-xs font-bold px-2.5 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-400/30">
                   {record.grnNumber}
@@ -230,6 +246,21 @@ export const GrnEditModal: React.FC<GrnEditModalProps> = ({
               </div>
               <p className="text-[10.5px] text-amber-800">
                 Menyimpan perbaikan formulir ini akan mengembalikan status ke <strong>KARANTINA</strong> dan secara otomatis menghitung ulang rencana sampling QC.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Manager-Only Restriction Banner */}
+        {!isManager && (
+          <div className="bg-amber-50/90 border-b border-amber-200 p-4 text-xs text-amber-950 flex items-start gap-3 shrink-0">
+            <Lock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <span className="font-bold text-amber-900 uppercase tracking-wide">
+                Akses Terbatas (Khusus Level Manager):
+              </span>
+              <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
+                Anda masuk sebagai <strong>{user?.name || 'Pengguna'} ({user?.role?.toUpperCase() || 'USER'})</strong>. Formulir ini berada dalam mode baca (<em>Read-Only</em>). Berdasarkan SOP dan integritas CPKB, perubahan data kedatangan barang (GRN) hanya berhak dilakukan oleh <strong>Manager Gudang / Manager Terkait</strong> atau <strong>Administrator</strong>.
               </p>
             </div>
           </div>

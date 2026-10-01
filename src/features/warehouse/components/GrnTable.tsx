@@ -436,9 +436,11 @@ export const GrnTable: React.FC<GrnTableProps> = ({
                             <Printer className="w-3.5 h-3.5" />
                           </button>
 
-                          {/* Edit Data Penerimaan */}
+                          {/* Edit Data Penerimaan - Khusus Manager / Admin */}
                           {(() => {
-                            const isEditable = rec.qcStatus === 'QUARANTINE' || isReverted;
+                            const isManager = user?.role === 'manager' || user?.role === 'admin';
+                            const isStatusEditable = rec.qcStatus === 'QUARANTINE' || isReverted;
+                            const isEditable = isManager && isStatusEditable;
                             const isUnderTesting = rec.qcStatus === 'QUALITY_CONTROL_PROCESS';
                             const isAwaitingQm = rec.qcStatus === 'AWAITING_QM_AUTHORIZATION';
                             
@@ -452,6 +454,8 @@ export const GrnTable: React.FC<GrnTableProps> = ({
                                 className={`${isCompactMode ? 'p-1' : 'p-1.5'} rounded-lg transition-colors cursor-pointer ${
                                   isEditable
                                     ? 'text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200'
+                                    : !isManager
+                                    ? 'text-slate-400 bg-slate-100/80 border border-slate-200 hover:bg-slate-200/60'
                                     : isUnderTesting
                                     ? 'text-blue-700 bg-blue-50/70 hover:bg-blue-100 border border-blue-200'
                                     : isAwaitingQm
@@ -459,15 +463,17 @@ export const GrnTable: React.FC<GrnTableProps> = ({
                                     : 'text-slate-500 bg-slate-100 hover:bg-slate-200 border border-slate-200'
                                 }`}
                                 title={
-                                  isUnderTesting
+                                  !isManager
+                                    ? `Akses Terbatas (${user?.role?.toUpperCase() || 'USER'}): Hanya Manager atau Administrator yang berwenang mengedit data GRN (Mode Baca)`
+                                    : isUnderTesting
                                     ? 'Lihat Data Penerimaan (Terkunci CPKB: Sedang Diuji QC Lab)'
                                     : isAwaitingQm
                                     ? 'Lihat Data Penerimaan (Terkunci CPKB: Menunggu Otorisasi QM)'
                                     : rec.qcStatus === 'PASSED' || rec.qcStatus === 'RELEASED' || rec.qcStatus === 'PASSED_WITH_DEVIATION' || rec.qcStatus === 'REJECTED'
                                     ? 'Lihat Data Penerimaan (Terkunci CPKB: Selesai Otorisasi Mutu)'
                                     : isReverted
-                                    ? 'Koreksi Data Penerimaan yang Dikembalikan QC'
-                                    : 'Edit Data Penerimaan Barang'
+                                    ? 'Koreksi Data Penerimaan yang Dikembalikan QC (Otorisasi Manager)'
+                                    : 'Edit Data Penerimaan Barang (Otorisasi Manager)'
                                 }
                               >
                                 {isEditable ? (

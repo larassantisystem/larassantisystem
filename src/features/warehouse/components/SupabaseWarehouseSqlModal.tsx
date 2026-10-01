@@ -124,6 +124,8 @@ CREATE TABLE IF NOT EXISTS public.warehouse_grn (
 );
 
 -- 3. Tambahkan kolom yang mungkin belum ada bila tabel pernah dibuat dengan skema berbeda
+ALTER TABLE public.warehouse_grn ADD COLUMN IF NOT EXISTS current_quantity NUMERIC(12, 3);
+UPDATE public.warehouse_grn SET current_quantity = quantity_received WHERE current_quantity IS NULL;
 ALTER TABLE public.warehouse_grn ADD COLUMN IF NOT EXISTS po_number VARCHAR(100);
 ALTER TABLE public.warehouse_grn ADD COLUMN IF NOT EXISTS purchase_order_number VARCHAR(100);
 ALTER TABLE public.warehouse_grn ADD COLUMN IF NOT EXISTS batch_number VARCHAR(100);
