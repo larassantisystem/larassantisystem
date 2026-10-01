@@ -198,8 +198,8 @@ const SUPABASE_REGISTERED_ACCOUNTS: SupabaseAccountItem[] = [
 
 export const LoginPage: React.FC = () => {
   const { login, isLoading } = useAuth();
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('laras123');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -440,7 +440,7 @@ export const LoginPage: React.FC = () => {
                   </span>
                 ) : (
                   <>
-                    <span>Masuk ke Sistem ({username})</span>
+                    <span>Masuk ke Sistem{username ? ` (${username})` : ''}</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}
