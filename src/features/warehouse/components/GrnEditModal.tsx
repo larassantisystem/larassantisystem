@@ -64,7 +64,8 @@ export const GrnEditModal: React.FC<GrnEditModalProps> = ({
 
   if (!isOpen || !record) return null;
 
-  const isManager = user?.role === 'manager' || user?.role === 'admin';
+  const isAdmin = user?.role === 'admin' || user?.nik?.toLowerCase() === 'admin';
+  const isManager = user?.role === 'manager' || isAdmin;
 
   const isUnderQcProcess =
     record.qcStatus === 'QUALITY_CONTROL_PROCESS' ||
@@ -76,7 +77,8 @@ export const GrnEditModal: React.FC<GrnEditModalProps> = ({
     record.qcStatus === 'PASSED_WITH_DEVIATION' ||
     record.qcStatus === 'REJECTED';
 
-  const isLocked = isUnderQcProcess || isFinalized || !isManager;
+  // Super Admin can override locks
+  const isLocked = !isAdmin && (isUnderQcProcess || isFinalized || !isManager);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -190,7 +192,21 @@ export const GrnEditModal: React.FC<GrnEditModalProps> = ({
         </div>
 
         {/* Lock or Revert Alert Banner */}
-        {isUnderQcProcess && (
+        {isAdmin && (isUnderQcProcess || isFinalized) && (
+          <div className="bg-indigo-50 border-b border-indigo-200 p-4 text-xs text-indigo-950 flex items-start gap-2.5 shrink-0">
+            <ShieldCheck className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
+            <div>
+              <span className="font-bold text-indigo-900 uppercase tracking-wide">
+                Mode Super Admin Master Override Aktif:
+              </span>
+              <p className="text-[11px] text-indigo-800 mt-0.5 leading-relaxed">
+                Anda login sebagai <strong>Administrator Utama</strong>. Anda memiliki otorisasi penuh untuk mengoreksi kuantitas diterima, nomor batch, atau data GRN ini meskipun status saat ini adalah <strong>{record.qcStatus}</strong>.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {!isAdmin && isUnderQcProcess && (
           <div className="bg-blue-50 border-b border-blue-200 p-4 text-xs text-blue-950 flex items-start gap-2.5 shrink-0">
             <Lock className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
             <div>
@@ -207,7 +223,7 @@ export const GrnEditModal: React.FC<GrnEditModalProps> = ({
           </div>
         )}
 
-        {isFinalized && (
+        {!isAdmin && isFinalized && (
           <div className="bg-slate-100 border-b border-slate-200 p-4 text-xs text-slate-700 flex items-start gap-2.5 shrink-0">
             <Lock className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
             <div>

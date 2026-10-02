@@ -4,6 +4,7 @@ import { calculateSamplingPlan } from '../quality/utils/milStd105e';
 import { packGrnNotes, unpackGrnNotes } from '../../core/utils/qcStorageSync';
 import { generateLotInternalNumber, normalizeLotNumber, calculateAutoRetestDate } from '../quality/utils/qcNumbering';
 import { formatToIsoDateString } from '../../core/utils/dateUtils';
+import { authService } from '../../core/auth/authService';
 
 const WAREHOUSE_GRN_STORAGE_KEY = 'lsm_warehouse_grn_v1';
 
@@ -727,13 +728,20 @@ export const warehouseService = {
     return updatedRecord;
   },
 
-  deleteGrnRecord: async (id: string): Promise<boolean> => {
+  deleteGrnRecord: async (id: string, isSuperAdminOverride = false): Promise<boolean> => {
     const existing = await warehouseService.getGrnRecords();
     const target = existing.find((item) => item.id === id || item.grnNumber === id);
     if (!target) return true;
 
-    // Kepatuhan Integritas Data CPKB: Tolak hapus jika sudah masuk Sedang Uji, Menunggu Otorisasi, Rilis, atau Ditolak
-    if (target.qcStatus !== 'QUARANTINE' && target.qcStatus !== 'REVERTED_TO_WAREHOUSE') {
+    // Check if user is Super Admin
+    const currentUser = authService.getCurrentUser();
+    const isSuperAdmin =
+      isSuperAdminOverride ||
+      currentUser?.role === 'admin' ||
+      currentUser?.nik?.toLowerCase() === 'admin';
+
+    // Kepatuhan Integritas Data CPKB: Tolak hapus jika sudah masuk Sedang Uji, Menunggu Otorisasi, Rilis, atau Ditolak (Kecuali Super Admin Override)
+    if (!isSuperAdmin && target.qcStatus !== 'QUARANTINE' && target.qcStatus !== 'REVERTED_TO_WAREHOUSE') {
       const statusLabel =
         target.qcStatus === 'QUALITY_CONTROL_PROCESS'
           ? 'Sedang Uji'

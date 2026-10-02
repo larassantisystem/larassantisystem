@@ -438,9 +438,10 @@ export const GrnTable: React.FC<GrnTableProps> = ({
 
                           {/* Edit Data Penerimaan - Khusus Manager / Admin */}
                           {(() => {
-                            const isManager = user?.role === 'manager' || user?.role === 'admin';
+                            const isAdmin = user?.role === 'admin' || user?.nik?.toLowerCase() === 'admin';
+                            const isManager = user?.role === 'manager' || isAdmin;
                             const isStatusEditable = rec.qcStatus === 'QUARANTINE' || isReverted;
-                            const isEditable = isManager && isStatusEditable;
+                            const isEditable = isAdmin || (isManager && isStatusEditable);
                             const isUnderTesting = rec.qcStatus === 'QUALITY_CONTROL_PROCESS';
                             const isAwaitingQm = rec.qcStatus === 'AWAITING_QM_AUTHORIZATION';
                             
@@ -453,7 +454,9 @@ export const GrnTable: React.FC<GrnTableProps> = ({
                                 }}
                                 className={`${isCompactMode ? 'p-1' : 'p-1.5'} rounded-lg transition-colors cursor-pointer ${
                                   isEditable
-                                    ? 'text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200'
+                                    ? isAdmin
+                                      ? 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200'
+                                      : 'text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200'
                                     : !isManager
                                     ? 'text-slate-400 bg-slate-100/80 border border-slate-200 hover:bg-slate-200/60'
                                     : isUnderTesting
@@ -463,7 +466,9 @@ export const GrnTable: React.FC<GrnTableProps> = ({
                                     : 'text-slate-500 bg-slate-100 hover:bg-slate-200 border border-slate-200'
                                 }`}
                                 title={
-                                  !isManager
+                                  isAdmin
+                                    ? `Edit Data & Kuantitas (Super Admin Master Override - Status: ${rec.qcStatus})`
+                                    : !isManager
                                     ? `Akses Terbatas (${user?.role?.toUpperCase() || 'USER'}): Hanya Manager atau Administrator yang berwenang mengedit data GRN (Mode Baca)`
                                     : isUnderTesting
                                     ? 'Lihat Data Penerimaan (Terkunci CPKB: Sedang Diuji QC Lab)'
@@ -498,50 +503,65 @@ export const GrnTable: React.FC<GrnTableProps> = ({
                             <Eye className="w-3.5 h-3.5" />
                           </button>
 
-                          {/* Delete Record - Protected by CPKB Data Integrity */}
-                          {isDeletable ? (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setRecordToDelete(rec);
-                                setDeletePassword('');
-                                setDeletePasswordError(null);
-                              }}
-                              className={`${isCompactMode ? 'p-1' : 'p-1.5'} rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer`}
-                              title={
-                                isReverted
-                                  ? 'Hapus Penerimaan yang Dibatalkan/Dikembalikan QC (Otorisasi Password)'
-                                  : 'Hapus Catatan Karantina (Memerlukan Kata Sandi)'
-                              }
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                const label =
-                                  rec.qcStatus === 'QUALITY_CONTROL_PROCESS'
-                                    ? 'Sedang Uji'
-                                    : rec.qcStatus === 'AWAITING_QM_AUTHORIZATION'
-                                    ? 'Menunggu Otorisasi QM'
-                                    : rec.qcStatus === 'PASSED' || rec.qcStatus === 'RELEASED'
-                                    ? 'Rilis'
-                                    : rec.qcStatus === 'PASSED_WITH_DEVIATION'
-                                    ? 'Rilis dengan Deviasi'
-                                    : 'Ditolak';
-                                alert(
-                                  `[Terkunci CPKB / GMP]\n\nPenerimaan ${rec.grnNumber} tidak dapat dihapus karena sudah dalam tahap "${label}".\n\nUntuk menjaga integritas data pengujian laboratorium, gudang tidak dapat menghapus data yang sudah diproses QC. Silakan hubungi tim QC untuk melakukan pembatalan (Revert) pengujian terlebih dahulu jika diperlukan perbaikan.`
-                                );
-                              }}
-                              className={`${isCompactMode ? 'p-1' : 'p-1.5'} rounded-lg text-slate-300 bg-slate-100/70 border border-slate-200/80 cursor-not-allowed`}
-                              title={`Terkunci CPKB: Tidak dapat dihapus karena status sudah ${rec.qcStatus}. Hubungi QC jika perlu pembatalan pengujian.`}
-                            >
-                              <Lock className="w-3.5 h-3.5 text-slate-400" />
-                            </button>
-                          )}
+                          {/* Delete Record - Protected by CPKB Data Integrity, Unlocked for Super Admin */}
+                          {(() => {
+                            const isAdmin = user?.role === 'admin' || user?.nik?.toLowerCase() === 'admin';
+                            const isDeletable = isAdmin || rec.qcStatus === 'QUARANTINE' || isReverted;
+
+                            if (isDeletable) {
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setRecordToDelete(rec);
+                                    setDeletePassword('');
+                                    setDeletePasswordError(null);
+                                  }}
+                                  className={`${isCompactMode ? 'p-1' : 'p-1.5'} rounded-lg transition-colors cursor-pointer ${
+                                    isAdmin
+                                      ? 'text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200'
+                                      : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
+                                  }`}
+                                  title={
+                                    isAdmin
+                                      ? `Hapus Transaksi Penerimaan (Super Admin Master Override - Status: ${rec.qcStatus})`
+                                      : isReverted
+                                      ? 'Hapus Penerimaan yang Dibatalkan/Dikembalikan QC (Otorisasi Password)'
+                                      : 'Hapus Catatan Karantina (Memerlukan Kata Sandi)'
+                                  }
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              );
+                            }
+
+                            return (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const label =
+                                    rec.qcStatus === 'QUALITY_CONTROL_PROCESS'
+                                      ? 'Sedang Uji'
+                                      : rec.qcStatus === 'AWAITING_QM_AUTHORIZATION'
+                                      ? 'Menunggu Otorisasi QM'
+                                      : rec.qcStatus === 'PASSED' || rec.qcStatus === 'RELEASED'
+                                      ? 'Rilis'
+                                      : rec.qcStatus === 'PASSED_WITH_DEVIATION'
+                                      ? 'Rilis dengan Deviasi'
+                                      : 'Ditolak';
+                                  alert(
+                                    `[Terkunci CPKB / GMP]\n\nPenerimaan ${rec.grnNumber} tidak dapat dihapus oleh staf karena sudah dalam tahap "${label}".\n\nUntuk menjaga integritas data pengujian laboratorium, login sebagai Super Admin jika diperlukan override otorisasi.`
+                                  );
+                                }}
+                                className={`${isCompactMode ? 'p-1' : 'p-1.5'} rounded-lg text-slate-300 bg-slate-100/70 border border-slate-200/80 cursor-not-allowed`}
+                                title={`Terkunci CPKB: Tidak dapat dihapus karena status sudah ${rec.qcStatus}. Hubungi Administrator.`}
+                              >
+                                <Lock className="w-3.5 h-3.5 text-slate-400" />
+                              </button>
+                            );
+                          })()}
                         </div>
                       </td>
                     </tr>
