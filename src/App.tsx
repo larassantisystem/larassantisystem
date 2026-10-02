@@ -49,7 +49,7 @@ const MainAppContent: React.FC = () => {
     | 'sop'
     | 'capa'
     | 'complaints'
-  >('ipc-bulk');
+  >('queue');
 
   // Auto-switch to Quality tab if scanned via QR Code with ?coa= param
   React.useEffect(() => {

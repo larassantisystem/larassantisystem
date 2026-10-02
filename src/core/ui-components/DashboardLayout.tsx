@@ -168,13 +168,28 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     admin: false
   });
 
-  // Track which layer-1 sub-groups are expanded
+  // Track which layer-1 sub-groups are expanded (only active group open by default)
   const [expandedSubItems, setExpandedSubItems] = useState<Record<string, boolean>>({
     'quality-incoming': true,
-    'quality-ipc': true,
-    'quality-retained-stability': true,
-    'quality-doc-control': true,
+    'quality-ipc': false,
+    'quality-retained-stability': false,
+    'quality-doc-control': false,
   });
+
+  // Auto-expand only the relevant sub-group when a sub-item is active
+  useEffect(() => {
+    if (activeTab === 'quality' && activeSubTab) {
+      if (['queue', 'testing', 'approval', 'archive'].includes(activeSubTab)) {
+        setExpandedSubItems((prev) => ({ ...prev, 'quality-incoming': true }));
+      } else if (['ipc-bulk', 'ipc-finished', 'ipc-rework'].includes(activeSubTab)) {
+        setExpandedSubItems((prev) => ({ ...prev, 'quality-ipc': true }));
+      } else if (['retained', 'stability'].includes(activeSubTab)) {
+        setExpandedSubItems((prev) => ({ ...prev, 'quality-retained-stability': true }));
+      } else if (['sop', 'capa', 'complaints'].includes(activeSubTab)) {
+        setExpandedSubItems((prev) => ({ ...prev, 'quality-doc-control': true }));
+      }
+    }
+  }, [activeTab, activeSubTab]);
 
   const toggleAccordion = (deptId: string, e: React.MouseEvent) => {
     e.stopPropagation();
