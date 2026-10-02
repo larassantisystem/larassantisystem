@@ -658,6 +658,7 @@ export const EmployeeManagementModule: React.FC<EmployeeManagementModuleProps> =
                   <option value="staff">Staff</option>
                   <option value="supervisor">Supervisor</option>
                   <option value="manager">Manager</option>
+                  <option value="operator">Operator</option>
                   <option value="admin">Admin</option>
                 </select>
               </div>

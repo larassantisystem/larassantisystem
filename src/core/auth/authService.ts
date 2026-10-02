@@ -348,15 +348,6 @@ export const authService = {
   },
 
   getAllEmployees: async (): Promise<UserProfile[]> => {
-    const accessMapRaw = localStorage.getItem('cosmo_ddmp_specific_access_map');
-    const accessMap: Record<string, any[]> = accessMapRaw ? JSON.parse(accessMapRaw) : {};
-
-    const deactivatedRaw = localStorage.getItem('cosmo_ddmp_deactivated_niks');
-    const deactivatedNiks: string[] = deactivatedRaw ? JSON.parse(deactivatedRaw) : [];
-
-    const customUsersRaw = localStorage.getItem('cosmo_ddmp_registered_users');
-    const customUsers: UserProfile[] = customUsersRaw ? JSON.parse(customUsersRaw) : [];
-
     let resultList: UserProfile[] = [];
 
     // 1. Fetch from Supabase profiles if configured (Direct Cloud Database Single Source of Truth)
@@ -386,8 +377,8 @@ export const authService = {
             };
           });
 
-          // Opsi A: Murni 100% dari database Supabase jika data profiles tersedia
-          return resultList.filter((u) => !deactivatedNiks.includes(u.nik.toLowerCase()));
+          // Mengembalikan 100% seluruh user resmi langsung dari database Supabase
+          return resultList;
         }
       } catch (err) {
         console.warn('Could not fetch profiles from Supabase, using fallback list', err);
@@ -407,8 +398,7 @@ export const authService = {
       }));
     }
 
-    // Filter out deactivated accounts
-    return resultList.filter((u) => !deactivatedNiks.includes(u.nik.toLowerCase()));
+    return resultList;
   },
 
   registerEmployee: async (employee: {
