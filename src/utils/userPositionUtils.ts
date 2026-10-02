@@ -41,7 +41,15 @@ export function getUserPositionTitleByNik(nik?: string, defaultTitle?: string): 
 export function getUserPositionTitle(user?: UserProfile | null, defaultTitle?: string): string {
   if (!user) return defaultTitle || 'Staf Analis Lab QC';
 
-  if ((user as any).position) return (user as any).position;
+  if ((user as any).position) {
+    const rawPos = (user as any).position;
+    if (typeof rawPos === 'string' && rawPos.startsWith('ACC:')) {
+      const parts = rawPos.slice(4).split('#');
+      if (parts[1] && parts[1].trim()) return parts[1].trim();
+    } else if (typeof rawPos === 'string' && !rawPos.startsWith('{')) {
+      return rawPos;
+    }
+  }
   if ((user as any).job_title) return (user as any).job_title;
   if ((user as any).jobTitle) return (user as any).jobTitle;
   if ((user as any).jabatan) return (user as any).jabatan;

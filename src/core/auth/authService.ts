@@ -1,8 +1,93 @@
 import { supabase, isSupabaseConfigured } from './supabaseClient';
-import { UserProfile } from '../../types';
+import { UserProfile, ModulePermission } from '../../types';
 import { DEMO_USERS, INITIAL_SYSTEM_USERS } from './mockUsers';
 
 const AUTH_STORAGE_KEY = 'cosmo_ddmp_auth_user';
+
+const MODULE_CODE_MAP: Record<string, string> = {
+  warehouse: 'wh',
+  quality: 'qc',
+  production: 'prod',
+  procurement: 'po',
+  management: 'mgmt',
+  rnd: 'rnd',
+  ppic: 'ppic',
+  sales: 'sales',
+  admin: 'admin',
+};
+
+const REVERSE_MODULE_CODE_MAP: Record<string, Department> = {
+  wh: 'warehouse',
+  warehouse: 'warehouse',
+  qc: 'quality',
+  quality: 'quality',
+  prod: 'production',
+  production: 'production',
+  po: 'procurement',
+  procurement: 'procurement',
+  mgmt: 'management',
+  management: 'management',
+  rnd: 'rnd',
+  ppic: 'ppic',
+  sales: 'sales',
+  admin: 'admin',
+};
+
+export function serializeProfilePositionAndAccess(title?: string, specificAccess?: ModulePermission[]): string {
+  const cleanTitle = (title || '').trim().replace(/[#]/g, '');
+  if (!specificAccess || specificAccess.length === 0) {
+    return cleanTitle.slice(0, 95);
+  }
+  const accParts = specificAccess.map((perm) => {
+    const code = MODULE_CODE_MAP[perm.moduleId] || perm.moduleId;
+    const lvl = perm.accessLevel === 'write' ? 'w' : 'r';
+    return `${code}:${lvl}`;
+  });
+  const accStr = `ACC:${accParts.join(',')}`;
+  if (cleanTitle) {
+    return `${accStr}#${cleanTitle}`.slice(0, 95);
+  }
+  return accStr.slice(0, 95);
+}
+
+export function parseProfilePositionAndAccess(positionValue: any): { position?: string; specificAccess: ModulePermission[] } {
+  let position: string | undefined = undefined;
+  let specificAccess: ModulePermission[] = [];
+  if (!positionValue || typeof positionValue !== 'string') {
+    return { position: undefined, specificAccess: [] };
+  }
+  const raw = positionValue.trim();
+  if (raw.startsWith('ACC:')) {
+    const parts = raw.slice(4).split('#');
+    const accListStr = parts[0] || '';
+    position = parts[1] || undefined;
+    if (accListStr) {
+      accListStr.split(',').forEach((item) => {
+        const [code, lvl] = item.split(':');
+        const mod = REVERSE_MODULE_CODE_MAP[code?.toLowerCase()];
+        if (mod) {
+          specificAccess.push({
+            moduleId: mod,
+            accessLevel: lvl === 'w' ? 'write' : 'read',
+          });
+        }
+      });
+    }
+  } else if (raw.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(raw);
+      position = parsed.title || parsed.position || undefined;
+      if (Array.isArray(parsed.specificAccess)) {
+        specificAccess = parsed.specificAccess;
+      }
+    } catch {
+      position = raw;
+    }
+  } else {
+    position = raw;
+  }
+  return { position, specificAccess };
+}
 
 export const authService = {
   isConfigured: isSupabaseConfigured,
@@ -80,13 +165,16 @@ export const authService = {
             }
           }
 
+          const { position: parsedPos, specificAccess: parsedAccess } = parseProfilePositionAndAccess(profileData?.position);
+
           const userProfile: UserProfile = {
             id: profileData?.id || authUser.id,
             nik: resolvedNik,
             name: resolvedName,
             department: resolvedDept,
             role: resolvedRole,
-            position: profileData?.position,
+            position: parsedPos,
+            specificAccess: parsedAccess,
             email: authUser.email || primaryEmail,
             password: profileData?.password || password,
           };
@@ -117,13 +205,16 @@ export const authService = {
           const resolvedDept = (isAdminUser ? 'admin' : (dbProfile.department || 'rnd')) as UserProfile['department'];
           const resolvedRole = (isAdminUser ? 'admin' : (dbProfile.role || 'staff')) as UserProfile['role'];
 
+          const { position: parsedPos, specificAccess: parsedAccess } = parseProfilePositionAndAccess(dbProfile.position);
+
           const userProfile: UserProfile = {
             id: dbProfile.id,
             nik: resolvedNik,
             name: dbProfile.name || (isAdminUser ? 'ADMIN' : `Karyawan ${cleanNik}`),
             department: resolvedDept,
             role: resolvedRole,
-            position: dbProfile.position,
+            position: parsedPos,
+            specificAccess: parsedAccess,
             email: dbProfile.email || primaryEmail,
             password: dbProfile.password || password,
           };
@@ -280,16 +371,18 @@ export const authService = {
           resultList = profiles.map((p: any) => {
             const isAdmin = p.nik === 'LMS00000' || p.nik?.toLowerCase() === 'admin' || p.role === 'admin';
             const cleanNik = isAdmin ? 'admin' : (p.nik || 'N/A');
+            const { position: parsedPos, specificAccess: parsedAccess } = parseProfilePositionAndAccess(p.position);
+
             return {
               id: p.id,
               nik: cleanNik,
               name: p.full_name || p.name || (isAdmin ? 'ADMIN' : `Karyawan ${cleanNik}`),
               department: (isAdmin ? 'admin' : (p.department || 'rnd')) as UserProfile['department'],
               role: (isAdmin ? 'admin' : (p.role || 'staff')) as UserProfile['role'],
-              position: p.position || p.job_title || p.jabatan || p.jobTitle,
+              position: parsedPos,
               email: p.email || (cleanNik === 'admin' ? 'lms00000@larassanti.co.id' : `${cleanNik.toLowerCase()}@larassanti.co.id`),
               password: p.password || 'laras123',
-              specificAccess: accessMap[cleanNik.toLowerCase()] || [],
+              specificAccess: parsedAccess,
             };
           });
 
@@ -310,25 +403,8 @@ export const authService = {
         department: u.department,
         role: u.role,
         email: u.email,
-        specificAccess: accessMap[u.nik.toLowerCase()] || u.specificAccess || [],
+        specificAccess: u.specificAccess || [],
       }));
-    }
-
-    // 3. Merge custom local users
-    for (const cust of customUsers) {
-      const idx = resultList.findIndex((r) => r.nik.toLowerCase() === cust.nik.toLowerCase());
-      if (idx !== -1) {
-        resultList[idx] = {
-          ...resultList[idx],
-          ...cust,
-          specificAccess: accessMap[cust.nik.toLowerCase()] || cust.specificAccess || resultList[idx].specificAccess || [],
-        };
-      } else {
-        resultList.push({
-          ...cust,
-          specificAccess: accessMap[cust.nik.toLowerCase()] || cust.specificAccess || [],
-        });
-      }
     }
 
     // Filter out deactivated accounts
@@ -347,6 +423,7 @@ export const authService = {
     const cleanNik = rawNik.toLowerCase() === 'admin' ? 'admin' : (rawNik.toUpperCase().startsWith('LMS') ? rawNik.toUpperCase() : `LMS${rawNik.toUpperCase()}`);
     const password = employee.password || 'laras123';
     const email = cleanNik === 'admin' ? 'admin@larassanti.co.id' : `${cleanNik.toLowerCase()}@larassanti.co.id`;
+    const positionPayload = serializeProfilePositionAndAccess('', employee.specificAccess);
 
     // 1. Registrasi ke Supabase Auth GoTrue (jika dikonfigurasi)
     let authUserId: string | null = null;
@@ -392,6 +469,7 @@ export const authService = {
               name: employee.name.trim(),
               department: employee.department,
               role: employee.role,
+              position: positionPayload,
               email,
               password,
               updated_at: new Date().toISOString(),
@@ -413,6 +491,7 @@ export const authService = {
               name: employee.name.trim(),
               department: employee.department,
               role: employee.role,
+              position: positionPayload,
               email,
               password,
               created_at: new Date().toISOString(),
@@ -445,9 +524,13 @@ export const authService = {
         if (updatedData.name) payload.name = updatedData.name.trim();
         if (updatedData.department) payload.department = updatedData.department;
         if (updatedData.role) payload.role = updatedData.role;
-        if (updatedData.position) payload.position = updatedData.position;
         if (updatedData.email) payload.email = updatedData.email;
         if (updatedData.password) payload.password = updatedData.password.trim();
+
+        // Selalu sinkronkan hak akses khusus lintas modul (specificAccess) ke kolom position di Supabase
+        if (updatedData.specificAccess !== undefined || updatedData.position !== undefined) {
+          payload.position = serializeProfilePositionAndAccess(updatedData.position, updatedData.specificAccess);
+        }
 
         const { error: dbErr } = await supabase
           .from('profiles')
