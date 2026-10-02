@@ -670,6 +670,7 @@ export const EmployeeManagementModule: React.FC<EmployeeManagementModuleProps> =
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    <th className="py-3 px-3 text-center w-12">No.</th>
                     <th className="py-3 px-4">NIK Karyawan</th>
                     <th className="py-3 px-4">Nama Lengkap & Email</th>
                     <th className="py-3 px-4">Departemen Utama</th>
@@ -681,7 +682,7 @@ export const EmployeeManagementModule: React.FC<EmployeeManagementModuleProps> =
                 <tbody className="divide-y divide-slate-100">
                   {isLoading ? (
                     <tr>
-                      <td colSpan={6} className="py-12 text-center text-slate-500">
+                      <td colSpan={7} className="py-12 text-center text-slate-500">
                         <div className="flex flex-col items-center justify-center gap-2">
                           <RefreshCw className="w-5 h-5 text-indigo-600 animate-spin" />
                           <span className="text-xs font-semibold">Memuat data karyawan dari Supabase...</span>
@@ -690,17 +691,22 @@ export const EmployeeManagementModule: React.FC<EmployeeManagementModuleProps> =
                     </tr>
                   ) : filteredEmployees.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="py-10 text-center text-slate-500">
+                      <td colSpan={7} className="py-10 text-center text-slate-500">
                         Tidak ada karyawan yang sesuai dengan kriteria pencarian atau filter.
                       </td>
                     </tr>
                   ) : (
-                    filteredEmployees.map((emp) => {
+                    filteredEmployees.map((emp, index) => {
                       const isSuperAdmin = emp.nik.toLowerCase() === 'admin';
                       const hasSpecific = emp.specificAccess && emp.specificAccess.length > 0;
 
                       return (
                         <tr key={emp.id || emp.nik} className="hover:bg-slate-50/60 transition-colors group">
+                          {/* Number */}
+                          <td className="py-3 px-3 text-center whitespace-nowrap text-slate-400 font-bold font-mono text-xs">
+                            {index + 1}
+                          </td>
+
                           {/* NIK */}
                           <td className="py-3 px-4 whitespace-nowrap">
                             <span

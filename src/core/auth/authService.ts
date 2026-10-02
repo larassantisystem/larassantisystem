@@ -268,7 +268,7 @@ export const authService = {
 
     let resultList: UserProfile[] = [];
 
-    // 1. Fetch from Supabase profiles if configured
+    // 1. Fetch from Supabase profiles if configured (Direct Cloud Database Single Source of Truth)
     if (isSupabaseConfigured && supabase) {
       try {
         const { data: profiles, error } = await supabase
@@ -292,13 +292,16 @@ export const authService = {
               specificAccess: accessMap[cleanNik.toLowerCase()] || [],
             };
           });
+
+          // Opsi A: Murni 100% dari database Supabase jika data profiles tersedia
+          return resultList.filter((u) => !deactivatedNiks.includes(u.nik.toLowerCase()));
         }
       } catch (err) {
         console.warn('Could not fetch profiles from Supabase, using fallback list', err);
       }
     }
 
-    // 2. Ensure all INITIAL_SYSTEM_USERS exist in resultList
+    // 2. Fallback jika Supabase offline / kosong
     if (resultList.length === 0) {
       resultList = INITIAL_SYSTEM_USERS.map((u) => ({
         id: u.id,
@@ -309,21 +312,6 @@ export const authService = {
         email: u.email,
         specificAccess: accessMap[u.nik.toLowerCase()] || u.specificAccess || [],
       }));
-    } else {
-      for (const sysUser of INITIAL_SYSTEM_USERS) {
-        const exists = resultList.some((r) => r.nik.toLowerCase() === sysUser.nik.toLowerCase());
-        if (!exists) {
-          resultList.push({
-            id: sysUser.id,
-            nik: sysUser.nik,
-            name: sysUser.name,
-            department: sysUser.department,
-            role: sysUser.role,
-            email: sysUser.email,
-            specificAccess: accessMap[sysUser.nik.toLowerCase()] || sysUser.specificAccess || [],
-          });
-        }
-      }
     }
 
     // 3. Merge custom local users
