@@ -128,17 +128,22 @@ export const formulaService = {
           lastFormulationsFetchTime = Date.now();
           return mapped;
         } else if (error) {
-          console.error('[formulaService] Error loading bulk_formulations from Supabase:', error.message);
-          if (typeof window !== 'undefined' && (error.message.includes('egress') || error.message.includes('restricted'))) {
+          console.warn('[formulaService] Unable to load bulk_formulations from Supabase:', error.message);
+          if (typeof window !== 'undefined' && (
+            error.message.includes('egress') ||
+            error.message.includes('restricted') ||
+            error.message.includes('Failed to fetch') ||
+            error.message.includes('TypeError')
+          )) {
             window.dispatchEvent(
               new CustomEvent('supabase-restriction', {
-                detail: 'Database Supabase Anda saat ini dibatasi (restricted) karena kuota egress terlampaui. Untuk memulihkan layanan, silakan perbarui URL/Key di menu Settings AI Studio.'
+                detail: 'Koneksi ke database Supabase saat ini terganggu atau dibatasi (restricted/network failure). Sistem beralih ke mode offline lokal.'
               })
             );
           }
         }
-      } catch (err) {
-        console.error('[formulaService] Exception loading from Supabase:', err);
+      } catch (err: any) {
+        console.warn('[formulaService] Exception loading from Supabase:', err?.message || err);
       }
     }
 

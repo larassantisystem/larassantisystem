@@ -165,7 +165,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     production: false,
     procurement: false,
     sales: false,
-    admin: false
+    admin: false,
+    deviations: false
   });
 
   // Track which layer-1 sub-groups are expanded (only active group open by default)
@@ -185,7 +186,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         setExpandedSubItems((prev) => ({ ...prev, 'quality-ipc': true }));
       } else if (['retained', 'stability'].includes(activeSubTab)) {
         setExpandedSubItems((prev) => ({ ...prev, 'quality-retained-stability': true }));
-      } else if (['sop', 'capa', 'complaints'].includes(activeSubTab)) {
+      } else if (['sop', 'capa', 'complaints', 'deviations'].includes(activeSubTab)) {
         setExpandedSubItems((prev) => ({ ...prev, 'quality-doc-control': true }));
       }
     }
@@ -271,6 +272,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           ]
         }
       ]
+    },
+    {
+      id: 'deviations',
+      name: 'Deviasi & CAPA',
+      shortName: 'Deviasi',
+      description: 'Penyimpangan Mutu & CAPA Lintas Departemen',
+      icon: <ShieldCheck className="w-4 h-4 text-rose-700" />,
     },
     {
       id: 'warehouse',

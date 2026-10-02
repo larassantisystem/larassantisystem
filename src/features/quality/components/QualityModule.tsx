@@ -30,6 +30,7 @@ import {
   Database,
   QrCode,
   RotateCcw,
+  ShieldAlert,
 } from 'lucide-react';
 import { QcInspectionReport } from '../types/qcTypes';
 import { qualityService } from '../qualityService';
@@ -45,6 +46,7 @@ import { IpcBulkBatchRegisterModal } from './IpcBulkBatchRegisterModal';
 import { IpcAnalysisModal } from './IpcAnalysisModal';
 import { IpcInspectionReportPdfModal } from './IpcInspectionReportPdfModal';
 import { IpcStatusLabelModal } from './IpcStatusLabelModal';
+import { DeviationModule } from './deviations/DeviationModule';
 import { ipcBulkService, IpcAuditResult } from '../services/ipcBulkService';
 import { warehouseService } from '../../warehouse/warehouseService';
 import { GrnDetailModal } from '../../warehouse/components/GrnDetailModal';
@@ -85,7 +87,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
     'queue' | 'testing' | 'approval' | 'archive' | 
     'ipc-bulk' | 'ipc-finished' | 'ipc-rework' | 
     'retained' | 'stability' | 
-    'sop' | 'capa' | 'complaints'
+    'sop' | 'capa' | 'complaints' | 'deviations'
   >('queue');
   
   // Specific material type separation tab for active view (BB vs BK)
@@ -1146,35 +1148,43 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
         </div>
       )}
 
-      {/* Mobile-Only Tab Selector (Shown only on small screens) */}
-      <div className="md:hidden mb-4 bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-2">
-        <label className="text-[10px] font-black uppercase text-slate-500 block">Pilih Sub-Modul QC:</label>
-        <select
-          value={currentTab}
-          onChange={(e) => setCurrentTab(e.target.value as any)}
-          className="w-full bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-3 py-2 text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
-        >
-          <optgroup label="1. Incoming (Bahan Masuk)">
-            <option value="queue">1.1 Antrean Karantina</option>
-            <option value="testing">1.2 Pengujian Lab</option>
-            <option value="approval">1.3 Otorisasi Manager</option>
-            <option value="archive">1.4 Arsip Laporan & Lot</option>
-          </optgroup>
-          <optgroup label="2. In-Process Control (IPC)">
-            <option value="ipc-bulk">2.1 Sediaan Ruahan (Bulk)</option>
-            <option value="ipc-finished">2.2 Produk Jadi</option>
-            <option value="ipc-rework">2.3 Rework / Reprocess</option>
-          </optgroup>
-          <optgroup label="3. Retained & Stability">
-            <option value="retained">3.1 Retained Sample</option>
-            <option value="stability">3.2 Stability Study</option>
-          </optgroup>
-          <optgroup label="4. Document Control & Keluhan">
-            <option value="sop">4.1 Daftar SOP Aktif</option>
-            <option value="capa">4.2 Riwayat Deviasi & CAPA</option>
-            <option value="complaints">4.3 Complaint Handling</option>
-          </optgroup>
-        </select>
+      {/* Responsive Sub-Module Navigation Bar */}
+      <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-2">
+        <div className="flex items-center justify-between">
+          <label className="text-[10px] font-black uppercase text-slate-500 block">Navigasi Sub-Modul Quality & QA:</label>
+          <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
+            Aktif: {currentTab}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+          {[
+            { id: 'queue', label: '1.1 Karantina' },
+            { id: 'testing', label: '1.2 Uji Lab' },
+            { id: 'approval', label: '1.3 Approval QM' },
+            { id: 'archive', label: '1.4 Arsip' },
+            { id: 'ipc-bulk', label: '2.1 Ruahan' },
+            { id: 'ipc-finished', label: '2.2 Produk Jadi' },
+            { id: 'ipc-rework', label: '2.3 Rework' },
+            { id: 'retained', label: '3.1 Retained' },
+            { id: 'stability', label: '3.2 Stability' },
+            { id: 'sop', label: '4.1 SOP' },
+            { id: 'capa', label: '4.2 CAPA' },
+            { id: 'complaints', label: '4.3 Komplain' },
+            { id: 'deviations', label: '4.4 Deviasi & CAPA' },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setCurrentTab(tab.id as any)}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                currentTab === tab.id
+                  ? 'bg-teal-700 text-white shadow-md shadow-teal-700/20'
+                  : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200/80'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Main Filter & Content Box */}
@@ -1195,6 +1205,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
               {currentTab === 'sop' && <><FileText className="w-3.5 h-3.5 text-slate-700" /> 4.1 Daftar SOP Aktif</>}
               {currentTab === 'capa' && <><ClipboardList className="w-3.5 h-3.5 text-rose-600" /> 4.2 Riwayat Deviasi & CAPA</>}
               {currentTab === 'complaints' && <><Info className="w-3.5 h-3.5 text-blue-600" /> 4.3 Complaint Handling</>}
+              {currentTab === 'deviations' && <><ShieldAlert className="w-3.5 h-3.5 text-orange-600" /> 4.4 Manajemen Deviasi & CAPA</>}
             </h3>
             <p className="text-[10px] text-slate-500 font-semibold mt-0.5">
               {currentTab === 'queue' && 'Sampling bahan masuk menggunakan rumus CPKB n = 1 + sqrt(N) wadah.'}
@@ -1209,6 +1220,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
               {currentTab === 'sop' && 'Daftar dokumen standar prosedur operasional pengujian aktif laboratorium QC.'}
               {currentTab === 'capa' && 'Sistem pelaporan penyimpangan, ketidaksesuaian kritis/minor, dan tindakan korektif preventif.'}
               {currentTab === 'complaints' && 'Registrasi laporan keluhan konsumen dan pengujian retained sample investigasi.'}
+              {currentTab === 'deviations' && 'Sistem pelaporan penyimpangan mutu lintas departemen, analisis root cause, dan tindakan korektif preventif CAPA.'}
             </p>
           </div>
 
@@ -3379,6 +3391,13 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
                   </div>
                 ))}
             </div>
+          </div>
+        )}
+
+        {/* TAB 4.4: Manajemen Deviasi & CAPA (Cross-Dept) */}
+        {currentTab === 'deviations' && (
+          <div className="p-4">
+            <DeviationModule currentUser={{ name: user?.name || 'User', nik: user?.nik || 'USER', role: user?.role || 'staff', department: user?.department }} />
           </div>
         )}
       </div>

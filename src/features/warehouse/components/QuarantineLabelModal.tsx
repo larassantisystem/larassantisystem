@@ -203,8 +203,8 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
                       </p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <span className="font-mono text-[8.5px] font-bold border border-black px-1.5 py-0.5 rounded-xs">
+                  <div className="text-right shrink-0">
+                    <span className="font-mono text-[8.5px] font-black border-1.5 border-black px-1.5 py-0.5 rounded-xs shrink-0 whitespace-nowrap inline-block bg-white/90 text-black shadow-2xs">
                       L-DQC-002-01
                     </span>
                   </div>

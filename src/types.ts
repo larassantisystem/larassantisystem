@@ -7,7 +7,8 @@ export type Department =
   | 'sales' 
   | 'management' 
   | 'admin'
-  | 'production';
+  | 'production'
+  | 'deviations';
 
 export type Role = 
   | 'admin' 

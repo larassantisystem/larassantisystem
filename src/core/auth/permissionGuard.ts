@@ -9,6 +9,9 @@ export function canAccessModule(user: UserProfile | null, targetModule: Departme
   // 1. Super Admin memiliki akses ke seluruh modul sistem
   if (user.role === 'admin') return true;
 
+  // 1b. Modul Deviasi & CAPA terbuka untuk seluruh departemen/user (pelaporan & penanganan deviasi)
+  if (targetModule === 'deviations') return true;
+
   // 2. Modul Admin & Otoritas hanya boleh dibuka oleh Super Admin
   if (targetModule === 'admin') {
     return false;
@@ -45,6 +48,9 @@ export function getModuleAccessLevel(
 ): 'none' | 'read' | 'write' {
   if (!user) return 'none';
   if (user.role === 'admin') return 'write';
+
+  // Modul Deviasi & CAPA: seluruh user dapat menulis / membuat deviasi
+  if (targetModule === 'deviations') return 'write';
 
   // 1. Tier 2: Pengecekan Kondisi Khusus (Specific Access Override selalu diprioritaskan)
   if (user.specificAccess && user.specificAccess.length > 0) {
