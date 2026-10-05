@@ -579,7 +579,7 @@ export const authService = {
 
   /**
    * Verifies the password of a specific user (for electronic signature & authorization confirmation)
-   * Menggunakan langsung kolom password milik pengguna di tabel public.profiles Supabase
+   * Menggunakan 100% kata sandi personal pengguna dari tabel public.profiles Supabase / Supabase Auth
    */
   verifyPassword: async (nik: string, passwordInput: string): Promise<{ valid: boolean; error?: string }> => {
     const cleanNik = nik.trim();
@@ -587,7 +587,7 @@ export const authService = {
       return { valid: false, error: 'Kata sandi tidak boleh kosong.' };
     }
 
-    // 1. Kueri langsung ke kolom password di tabel profiles Supabase
+    // Single source of truth: Database PostgreSQL Supabase (tabel profiles & Supabase Auth)
     if (isSupabaseConfigured && supabase) {
       try {
         const { data: dbProfile, error: dbErr } = await supabase
@@ -596,19 +596,18 @@ export const authService = {
           .ilike('nik', cleanNik)
           .maybeSingle();
 
-        if (dbProfile && !dbErr) {
-          const expectedPassword = dbProfile.password || 'laras123';
-          if (passwordInput === expectedPassword) {
+        if (dbProfile && !dbErr && dbProfile.password) {
+          if (passwordInput.trim() === dbProfile.password.trim()) {
             return { valid: true };
           } else {
-            return { valid: false, error: 'Kata sandi tidak sesuai dengan akun Anda.' };
+            return { valid: false, error: 'Kata sandi tidak sesuai dengan kata sandi personal Anda di database Supabase.' };
           }
         }
       } catch (err) {
         console.warn('[authService] Verify password DB exception:', err);
       }
 
-      // Supabase Auth fallback
+      // Supabase Auth verification
       const constructEmail = (rawNik: string) => {
         const clean = rawNik.trim();
         if (clean.includes('@')) return clean.toLowerCase();
@@ -631,14 +630,6 @@ export const authService = {
       }
     }
 
-    // 2. Demo users fallback (hanya jika data demo lokal)
-    const foundDemo = DEMO_USERS.find(
-      (u) => u.nik.toLowerCase() === cleanNik.toLowerCase() && passwordInput === u.defaultPassword
-    );
-    if (foundDemo) {
-      return { valid: true };
-    }
-
-    return { valid: false, error: 'Kata sandi tidak sesuai dengan akun Anda.' };
+    return { valid: false, error: 'Kata sandi tidak sesuai dengan kata sandi personal Anda di database Supabase.' };
   },
 };

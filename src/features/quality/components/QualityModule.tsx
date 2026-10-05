@@ -363,7 +363,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
   const handleStartInspection = async (report: QcInspectionReport) => {
     if (!user) return;
     const updated = await qualityService.startInspectionProcess(report.id, user);
-    setReports((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+    setReports((prev) => prev.map((r) => (r.id === updated.id || r.grnNumber === updated.grnNumber ? updated : r)));
     setInspectingReport(updated);
   };
 
@@ -393,7 +393,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
       sampledContainers,
       samplingDateTime
     );
-    setReports((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+    setReports((prev) => prev.map((r) => (r.id === updated.id || r.grnNumber === updated.grnNumber ? updated : r)));
     setCurrentTab('approval');
   };
 
@@ -413,20 +413,20 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
       user,
       passwordInput
     );
-    setReports((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+    setReports((prev) => prev.map((r) => (r.id === updated.id || r.grnNumber === updated.grnNumber ? updated : r)));
     setPdfReport(updated);
   };
 
   const handleConfirmRevert = async (reportId: string, reason: string, passwordInput: string) => {
     if (!user) return;
     const updated = await qualityService.revertToWarehouse(reportId, reason, user, passwordInput);
-    setReports((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+    setReports((prev) => prev.map((r) => (r.id === updated.id || r.grnNumber === updated.grnNumber ? updated : r)));
   };
 
   const handleRevertToLab = async (reportId: string, revisionInstruction: string, passwordInput: string) => {
     if (!user) return;
     const updated = await qualityService.revertToLabProcess(reportId, revisionInstruction, user, passwordInput);
-    setReports((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+    setReports((prev) => prev.map((r) => (r.id === updated.id || r.grnNumber === updated.grnNumber ? updated : r)));
     setCurrentTab('testing');
   };
 
