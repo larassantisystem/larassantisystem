@@ -270,23 +270,14 @@ export const qualityService = {
         let needsUpdate = false;
 
         // Synchronize remote status into existingReport if Supabase has latest status
-        const resolvedRemoteStatus = (grn.qcPayload?.status as QcInspectionStatus) || (grn.qcStatus as QcInspectionStatus);
-        if (resolvedRemoteStatus && existingReport.status !== resolvedRemoteStatus) {
-          const hasQmAuth = Boolean(existingReport.qmSignature || grn.qcPayload?.qmSignature);
-          // If QM has NOT authorized release/rejection and GRN status is QUARANTINE, force QUARANTINE
-          if (resolvedRemoteStatus === 'QUARANTINE' && !hasQmAuth) {
-            existingReport.status = 'QUARANTINE';
+        const canonicalRemoteStatus = grn.qcPayload?.status || (grn.qcStatus as QcInspectionStatus);
+        if (canonicalRemoteStatus && existingReport.status !== canonicalRemoteStatus) {
+          // Do not downgrade active testing / awaiting authorization status back to default QUARANTINE unless explicitly in qcPayload
+          const isDowngradeToQuarantine = canonicalRemoteStatus === 'QUARANTINE' && existingReport.status !== 'QUARANTINE' && !grn.qcPayload?.status;
+          if (!isDowngradeToQuarantine) {
+            existingReport.status = canonicalRemoteStatus;
             existingReport.updatedAt = new Date().toISOString();
             needsUpdate = true;
-          } else {
-            // Guard: Do not downgrade an active testing/approval status (e.g. AWAITING_QM_AUTHORIZATION, QUALITY_CONTROL_PROCESS)
-            // back to default 'QUARANTINE' if remote column was simply un-updated while local testing is ahead
-            const isDowngradeToQuarantine = resolvedRemoteStatus === 'QUARANTINE' && existingReport.status !== 'QUARANTINE';
-            if (!isDowngradeToQuarantine) {
-              existingReport.status = resolvedRemoteStatus;
-              existingReport.updatedAt = new Date().toISOString();
-              needsUpdate = true;
-            }
           }
         }
 
@@ -296,7 +287,7 @@ export const qualityService = {
           needsUpdate = true;
         }
 
-        // Merge remote QC payload if local report is missing parameters, notes, or signatures
+        // Merge remote QC payload if available
         if (grn.qcPayload) {
           if (grn.qcPayload.status && existingReport.status !== grn.qcPayload.status) {
             existingReport.status = grn.qcPayload.status;
@@ -337,12 +328,12 @@ export const qualityService = {
               );
               const remoteVal = typeof remoteP.resultValue === 'string' ? remoteP.resultValue.trim() : '';
               const localVal = localP && typeof localP.resultValue === 'string' ? localP.resultValue.trim() : '';
-              const finalVal = localVal !== '' ? localP.resultValue : (remoteVal !== '' ? remoteP.resultValue : '');
+              const finalVal = remoteVal !== '' ? remoteP.resultValue : (localVal !== '' ? localP.resultValue : '');
 
               return {
                 ...remoteP,
                 resultValue: finalVal,
-                isCompliant: localP?.isCompliant !== undefined ? localP.isCompliant : (remoteP.isCompliant ?? true),
+                isCompliant: remoteP.isCompliant !== undefined ? remoteP.isCompliant : (localP?.isCompliant ?? true),
               };
             });
             needsUpdate = true;
@@ -1082,6 +1073,26 @@ export const qualityService = {
         const matchingReport = memoryReports.find((r) => r.grnId === target.id || r.grnNumber === target.grnNumber || r.id === target.id);
         if (matchingReport) {
           matchingReport.status = newStatus as QcInspectionStatus;
+          target.qcPayload = {
+            lotInternalNumber: matchingReport.lotInternalNumber,
+            reportNumber: matchingReport.reportNumber,
+            status: matchingReport.status,
+            parameters: matchingReport.parameters,
+            staffDecision: matchingReport.staffDecision,
+            staffNotes: matchingReport.staffNotes,
+            staffSignature: matchingReport.staffSignature,
+            qmDecision: matchingReport.qmDecision,
+            qmDeviationNumber: matchingReport.qmDeviationNumber,
+            qmNotes: matchingReport.qmNotes,
+            qmSignature: matchingReport.qmSignature,
+            aiAssessment: matchingReport.aiAssessment,
+            actualSampleSize: matchingReport.actualSampleSize,
+            actualSampleUnit: matchingReport.actualSampleUnit,
+            sampledContainers: matchingReport.sampledContainers,
+            sampledBy: matchingReport.sampledBy,
+            samplingDateTime: matchingReport.samplingDateTime,
+            retestDate: matchingReport.retestDate,
+          };
           const { userNotes } = unpackGrnNotes(opts.notes || target.notes);
           target.notes = packGrnNotes(userNotes, matchingReport);
         } else if (opts.notes) {
@@ -1100,7 +1111,7 @@ export const qualityService = {
         await warehouseService.updateGrnRecord(target.id, {
           qcStatus: newStatus as any,
           notes: opts.notes || target.notes,
-          qcPayload: target.qcPayload ? { ...target.qcPayload, status: newStatus as any } : undefined,
+          qcPayload: target.qcPayload,
           revertReason: opts.revertReason !== undefined ? opts.revertReason : target.revertReason,
           revertedBy: opts.revertedBy !== undefined ? opts.revertedBy : target.revertedBy,
           revertedAt: opts.revertedAt !== undefined ? opts.revertedAt : target.revertedAt,
