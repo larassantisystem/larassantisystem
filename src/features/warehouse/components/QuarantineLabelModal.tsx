@@ -77,6 +77,26 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
           background: transparent !important;
           overflow: visible !important;
         }
+        .print-page-wrapper {
+          display: block !important;
+          width: 100mm !important;
+          height: 100mm !important;
+          min-width: 100mm !important;
+          min-height: 100mm !important;
+          max-width: 100mm !important;
+          max-height: 100mm !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          page-break-after: always !important;
+          break-after: page !important;
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
+          overflow: hidden !important;
+        }
+        .print-page-wrapper:last-child {
+          page-break-after: auto !important;
+          break-after: auto !important;
+        }
         .thermal-label-page {
           width: 100mm !important;
           height: 100mm !important;
@@ -90,21 +110,11 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
           justify-content: space-between !important;
           margin: 0 !important;
           padding: 3mm !important;
-          page-break-before: auto !important;
-          break-before: auto !important;
-          page-break-after: always !important;
-          break-after: page !important;
-          page-break-inside: avoid !important;
-          break-inside: avoid !important;
           overflow: hidden !important;
           background-color: #FEF08A !important;
           border: 1.5px solid #000000 !important;
           border-radius: 0 !important;
           box-shadow: none !important;
-        }
-        .thermal-label-page:last-child {
-          page-break-after: auto !important;
-          break-after: auto !important;
         }
       }
     `;
@@ -233,11 +243,11 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
           {/* Printable Container Target for Window Print */}
           <div id="quarantine-label-printable" className="space-y-6 w-full flex flex-col items-center">
             {containerList.map((containerIndex) => (
-              <div
-                key={containerIndex}
-                className="thermal-label-page w-[100mm] h-[100mm] min-w-[100mm] min-h-[100mm] max-w-[100mm] max-h-[100mm] bg-[#FEF08A] text-black border-2 border-black rounded-lg p-[3mm] shadow-lg flex flex-col justify-between overflow-hidden select-none print:shadow-none print:rounded-none print:border print:border-black print:bg-transparent"
-                style={{ boxSizing: 'border-box' }}
-              >
+              <div key={containerIndex} className="print-page-wrapper">
+                <div
+                  className="thermal-label-page w-[100mm] h-[100mm] min-w-[100mm] min-h-[100mm] max-w-[100mm] max-h-[100mm] bg-[#FEF08A] text-black border-2 border-black rounded-lg p-[3mm] shadow-lg flex flex-col justify-between overflow-hidden select-none print:shadow-none print:rounded-none print:border print:border-black print:bg-transparent"
+                  style={{ boxSizing: 'border-box' }}
+                >
                 {/* 1. Header CPKB (Perusahaan & Kode Form) */}
                 <div className="flex items-center justify-between border-b-2 border-black pb-1">
                   <div className="flex items-center gap-2">
@@ -389,6 +399,7 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
                     <span className="block text-[6.5px] text-black/60 border-t border-black/20 pt-0.5 mt-0.5">
                       Sesuai Prosedur CPKB
                     </span>
+                  </div>
                   </div>
                 </div>
               </div>

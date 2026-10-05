@@ -116,6 +116,26 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
           background: transparent !important;
           overflow: visible !important;
         }
+        .print-page-wrapper {
+          display: block !important;
+          width: 100mm !important;
+          height: 100mm !important;
+          min-width: 100mm !important;
+          min-height: 100mm !important;
+          max-width: 100mm !important;
+          max-height: 100mm !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          page-break-after: always !important;
+          break-after: page !important;
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
+          overflow: hidden !important;
+        }
+        .print-page-wrapper:last-child {
+          page-break-after: auto !important;
+          break-after: auto !important;
+        }
         .thermal-label-page {
           width: 100mm !important;
           height: 100mm !important;
@@ -129,21 +149,11 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
           justify-content: space-between !important;
           margin: 0 !important;
           padding: 3mm !important;
-          page-break-before: auto !important;
-          break-before: auto !important;
-          page-break-after: always !important;
-          break-after: page !important;
-          page-break-inside: avoid !important;
-          break-inside: avoid !important;
           overflow: hidden !important;
           background-color: ${isReleasedState ? '#BBF7D0' : '#FECDD3'} !important;
           border: 1.5px solid #000000 !important;
           border-radius: 0 !important;
           box-shadow: none !important;
-        }
-        .thermal-label-page:last-child {
-          page-break-after: auto !important;
-          break-after: auto !important;
         }
       }
     `;
@@ -301,11 +311,11 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
               const lotDisplay = normalizeLotNumber(report.lotInternalNumber || report.grnNumber);
 
               return (
-                <div
-                  key={containerIndex}
-                  className={`thermal-label-page w-[100mm] h-[100mm] min-w-[100mm] min-h-[100mm] max-w-[100mm] max-h-[100mm] ${theme.screenBg} text-black border-2 border-black rounded-lg p-[3mm] shadow-lg flex flex-col justify-between overflow-hidden select-none print:shadow-none print:rounded-none print:border print:border-black print:bg-transparent`}
-                  style={{ boxSizing: 'border-box' }}
-                >
+                <div key={containerIndex} className="print-page-wrapper">
+                  <div
+                    className={`thermal-label-page w-[100mm] h-[100mm] min-w-[100mm] min-h-[100mm] max-w-[100mm] max-h-[100mm] ${theme.screenBg} text-black border-2 border-black rounded-lg p-[3mm] shadow-lg flex flex-col justify-between overflow-hidden select-none print:shadow-none print:rounded-none print:border print:border-black print:bg-transparent`}
+                    style={{ boxSizing: 'border-box' }}
+                  >
                   {/* 1. Header CPKB (Perusahaan & Kode Form) */}
                   <div className="flex items-center justify-between border-b-2 border-black pb-1">
                     <div className="flex items-center gap-2">
@@ -475,7 +485,8 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
                     </div>
                   </div>
                 </div>
-              );
+              </div>
+            );
             })}
           </div>
         </div>
