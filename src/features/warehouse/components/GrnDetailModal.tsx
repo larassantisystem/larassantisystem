@@ -325,7 +325,13 @@ export const GrnDetailModal: React.FC<GrnDetailModalProps> = ({
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-slate-400">Sertifikat Mutu (CoA): </span>
                       <span className="font-semibold text-emerald-700 font-mono bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 text-[11px]">
-                        ✓ {record.coaAttachment}
+                        ✓ {record.coaAttachment.startsWith('data:image/')
+                          ? 'Foto / Scan CoA (.JPG/.PNG)'
+                          : record.coaAttachment.startsWith('data:application/pdf')
+                          ? 'Dokumen CoA (.PDF)'
+                          : record.coaAttachment.startsWith('data:')
+                          ? 'Dokumen CoA Terlampir'
+                          : record.coaAttachment}
                       </span>
                       {record.coaDriveFileId && (
                         <span className="inline-flex items-center gap-1 font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">

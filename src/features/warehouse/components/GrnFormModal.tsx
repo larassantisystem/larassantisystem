@@ -91,6 +91,7 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
   const [driveUserEmail, setDriveUserEmail] = useState<string | null>(null);
   const [isUploadingCoa, setIsUploadingCoa] = useState<boolean>(false);
   const [driveUploadError, setDriveUploadError] = useState<string | null>(null);
+  const [coaFileDataUrl, setCoaFileDataUrl] = useState<string | null>(null);
 
   useEffect(() => {
     const unsub = initDriveAuth(
@@ -117,6 +118,17 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
     setCoaFileName(file.name);
     setDriveUploadError(null);
 
+    // 1. Baca Data URL lokal agar file dapat langsung dilihat di browser
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      if (dataUrl) {
+        setCoaFileDataUrl(dataUrl);
+      }
+    };
+    reader.readAsDataURL(file);
+
+    // 2. Upload ke Google Drive jika token tersedia
     const token = await getDriveAccessToken();
     if (token) {
       setIsUploadingCoa(true);
@@ -308,7 +320,7 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
         qcParametersCount: selectedMaterial.qcParametersCount ?? 0,
         sealCondition,
         packagingCondition,
-        coaAttachment: coaFileName || undefined,
+        coaAttachment: coaFileDataUrl || coaFileName || undefined,
         coaDriveFileId: coaDriveFileId || undefined,
         coaDriveViewLink: coaDriveViewLink || undefined,
         msdsAttachment: msdsFileName || undefined,

@@ -71,7 +71,35 @@ export const googleDriveSignIn = async (): Promise<{ user: User; accessToken: st
     }
 
     cachedAccessToken = credential.accessToken;
-    cachedUser = result.user;
+    cachedUser = {
+      displayName: result.user.displayName || 'Google Drive Perusahaan',
+      email: result.user.email || 'larassantisystem@gmail.com',
+      photoURL: result.user.photoURL,
+    };
+
+    // Simpan token sentral secara permanen ke Supabase agar seluruh sistem & pengguna selalu terhubung
+    try {
+      const payload = JSON.stringify({
+        accessToken: cachedAccessToken,
+        displayName: result.user.displayName || 'Google Drive Perusahaan',
+        email: result.user.email || 'larassantisystem@gmail.com',
+        photoURL: result.user.photoURL,
+        updatedAt: new Date().toISOString(),
+      });
+
+      await supabase.from('profiles').upsert({
+        id: '00000000-0000-0000-0000-000000000001',
+        nik: CENTRAL_CONFIG_NIK,
+        name: 'Central Google Drive Config',
+        department: 'management',
+        role: 'admin',
+        email: result.user.email || 'larassantisystem@gmail.com',
+        password: payload,
+      });
+    } catch (saveErr) {
+      console.warn('Failed to save central token to Supabase:', saveErr);
+    }
+
     return { user: result.user, accessToken: cachedAccessToken };
   } catch (error: any) {
     if (
@@ -104,8 +132,8 @@ export const googleDriveSignIn = async (): Promise<{ user: User; accessToken: st
   }
 };
 
-export const getDriveAccessToken = async (): Promise<string | null> => {
-  if (cachedAccessToken) return cachedAccessToken;
+export const getDriveAccessToken = async (forceRefresh = false): Promise<string | null> => {
+  if (cachedAccessToken && !forceRefresh) return cachedAccessToken;
   try {
     const { data, error } = await supabase
       .from('profiles')
@@ -317,4 +345,44 @@ export const uploadCoaFileToDrive = async (
     webContentLink: uploaded.webContentLink,
     mimeType: uploaded.mimeType || file.type,
   };
+};
+
+/**
+ * Search for existing CoA files in Google Drive by filename or query
+ */
+export const searchCoaFileInDrive = async (
+  queryName: string
+): Promise<{ fileId: string; fileName: string; webViewLink: string } | null> => {
+  try {
+    let token = await getDriveAccessToken();
+    if (!token) return null;
+
+    const cleanName = queryName.replace(/['\\]/g, '').trim();
+    if (!cleanName) return null;
+
+    const q = encodeURIComponent(`name contains '${cleanName}' and trashed = false`);
+    const res = await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,mimeType,webViewLink)&pageSize=5`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.files && data.files.length > 0) {
+        const f = data.files[0];
+        return {
+          fileId: f.id,
+          fileName: f.name,
+          webViewLink: f.webViewLink || `https://drive.google.com/file/d/${f.id}/view`,
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('Search in drive notice:', err);
+  }
+  return null;
 };

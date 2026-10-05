@@ -31,7 +31,7 @@ export interface DepartmentNotificationCounts {
 let inMemoryReadNotificationIds: string[] = [];
 let cachedNotifications: DepartmentNotificationItem[] = [];
 let lastNotificationsFetchTime = 0;
-const NOTIF_CACHE_TTL_MS = 25 * 1000; // 25 detik in-memory cache untuk mencegah duplicate request
+const NOTIF_CACHE_TTL_MS = 60 * 1000; // 60 detik in-memory cache untuk mencegah duplicate request & hemat egress Supabase
 
 export const departmentNotificationService = {
   invalidateCache: () => {

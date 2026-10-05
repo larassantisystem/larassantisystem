@@ -328,7 +328,13 @@ export const QcInspectionModal: React.FC<QcInspectionModalProps> = ({
                       <FileCheck className="w-3.5 h-3.5 text-blue-600" />
                       <span className="text-slate-500">CoA Vendor:</span>
                       <span className="font-semibold text-emerald-700 font-mono text-[11px] bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                        {matchingGrn.coaAttachment || 'Dokumen CoA'}
+                        {matchingGrn.coaAttachment?.startsWith('data:image/')
+                          ? 'Foto / Scan CoA (.JPG/.PNG)'
+                          : matchingGrn.coaAttachment?.startsWith('data:application/pdf')
+                          ? 'Dokumen CoA (.PDF)'
+                          : matchingGrn.coaAttachment?.startsWith('data:')
+                          ? 'Dokumen CoA Terlampir'
+                          : (matchingGrn.coaAttachment || 'Dokumen CoA')}
                       </span>
                       {matchingGrn.coaDriveFileId && (
                         <span className="inline-flex items-center gap-1 font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">

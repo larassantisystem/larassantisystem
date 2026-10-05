@@ -273,6 +273,28 @@ function mapDbRowToGrnRecord(d: any): GrnRecord {
     resolvedQcStatus = d.qc_status || d.qcStatus || 'QUARANTINE';
   }
 
+  let coaAtt = d.coa_attachment || d.coaAttachment || qcPayload?.coaAttachment || '';
+  let driveFileId = (d as any).coa_drive_file_id || d.coaDriveFileId || qcPayload?.coaDriveFileId;
+  let driveViewLink = (d as any).coa_drive_view_link || d.coaDriveViewLink || qcPayload?.coaDriveViewLink;
+
+  // Auto-parse if coa_attachment contains a Drive link or JSON metadata
+  if (coaAtt && typeof coaAtt === 'string') {
+    if (coaAtt.startsWith('{') && coaAtt.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(coaAtt);
+        if (parsed.fileId) driveFileId = parsed.fileId;
+        if (parsed.viewLink) driveViewLink = parsed.viewLink;
+        if (parsed.fileName) coaAtt = parsed.fileName;
+      } catch (_) {}
+    } else if (coaAtt.includes('drive.google.com/file/d/')) {
+      const match = coaAtt.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+      if (match && match[1]) {
+        driveFileId = match[1];
+        driveViewLink = coaAtt;
+      }
+    }
+  }
+
   return {
     id: d.id,
     grnNumber: d.grn_number || d.grnNumber,
@@ -324,9 +346,9 @@ function mapDbRowToGrnRecord(d: any): GrnRecord {
     samplingDateTime: d.sampling_date_time || qcPayload?.samplingDateTime || d.samplingDateTime,
     sealCondition: d.seal_condition,
     packagingCondition: d.packaging_condition,
-    coaAttachment: d.coa_attachment || d.coaAttachment,
-    coaDriveFileId: d.coa_drive_file_id || d.coaDriveFileId,
-    coaDriveViewLink: d.coa_drive_view_link || d.coaDriveViewLink,
+    coaAttachment: coaAtt || undefined,
+    coaDriveFileId: driveFileId || undefined,
+    coaDriveViewLink: driveViewLink || undefined,
   };
 }
 
@@ -495,7 +517,7 @@ export const warehouseService = {
         let { data, error } = await withTimeout(
           supabase
             .from('warehouse_grn')
-            .select('id, grn_number, material_type, material_id, material_code, material_name, manufacturer, distributor, delivery_note_number, purchase_order_number, po_number, supplier_batch_number, batch_number, internal_lot_number, received_date, expiration_date, expiry_date, retest_date, quantity_received, current_quantity, unit, container_count, container_type, storage_location, storage_conditions, qc_status, qc_parameters_count, seal_condition, packaging_condition, received_by, notes, created_at, updated_at')
+            .select('id, grn_number, material_type, material_id, material_code, material_name, manufacturer, distributor, delivery_note_number, purchase_order_number, po_number, supplier_batch_number, batch_number, internal_lot_number, received_date, expiration_date, expiry_date, retest_date, quantity_received, current_quantity, unit, container_count, container_type, storage_location, storage_conditions, qc_status, qc_parameters_count, seal_condition, packaging_condition, coa_attachment, received_by, notes, created_at, updated_at')
             .order('created_at', { ascending: false })
             .limit(100),
           5000
@@ -847,6 +869,21 @@ export const warehouseService = {
     paginatedGrnCache.clear();
 
     return updatedRecord;
+  },
+
+  /**
+   * Memperbarui dokumen CoA pada record GRN di Supabase dan in-memory cache
+   */
+  updateGrnCoa: async (
+    grnIdentifier: string,
+    coaData: { coaAttachment?: string; coaDriveFileId?: string; coaDriveViewLink?: string }
+  ): Promise<GrnRecord | null> => {
+    const existing = await warehouseService.getGrnRecords();
+    const target = existing.find((r) => r.id === grnIdentifier || r.grnNumber === grnIdentifier);
+    if (!target) return null;
+    return await warehouseService.updateGrnRecord(target.id, {
+      ...coaData,
+    });
   },
 
   deleteGrnRecord: async (id: string, isSuperAdminOverride = false): Promise<boolean> => {

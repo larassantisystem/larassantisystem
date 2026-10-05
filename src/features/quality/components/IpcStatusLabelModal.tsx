@@ -51,7 +51,80 @@ export const IpcStatusLabelModal: React.FC<IpcStatusLabelModalProps> = ({
   if (!isOpen || !batch) return null;
 
   const handlePrint = () => {
+    const styleEl = document.createElement('style');
+    styleEl.id = 'ipc-label-print-style';
+    styleEl.innerHTML = `
+      @page {
+        size: 100mm 100mm;
+        margin: 0mm !important;
+      }
+      @media print {
+        *, *::before, *::after {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        html, body {
+          width: 100mm !important;
+          height: auto !important;
+          min-height: 100% !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          background: #ffffff !important;
+          overflow: visible !important;
+        }
+        body * {
+          visibility: hidden !important;
+        }
+        #ipc-labels-printable,
+        #ipc-labels-printable * {
+          visibility: visible !important;
+        }
+        #ipc-labels-printable {
+          display: block !important;
+          position: absolute !important;
+          top: 0 !important;
+          left: 0 !important;
+          width: 100mm !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          background: transparent !important;
+          overflow: visible !important;
+        }
+        .ipc-label-card {
+          width: 100mm !important;
+          height: 100mm !important;
+          min-width: 100mm !important;
+          min-height: 100mm !important;
+          max-width: 100mm !important;
+          max-height: 100mm !important;
+          box-sizing: border-box !important;
+          display: flex !important;
+          flex-direction: column !important;
+          justify-content: space-between !important;
+          margin: 0 !important;
+          padding: 3mm !important;
+          page-break-before: auto !important;
+          break-before: auto !important;
+          page-break-after: always !important;
+          break-after: page !important;
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
+          overflow: hidden !important;
+          border-radius: 0 !important;
+          box-shadow: none !important;
+        }
+        .ipc-label-card:last-child {
+          page-break-after: auto !important;
+          break-after: auto !important;
+        }
+      }
+    `;
+    document.head.appendChild(styleEl);
     window.print();
+    setTimeout(() => {
+      const el = document.getElementById('ipc-label-print-style');
+      if (el) el.remove();
+    }, 1500);
   };
 
   const isReleased = activeType === 'RELEASED';
@@ -207,11 +280,11 @@ export const IpcStatusLabelModal: React.FC<IpcStatusLabelModalProps> = ({
 
         {/* Printable Labels Canvas */}
         <div className="p-6 overflow-y-auto grow bg-slate-200/90 flex flex-col items-center gap-6">
-          <div className="w-full max-w-2xl space-y-6 print:space-y-4">
+          <div id="ipc-labels-printable" className="w-full max-w-2xl space-y-6 print:space-y-4">
             {containerList.map((containerNum) => (
               <div
                 key={containerNum}
-                className={`bg-white rounded-2xl border-4 ${theme.borderOuter} shadow-xl overflow-hidden print:shadow-none print:m-0 print:break-inside-avoid relative text-slate-900`}
+                className={`ipc-label-card bg-white rounded-2xl border-4 ${theme.borderOuter} shadow-xl overflow-hidden print:shadow-none print:m-0 print:break-inside-avoid relative text-slate-900`}
               >
                 {/* Header Banner */}
                 <div className={`${theme.bgBanner} ${theme.textBanner} px-5 py-3 border-b-2 ${theme.borderAccent}`}>

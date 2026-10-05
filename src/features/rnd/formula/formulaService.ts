@@ -54,7 +54,7 @@ const defaultFormulations: BulkFormulation[] = [
 
 let inMemoryFormulations: BulkFormulation[] = [...defaultFormulations];
 let lastFormulationsFetchTime = 0;
-const FORMULATIONS_CACHE_TTL_MS = 60 * 1000; // 60 detik cache di RAM
+const FORMULATIONS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 menit cache di RAM untuk efisiensi egress Supabase
 
 // Bersihkan data demo lama dari local storage jika masih tersisa di browser
 export const purgeLegacyDemoFormulas = () => {

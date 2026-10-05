@@ -42,16 +42,69 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
     styleEl.id = 'thermal-label-print-style';
     styleEl.innerHTML = `
       @page {
-        size: 100mm 100mm !important;
-        margin: 0 !important;
+        size: 100mm 100mm;
+        margin: 0mm !important;
       }
       @media print {
+        *, *::before, *::after {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
         html, body {
           width: 100mm !important;
-          height: 100mm !important;
+          height: auto !important;
+          min-height: 100% !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          background: #ffffff !important;
+          overflow: visible !important;
+        }
+        body * {
+          visibility: hidden !important;
+        }
+        #quarantine-label-printable,
+        #quarantine-label-printable * {
+          visibility: visible !important;
+        }
+        #quarantine-label-printable {
+          display: block !important;
+          position: absolute !important;
+          top: 0 !important;
+          left: 0 !important;
+          width: 100mm !important;
           margin: 0 !important;
           padding: 0 !important;
           background: transparent !important;
+          overflow: visible !important;
+        }
+        .thermal-label-page {
+          width: 100mm !important;
+          height: 100mm !important;
+          min-width: 100mm !important;
+          min-height: 100mm !important;
+          max-width: 100mm !important;
+          max-height: 100mm !important;
+          box-sizing: border-box !important;
+          display: flex !important;
+          flex-direction: column !important;
+          justify-content: space-between !important;
+          margin: 0 !important;
+          padding: 3mm !important;
+          page-break-before: auto !important;
+          break-before: auto !important;
+          page-break-after: always !important;
+          break-after: page !important;
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
+          overflow: hidden !important;
+          background-color: #FEF08A !important;
+          border: 1.5px solid #000000 !important;
+          border-radius: 0 !important;
+          box-shadow: none !important;
+        }
+        .thermal-label-page:last-child {
+          page-break-after: auto !important;
+          break-after: auto !important;
         }
       }
     `;

@@ -29,7 +29,7 @@ const defaultSeedProducts: Product[] = [];
 
 let inMemoryProducts: Product[] = [];
 let lastProductsFetchTime = 0;
-const PRODUCTS_CACHE_TTL_MS = 60 * 1000; // 60 detik cache di RAM
+const PRODUCTS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 menit cache di RAM untuk efisiensi egress Supabase
 let tablesInitializedInSupabase: boolean | null = null;
 
 const isTableMissingError = (err: any): boolean => {
