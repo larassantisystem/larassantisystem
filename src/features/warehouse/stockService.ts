@@ -15,7 +15,15 @@ import { normalizeLotNumber } from '../quality/utils/qcNumbering';
 import { formatToIsoDateString } from '../../core/utils/dateUtils';
 import { supabase, isSupabaseConfigured } from '../../core/auth/supabaseClient';
 
+// In-memory runtime cache untuk efisiensi EGRESS Supabase (BUKAN local storage)
+let inMemoryMovementLedger: StockMovementLedger[] = [];
+let lastMovementLedgerFetchTime = 0;
+const MOVEMENT_CACHE_TTL_MS = 30 * 1000; // 30 detik cache di RAM
+
 export const stockService = {
+  invalidateStockCache: () => {
+    lastMovementLedgerFetchTime = 0;
+  },
   /**
    * Simpan riwayat mutasi stok ke tabel public.stock_movements di Supabase (Opsi 2)
    */
@@ -45,6 +53,7 @@ export const stockService = {
       if (error) {
         console.warn('[stockService] Supabase stock_movements notice:', error.message);
       } else {
+        lastMovementLedgerFetchTime = 0; // Invalidate cache
         console.log('[stockService] Stock movement logged to Supabase:', movement.referenceNumber);
       }
     } catch (err) {
@@ -280,7 +289,12 @@ export const stockService = {
   /**
    * Get Stock Ledger movement history (Prioritas: tabel public.stock_movements Supabase Opsi 2)
    */
-  getMovementLedger: async (): Promise<StockMovementLedger[]> => {
+  getMovementLedger: async (forceRefresh = false): Promise<StockMovementLedger[]> => {
+    const isCacheValid = !forceRefresh && inMemoryMovementLedger.length > 0 && (Date.now() - lastMovementLedgerFetchTime < MOVEMENT_CACHE_TTL_MS);
+    if (isCacheValid) {
+      return inMemoryMovementLedger;
+    }
+
     let movements: StockMovementLedger[] = [];
     const seenSignatures = new Set<string>();
     const seenIds = new Set<string>();
@@ -300,8 +314,9 @@ export const stockService = {
       try {
         const { data, error } = await supabase
           .from('stock_movements')
-          .select('*')
-          .order('timestamp', { ascending: false });
+          .select('id, timestamp, material_code, material_name, material_type, lot_internal_number, movement_type, reference_number, qty_before, qty_change, qty_after, unit, performer_name, performer_role, performer_department, notes, created_at')
+          .order('timestamp', { ascending: false })
+          .limit(150);
 
         if (!error && data && data.length > 0) {
           for (const d of data) {
@@ -357,7 +372,10 @@ export const stockService = {
       }
     }
 
-    return movements.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    const sorted = movements.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    inMemoryMovementLedger = sorted;
+    lastMovementLedgerFetchTime = Date.now();
+    return sorted;
   },
 
   /**

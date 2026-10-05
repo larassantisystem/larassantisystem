@@ -41,9 +41,9 @@ export const StockRawMaterialPage: React.FC<StockRawMaterialPageProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedLocation, setSelectedLocation] = useState<string>('all');
 
-  // Pagination state
+  // Pagination state (Pilihan B: 20 Baris per Halaman)
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(50);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
 
   // Modal States
   const [selectedMaterialForLots, setSelectedMaterialForLots] = useState<MaterialStockSummary | null>(null);

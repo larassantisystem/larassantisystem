@@ -34,7 +34,6 @@ import {
 } from 'lucide-react';
 import { QcInspectionReport } from '../types/qcTypes';
 import { qualityService } from '../qualityService';
-import { analyzeQueuePriorities } from '../utils/qcAiAssistant';
 import { QcInspectionModal } from './QcInspectionModal';
 import { QcManagerAuthModal } from './QcManagerAuthModal';
 import { QcRevertModal } from './QcRevertModal';
@@ -95,22 +94,22 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
   const [searchQuery, setSearchQuery] = useState('');
   const isCompactMode = true;
 
-  // Dedicated Category & Pagination States (Default 50 items/page, 2 Separate Tabs: Bahan Baku vs Bahan Kemas)
+  // Dedicated Category & Pagination States (Default 20 items/page, 2 Separate Tabs: Bahan Baku vs Bahan Kemas)
   const [queueCategory, setQueueCategory] = useState<'raw' | 'packaging'>('raw');
   const [queuePage, setQueuePage] = useState<number>(1);
-  const [queueItemsPerPage, setQueueItemsPerPage] = useState<number>(50);
+  const [queueItemsPerPage, setQueueItemsPerPage] = useState<number>(20);
 
   const [testingCategory, setTestingCategory] = useState<'raw' | 'packaging'>('raw');
   const [testingPage, setTestingPage] = useState<number>(1);
-  const [testingItemsPerPage, setTestingItemsPerPage] = useState<number>(50);
+  const [testingItemsPerPage, setTestingItemsPerPage] = useState<number>(20);
 
   const [approvalCategory, setApprovalCategory] = useState<'raw' | 'packaging'>('raw');
   const [approvalPage, setApprovalPage] = useState<number>(1);
-  const [approvalItemsPerPage, setApprovalItemsPerPage] = useState<number>(50);
+  const [approvalItemsPerPage, setApprovalItemsPerPage] = useState<number>(20);
 
   const [archiveCategory, setArchiveCategory] = useState<'raw' | 'packaging'>('raw');
   const [archivePage, setArchivePage] = useState<number>(1);
-  const [archiveItemsPerPage, setArchiveItemsPerPage] = useState<number>(50);
+  const [archiveItemsPerPage, setArchiveItemsPerPage] = useState<number>(20);
 
   // Extended Quality states
   const [ipcBulkTests, setIpcBulkTests] = useState<IpcBulkTest[]>(initialIpcBulkTests);
@@ -302,10 +301,6 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
     }
   }, [reports]);
 
-  // AI Queue Priorities
-  const quarantineReports = reports.filter((r) => r.status === 'QUARANTINE');
-  const queuePriorities = analyzeQueuePriorities(quarantineReports);
-
   // Filtered lists for each tab, sorted from oldest to newest (ascending)
   const filterBySearchAndType = (list: QcInspectionReport[], forcedType?: 'all' | 'raw' | 'packaging') => {
     const activeType = forcedType !== undefined ? forcedType : activeMaterialType;
@@ -332,6 +327,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
   };
 
   // 1. Antrean Karantina
+  const quarantineReports = reports.filter((r) => r.status === 'QUARANTINE');
   const queueList = filterBySearchAndType(quarantineReports, activeMaterialType);
   const queueRawList = filterBySearchAndType(quarantineReports, 'raw');
   const queuePackagingList = filterBySearchAndType(quarantineReports, 'packaging');
@@ -1097,93 +1093,6 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
             <span>•</span>
             <span>BK: {stats.archivePkg}</span>
           </div>
-        </div>
-      </div>
-
-      {/* AI Smart Queue Optimizer Panel (Shown on Queue tab) */}
-      {currentTab === 'queue' && queuePriorities.length > 0 && (
-        <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-900 text-white rounded-2xl p-5 shadow-lg space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-purple-300" />
-              <h3 className="font-bold text-sm tracking-tight text-purple-100">
-                AI Smart Queue Optimizer (Rekomendasi Prioritas Sampling & Uji)
-              </h3>
-            </div>
-            <span className="text-[11px] text-purple-300 bg-purple-800/60 px-2.5 py-0.5 rounded-full border border-purple-600/40">
-              Analisis Otomatis Risiko & Lead Time
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {queuePriorities.slice(0, 3).map((item, idx) => (
-              <div
-                key={item.reportId}
-                className="bg-white/10 backdrop-blur-xs border border-white/15 rounded-xl p-3 text-xs space-y-1.5 hover:bg-white/15 transition-all"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-mono font-bold text-purple-200">
-                    #{idx + 1} {item.materialCode}
-                  </span>
-                  <span
-                    className={`px-2 py-0.2 rounded-full text-[10px] font-bold ${
-                      item.priorityRank === 'URGENT'
-                        ? 'bg-red-500 text-white'
-                        : item.priorityRank === 'HIGH'
-                        ? 'bg-amber-400 text-amber-950'
-                        : 'bg-teal-400 text-teal-950'
-                    }`}
-                  >
-                    {item.priorityRank} ({item.priorityScore} Pts)
-                  </span>
-                </div>
-                <div className="font-semibold text-white truncate">{item.materialName}</div>
-                <div className="text-[11px] text-purple-200/90 leading-snug">{item.reason}</div>
-                <div className="text-[10px] text-purple-300 font-semibold pt-1 border-t border-white/10">
-                  ⚡ {item.samplingUrgency}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Responsive Sub-Module Navigation Bar */}
-      <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-2">
-        <div className="flex items-center justify-between">
-          <label className="text-[10px] font-black uppercase text-slate-500 block">Navigasi Sub-Modul Quality & QA:</label>
-          <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
-            Aktif: {currentTab}
-          </span>
-        </div>
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
-          {[
-            { id: 'queue', label: '1.1 Karantina' },
-            { id: 'testing', label: '1.2 Uji Lab' },
-            { id: 'approval', label: '1.3 Approval QM' },
-            { id: 'archive', label: '1.4 Arsip' },
-            { id: 'ipc-bulk', label: '2.1 Ruahan' },
-            { id: 'ipc-finished', label: '2.2 Produk Jadi' },
-            { id: 'ipc-rework', label: '2.3 Rework' },
-            { id: 'retained', label: '3.1 Retained' },
-            { id: 'stability', label: '3.2 Stability' },
-            { id: 'sop', label: '4.1 SOP' },
-            { id: 'capa', label: '4.2 CAPA' },
-            { id: 'complaints', label: '4.3 Komplain' },
-            { id: 'deviations', label: '4.4 Deviasi & CAPA' },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setCurrentTab(tab.id as any)}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                currentTab === tab.id
-                  ? 'bg-teal-700 text-white shadow-md shadow-teal-700/20'
-                  : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200/80'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
         </div>
       </div>
 

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Search,
   Filter,
@@ -25,6 +25,7 @@ import {
   X,
 } from 'lucide-react';
 import { GrnRecord, GrnMaterialType, GrnQcStatus } from '../types/grnTypes';
+import { warehouseService } from '../warehouseService';
 import { Pagination } from '../../../core/ui-components/Pagination';
 import { QuarantineLabelModal } from './QuarantineLabelModal';
 import { GrnEditModal } from './GrnEditModal';
@@ -53,9 +54,15 @@ export const GrnTable: React.FC<GrnTableProps> = ({
   const [statusFilter, setStatusFilter] = useState<'ALL' | GrnQcStatus>('ALL');
   const isCompactMode = true;
 
-  // Pagination states
+  // Pagination states (Pilihan B: 20 baris per halaman untuk efisiensi Egress)
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(50);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
+  const [serverPageData, setServerPageData] = useState<{
+    records: GrnRecord[];
+    totalItems: number;
+    totalPages: number;
+  } | null>(null);
+  const [isServerLoading, setIsServerLoading] = useState(false);
 
   // Detail Modal State
   const [selectedRecord, setSelectedRecord] = useState<GrnRecord | null>(null);
@@ -72,6 +79,42 @@ export const GrnTable: React.FC<GrnTableProps> = ({
   // Print Label Modal State
   const [labelRecordToPrint, setLabelRecordToPrint] = useState<GrnRecord | null>(null);
 
+  // Server-Side Pagination Effect
+  useEffect(() => {
+    let isCancelled = false;
+    setIsServerLoading(true);
+
+    const timer = setTimeout(() => {
+      warehouseService
+        .getGrnRecordsPaginated({
+          page: currentPage,
+          pageSize: itemsPerPage,
+          materialType: activeCategory,
+          status: statusFilter,
+          search: searchQuery,
+        })
+        .then((res) => {
+          if (!isCancelled) {
+            setServerPageData({
+              records: res.records,
+              totalItems: res.totalItems,
+              totalPages: res.totalPages,
+            });
+            setIsServerLoading(false);
+          }
+        })
+        .catch((err) => {
+          console.warn('[GrnTable] Server pagination notice:', err);
+          if (!isCancelled) setIsServerLoading(false);
+        });
+    }, 250);
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(timer);
+    };
+  }, [currentPage, itemsPerPage, activeCategory, statusFilter, searchQuery, records]);
+
   // Category counts
   const rawCount = useMemo(
     () => records.filter((r) => r.materialType === 'raw').length,
@@ -82,13 +125,11 @@ export const GrnTable: React.FC<GrnTableProps> = ({
     [records]
   );
 
-  // Filter and sort records: Urutkan dari yang terlama ke yang baru (Oldest to Newest)
+  // Fallback client filter
   const filteredRecords = useMemo(() => {
     return records
       .filter((rec) => {
-        // Separate category
         if (rec.materialType !== activeCategory) return false;
-        // Status filter
         if (statusFilter !== 'ALL') {
           if (statusFilter === 'PASSED' || statusFilter === 'RELEASED') {
             if (rec.qcStatus !== 'PASSED' && rec.qcStatus !== 'RELEASED' && rec.qcStatus !== 'PASSED_WITH_DEVIATION') {
@@ -98,8 +139,6 @@ export const GrnTable: React.FC<GrnTableProps> = ({
             return false;
           }
         }
-
-        // Query search
         if (!searchQuery.trim()) return true;
         const q = searchQuery.toLowerCase();
         return (
@@ -114,7 +153,6 @@ export const GrnTable: React.FC<GrnTableProps> = ({
         );
       })
       .sort((a, b) => {
-        // Urutan kronologis: dari yang terlama ke yang baru (Oldest date first)
         const dateA = new Date(a.receivedDate).getTime();
         const dateB = new Date(b.receivedDate).getTime();
         if (dateA !== dateB) return dateA - dateB;
@@ -122,11 +160,11 @@ export const GrnTable: React.FC<GrnTableProps> = ({
       });
   }, [records, activeCategory, statusFilter, searchQuery]);
 
-  // Pagination calculations
-  const totalItems = filteredRecords.length;
+  // Server-Side pagination takes precedence, reducing egress to only 25 records per request
+  const totalItems = serverPageData ? serverPageData.totalItems : filteredRecords.length;
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = filteredRecords.slice(indexOfFirstItem, indexOfLastItem);
+  const currentItems = serverPageData ? serverPageData.records : filteredRecords.slice(indexOfFirstItem, indexOfLastItem);
 
   const renderStatusBadge = (status: GrnQcStatus) => {
     switch (status) {

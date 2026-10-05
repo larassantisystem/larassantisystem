@@ -1,4 +1,4 @@
-import { GrnRecord, GrnStats } from './types/grnTypes';
+import { GrnRecord, GrnStats, GrnPaginatedQuery, GrnPaginatedResponse } from './types/grnTypes';
 import { supabase, isSupabaseConfigured } from '../../core/auth/supabaseClient';
 import { calculateSamplingPlan } from '../quality/utils/milStd105e';
 import { packGrnNotes, unpackGrnNotes } from '../../core/utils/qcStorageSync';
@@ -14,6 +14,10 @@ const defaultGrnRecords: GrnRecord[] = [];
 let inMemoryGrnRecords: GrnRecord[] = [];
 let lastGrnFetchTime = 0;
 const GRN_CACHE_TTL_MS = 45 * 1000; // 45 detik cache di RAM
+
+// In-memory runtime cache per kueri paginasi
+const paginatedGrnCache = new Map<string, { timestamp: number; data: GrnPaginatedResponse }>();
+const PAGINATED_CACHE_TTL_MS = 30 * 1000; // 30 detik cache di RAM
 
 const knownMissingColumns = new Set<string>();
 
@@ -134,9 +138,9 @@ async function executeWithSchemaAdaptiveRetry(
     let result: { data: any; error: any };
 
     if (mode === 'insert') {
-      result = await supabase!.from(tableName).insert(payload).select().single();
+      result = await supabase!.from(tableName).insert(payload).select('id, grn_number').single();
     } else {
-      result = await supabase!.from(tableName).upsert(payload, { onConflict: 'grn_number' }).select().single();
+      result = await supabase!.from(tableName).upsert(payload, { onConflict: 'grn_number' }).select('id, grn_number').single();
     }
 
     if (!result.error) {
@@ -228,9 +232,9 @@ async function executeWithSchemaAdaptiveRetry(
   };
 
   if (mode === 'insert') {
-    return await supabase!.from(tableName).insert(fallbackPayload).select().single();
+    return await supabase!.from(tableName).insert(fallbackPayload).select('id, grn_number').single();
   } else {
-    return await supabase!.from(tableName).upsert(fallbackPayload, { onConflict: 'grn_number' }).select().single();
+    return await supabase!.from(tableName).upsert(fallbackPayload, { onConflict: 'grn_number' }).select('id, grn_number').single();
   }
 }
 
@@ -241,6 +245,89 @@ function withTimeout<T>(promise: PromiseLike<T>, ms: number = 2500): Promise<T> 
       setTimeout(() => reject(new Error(`Database query timed out after ${ms}ms`)), ms)
     ),
   ]);
+}
+
+function mapDbRowToGrnRecord(d: any): GrnRecord {
+  const { userNotes, qcPayload } = unpackGrnNotes(d.notes);
+  const unnormalizedLot = d.internal_lot_number || d.internalLotNumber || '';
+  const normalizedLot = normalizeLotNumber(unnormalizedLot, d.received_date || d.receivedDate);
+
+  const isOpnameGrn =
+    (d.grn_number || '').startsWith('GRN-OPNAME-') ||
+    (d.batch_number || '') === 'STK-OPNAME' ||
+    (d.manufacturer || '') === 'Stock Opname Adjustment';
+
+  const rawDbStatus = String(d.qc_status || d.qcStatus || '').toUpperCase();
+  const payloadStatus = qcPayload?.status ? String(qcPayload.status).toUpperCase() : '';
+
+  let resolvedQcStatus = 'QUARANTINE';
+  if (isOpnameGrn) {
+    resolvedQcStatus = 'RELEASED';
+  } else if (payloadStatus && payloadStatus !== 'QUARANTINE') {
+    resolvedQcStatus = payloadStatus === 'PASSED' ? 'RELEASED' : payloadStatus;
+  } else if (rawDbStatus === 'PASSED' || rawDbStatus === 'RELEASED') {
+    resolvedQcStatus = 'RELEASED';
+  } else if (rawDbStatus === 'REJECTED') {
+    resolvedQcStatus = 'REJECTED';
+  } else {
+    resolvedQcStatus = d.qc_status || d.qcStatus || 'QUARANTINE';
+  }
+
+  return {
+    id: d.id,
+    grnNumber: d.grn_number || d.grnNumber,
+    internalLotNumber: normalizedLot,
+    materialType: d.material_type || d.materialType || 'raw',
+    materialId: d.material_id || d.materialId || '',
+    materialCode: d.material_code || d.materialCode,
+    materialName: d.material_name || d.materialName,
+    manufacturer: d.manufacturer || '-',
+    distributor: d.distributor || '-',
+    poNumber: d.purchase_order_number || d.po_number || d.poNumber || '-',
+    deliveryNoteNumber: d.delivery_note_number || d.deliveryNoteNumber || '-',
+    batchNumber: d.supplier_batch_number || d.batch_number || d.batchNumber || '-',
+    receivedDate: d.received_date || d.receivedDate,
+    expiryDate: d.expiration_date || d.expiry_date || d.expiryDate,
+    retestDate:
+      d.retest_date ||
+      d.retestDate ||
+      qcPayload?.retestDate ||
+      ((d.material_type || d.materialType || 'raw') === 'raw'
+        ? calculateAutoRetestDate('raw', d.expiration_date || d.expiry_date || d.expiryDate, d.received_date || d.receivedDate)
+        : undefined),
+    quantityReceived: Number(d.quantity_received || d.quantityReceived || 0),
+    currentQuantity: d.current_quantity !== undefined && d.current_quantity !== null
+      ? Number(d.current_quantity)
+      : (qcPayload?.currentQuantity !== undefined
+          ? Number(qcPayload.currentQuantity)
+          : Number(d.quantity_received || d.quantityReceived || 0)),
+    unit: d.unit || 'kg',
+    containerCount: Number(d.container_count || d.containerCount || 1),
+    containerType: d.container_type || d.containerType || 'Drum / Zak',
+    storageLocation: d.storage_location || d.storageLocation || 'Gudang Karantina',
+    storageConditions: d.storage_conditions || d.storageConditions,
+    qcStatus: resolvedQcStatus as any,
+    qcParametersCount: Number(d.qc_parameters_count || d.qcParametersCount || 0),
+    receivedBy: d.received_by || d.receivedBy || 'Staf Gudang',
+    createdAt: d.created_at || d.createdAt || new Date().toISOString(),
+    notes: userNotes,
+    qcPayload: qcPayload || undefined,
+    revertReason: d.revert_reason || d.revertReason || qcPayload?.revertReason,
+    revertedBy: d.reverted_by || d.revertedBy || qcPayload?.revertedBy,
+    revertedAt: d.reverted_at || d.revertedAt || qcPayload?.revertedAt,
+    actualSampleSize: d.actual_sample_size !== undefined && d.actual_sample_size !== null
+      ? Number(d.actual_sample_size)
+      : (qcPayload?.actualSampleSize !== undefined ? qcPayload.actualSampleSize : d.actualSampleSize),
+    actualSampleUnit: d.actual_sample_unit || qcPayload?.actualSampleUnit || d.actualSampleUnit,
+    sampledContainers: d.sampled_containers || qcPayload?.sampledContainers || d.sampledContainers,
+    sampledBy: d.sampled_by || qcPayload?.sampledBy || d.sampledBy,
+    samplingDateTime: d.sampling_date_time || qcPayload?.samplingDateTime || d.samplingDateTime,
+    sealCondition: d.seal_condition,
+    packagingCondition: d.packaging_condition,
+    coaAttachment: d.coa_attachment || d.coaAttachment,
+    coaDriveFileId: d.coa_drive_file_id || d.coaDriveFileId,
+    coaDriveViewLink: d.coa_drive_view_link || d.coaDriveViewLink,
+  };
 }
 
 export const warehouseService = {
@@ -268,7 +355,7 @@ export const warehouseService = {
     try {
       const { count, error } = await supabase
         .from('warehouse_grn')
-        .select('*', { count: 'exact', head: true });
+        .select('id', { count: 'exact', head: true });
 
       if (error) {
         return {
@@ -318,7 +405,7 @@ export const warehouseService = {
     try {
       const { count, error } = await supabase
         .from('stock_movements')
-        .select('*', { count: 'exact', head: true });
+        .select('id', { count: 'exact', head: true });
 
       if (error) {
         return {
@@ -405,107 +492,29 @@ export const warehouseService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data, error } = await withTimeout(
+        let { data, error } = await withTimeout(
           supabase
             .from('warehouse_grn')
-            .select('*')
+            .select('id, grn_number, material_type, material_id, material_code, material_name, manufacturer, distributor, delivery_note_number, purchase_order_number, po_number, supplier_batch_number, batch_number, internal_lot_number, received_date, expiration_date, expiry_date, retest_date, quantity_received, current_quantity, unit, container_count, container_type, storage_location, storage_conditions, qc_status, qc_parameters_count, seal_condition, packaging_condition, coa_attachment, received_by, notes, created_at, updated_at')
             .order('created_at', { ascending: false })
-            .limit(300),
+            .limit(100),
           5000
         );
 
+        if (error && (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('schema cache'))) {
+          const fallbackRes = await supabase
+            .from('warehouse_grn')
+            .select('id, grn_number, material_type, material_code, material_name, internal_lot_number, received_date, quantity_received, unit, qc_status, notes, created_at')
+            .order('created_at', { ascending: false })
+            .limit(100);
+          data = fallbackRes.data;
+          error = fallbackRes.error;
+        }
+
         if (!error && data && data.length > 0) {
-          const mapped: GrnRecord[] = [];
-          
-          for (const d of data) {
-            // Exclude system ledger or other internal-only non-GRN rows
-            if (d.grn_number === 'SYSTEM-STOCK-LEDGER') {
-              continue;
-            }
-
-            const { userNotes, qcPayload } = unpackGrnNotes(d.notes);
-            
-            // Normalize internal lot number on the fly
-            const unnormalizedLot = d.internal_lot_number || d.internalLotNumber || '';
-            const normalizedLot = normalizeLotNumber(unnormalizedLot, d.received_date || d.receivedDate);
-
-            const isOpnameGrn =
-              (d.grn_number || '').startsWith('GRN-OPNAME-') ||
-              (d.batch_number || '') === 'STK-OPNAME' ||
-              (d.manufacturer || '') === 'Stock Opname Adjustment';
-
-            const rawDbStatus = String(d.qc_status || d.qcStatus || '').toUpperCase();
-            const payloadStatus = qcPayload?.status ? String(qcPayload.status).toUpperCase() : '';
-
-            let resolvedQcStatus = 'QUARANTINE';
-            if (isOpnameGrn) {
-              resolvedQcStatus = 'RELEASED';
-            } else if (payloadStatus && payloadStatus !== 'QUARANTINE') {
-              resolvedQcStatus = payloadStatus === 'PASSED' ? 'RELEASED' : payloadStatus;
-            } else if (rawDbStatus === 'PASSED' || rawDbStatus === 'RELEASED') {
-              resolvedQcStatus = 'RELEASED';
-            } else if (rawDbStatus === 'REJECTED') {
-              resolvedQcStatus = 'REJECTED';
-            } else {
-              resolvedQcStatus = d.qc_status || d.qcStatus || 'QUARANTINE';
-            }
-
-            mapped.push({
-              id: d.id,
-              grnNumber: d.grn_number || d.grnNumber,
-              internalLotNumber: normalizedLot,
-              materialType: d.material_type || d.materialType || 'raw',
-              materialId: d.material_id || d.materialId || '',
-              materialCode: d.material_code || d.materialCode,
-              materialName: d.material_name || d.materialName,
-              manufacturer: d.manufacturer || '-',
-              distributor: d.distributor || '-',
-              poNumber: d.purchase_order_number || d.po_number || d.poNumber || '-',
-              deliveryNoteNumber: d.delivery_note_number || d.deliveryNoteNumber || '-',
-              batchNumber: d.supplier_batch_number || d.batch_number || d.batchNumber || '-',
-              receivedDate: d.received_date || d.receivedDate,
-              expiryDate: d.expiration_date || d.expiry_date || d.expiryDate,
-              retestDate:
-                d.retest_date ||
-                d.retestDate ||
-                qcPayload?.retestDate ||
-                ((d.material_type || d.materialType || 'raw') === 'raw'
-                  ? calculateAutoRetestDate('raw', d.expiration_date || d.expiry_date || d.expiryDate, d.received_date || d.receivedDate)
-                  : undefined),
-              quantityReceived: Number(d.quantity_received || d.quantityReceived || 0),
-              currentQuantity: d.current_quantity !== undefined && d.current_quantity !== null
-                ? Number(d.current_quantity)
-                : (qcPayload?.currentQuantity !== undefined
-                    ? Number(qcPayload.currentQuantity)
-                    : Number(d.quantity_received || d.quantityReceived || 0)),
-              unit: d.unit || 'kg',
-              containerCount: Number(d.container_count || d.containerCount || 1),
-              containerType: d.container_type || d.containerType || 'Drum / Zak',
-              storageLocation: d.storage_location || d.storageLocation || 'Gudang Karantina',
-              storageConditions: d.storage_conditions || d.storageConditions,
-              qcStatus: resolvedQcStatus as any,
-              qcParametersCount: Number(d.qc_parameters_count || d.qcParametersCount || 0),
-              receivedBy: d.received_by || d.receivedBy || 'Staf Gudang',
-              createdAt: d.created_at || d.createdAt || new Date().toISOString(),
-              notes: userNotes,
-              qcPayload: qcPayload || undefined,
-              revertReason: d.revert_reason || d.revertReason || qcPayload?.revertReason,
-              revertedBy: d.reverted_by || d.revertedBy || qcPayload?.revertedBy,
-              revertedAt: d.reverted_at || d.revertedAt || qcPayload?.revertedAt,
-              actualSampleSize: d.actual_sample_size !== undefined && d.actual_sample_size !== null
-                ? Number(d.actual_sample_size)
-                : (qcPayload?.actualSampleSize !== undefined ? qcPayload.actualSampleSize : d.actualSampleSize),
-              actualSampleUnit: d.actual_sample_unit || qcPayload?.actualSampleUnit || d.actualSampleUnit,
-              sampledContainers: d.sampled_containers || qcPayload?.sampledContainers || d.sampledContainers,
-              sampledBy: d.sampled_by || qcPayload?.sampledBy || d.sampledBy,
-              samplingDateTime: d.sampling_date_time || qcPayload?.samplingDateTime || d.samplingDateTime,
-              sealCondition: d.seal_condition,
-              packagingCondition: d.packaging_condition,
-              coaAttachment: d.coa_attachment || d.coaAttachment,
-              coaDriveFileId: d.coa_drive_file_id || d.coaDriveFileId,
-              coaDriveViewLink: d.coa_drive_view_link || d.coaDriveViewLink,
-            });
-          }
+          const mapped: GrnRecord[] = data
+            .filter((d: any) => d.grn_number !== 'SYSTEM-STOCK-LEDGER')
+            .map(mapDbRowToGrnRecord);
 
           inMemoryGrnRecords = mapped;
           lastGrnFetchTime = Date.now();
@@ -519,6 +528,116 @@ export const warehouseService = {
     }
 
     return inMemoryGrnRecords;
+  },
+
+  /**
+   * Server-Side Pagination untuk tabel Penerimaan Barang (GRN).
+   * Menarik hanya sejumlah halaman (misal 25 baris) dari Supabase (.range(from, to))
+   * dan menghitung total baris akurat menggunakan { count: 'exact' } untuk efisiensi maksimal Egress.
+   */
+  getGrnRecordsPaginated: async (params: GrnPaginatedQuery = {}): Promise<GrnPaginatedResponse> => {
+    const {
+      page = 1,
+      pageSize = 25,
+      materialType = 'all',
+      status = 'ALL',
+      search = '',
+      forceRefresh = false,
+    } = params;
+
+    const cacheKey = `${page}_${pageSize}_${materialType}_${status}_${search.trim().toLowerCase()}`;
+    const cached = paginatedGrnCache.get(cacheKey);
+    if (!forceRefresh && cached && (Date.now() - cached.timestamp < PAGINATED_CACHE_TTL_MS)) {
+      return cached.data;
+    }
+
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        let query = supabase
+          .from('warehouse_grn')
+          .select('id, grn_number, material_type, material_id, material_code, material_name, manufacturer, distributor, delivery_note_number, purchase_order_number, po_number, supplier_batch_number, batch_number, internal_lot_number, received_date, expiration_date, expiry_date, retest_date, quantity_received, current_quantity, unit, container_count, container_type, storage_location, storage_conditions, qc_status, qc_parameters_count, seal_condition, packaging_condition, coa_attachment, received_by, notes, created_at, updated_at', { count: 'exact' });
+
+        if (materialType && materialType !== 'all') {
+          query = query.eq('material_type', materialType);
+        }
+
+        if (status && status !== 'ALL') {
+          if (status === 'PASSED' || status === 'RELEASED') {
+            query = query.in('qc_status', ['PASSED', 'RELEASED', 'PASSED_WITH_DEVIATION']);
+          } else {
+            query = query.eq('qc_status', status);
+          }
+        }
+
+        if (search && search.trim()) {
+          const q = search.trim();
+          query = query.or(`grn_number.ilike.%${q}%,material_code.ilike.%${q}%,material_name.ilike.%${q}%,distributor.ilike.%${q}%,supplier_batch_number.ilike.%${q}%,batch_number.ilike.%${q}%,internal_lot_number.ilike.%${q}%`);
+        }
+
+        const { data, count, error } = await query
+          .order('created_at', { ascending: false })
+          .range(from, to);
+
+        if (!error && data) {
+          const records: GrnRecord[] = data
+            .filter((d: any) => d.grn_number !== 'SYSTEM-STOCK-LEDGER')
+            .map(mapDbRowToGrnRecord);
+
+          const totalItems = count !== null && count !== undefined ? count : records.length;
+          const totalPages = Math.ceil(totalItems / pageSize) || 1;
+          const result: GrnPaginatedResponse = {
+            records,
+            totalItems,
+            totalPages,
+            page,
+            pageSize,
+          };
+
+          paginatedGrnCache.set(cacheKey, { timestamp: Date.now(), data: result });
+          return result;
+        }
+      } catch (err) {
+        console.warn('[warehouseService] Paginated fetch notice:', err);
+      }
+    }
+
+    // Fallback dari memori cache
+    let list = inMemoryGrnRecords.length > 0 ? inMemoryGrnRecords : await warehouseService.getGrnRecords();
+    if (materialType && materialType !== 'all') {
+      list = list.filter((r) => r.materialType === materialType);
+    }
+    if (status && status !== 'ALL') {
+      if (status === 'PASSED' || status === 'RELEASED') {
+        list = list.filter((r) => r.qcStatus === 'PASSED' || r.qcStatus === 'RELEASED' || r.qcStatus === 'PASSED_WITH_DEVIATION');
+      } else {
+        list = list.filter((r) => r.qcStatus === status);
+      }
+    }
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter((r) =>
+        r.grnNumber.toLowerCase().includes(q) ||
+        r.materialCode.toLowerCase().includes(q) ||
+        r.materialName.toLowerCase().includes(q) ||
+        r.distributor.toLowerCase().includes(q) ||
+        (r.batchNumber && r.batchNumber.toLowerCase().includes(q))
+      );
+    }
+    const totalItems = list.length;
+    const totalPages = Math.ceil(totalItems / pageSize) || 1;
+    const sliced = list.slice(from, to + 1);
+
+    const fallbackResult: GrnPaginatedResponse = {
+      records: sliced,
+      totalItems,
+      totalPages,
+      page,
+      pageSize,
+    };
+    return fallbackResult;
   },
 
   saveGrnRecord: async (
@@ -622,6 +741,7 @@ export const warehouseService = {
     // Perbarui in-memory cache secara langsung (0 byte tambahan egress)
     inMemoryGrnRecords = [newRecord, ...inMemoryGrnRecords.filter((r) => r.id !== newRecord.id && r.grnNumber !== newRecord.grnNumber)];
     lastGrnFetchTime = Date.now();
+    paginatedGrnCache.clear();
 
     return newRecord;
   },
@@ -724,6 +844,7 @@ export const warehouseService = {
       inMemoryGrnRecords = [updatedRecord, ...inMemoryGrnRecords];
     }
     lastGrnFetchTime = Date.now();
+    paginatedGrnCache.clear();
 
     return updatedRecord;
   },
@@ -772,6 +893,7 @@ export const warehouseService = {
     // Update in-memory cache
     inMemoryGrnRecords = inMemoryGrnRecords.filter((r) => r.id !== id && r.grnNumber !== id && (!target || r.id !== target.id));
     lastGrnFetchTime = Date.now();
+    paginatedGrnCache.clear();
 
     return true;
   },
@@ -782,6 +904,7 @@ export const warehouseService = {
   clearAllWarehouseData: async (): Promise<boolean> => {
     inMemoryGrnRecords = [];
     lastGrnFetchTime = 0;
+    paginatedGrnCache.clear();
     if (isSupabaseConfigured && supabase) {
       try {
         await Promise.allSettled([

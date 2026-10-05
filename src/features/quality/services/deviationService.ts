@@ -1,18 +1,33 @@
 import { supabase, isSupabaseConfigured } from '../../../core/auth/supabaseClient';
 import { DeviationReport, CapaAction, DeviationStatus } from '../types/deviationTypes';
 
+// In-memory runtime cache untuk efisiensi EGRESS Supabase (BUKAN local storage)
+let inMemoryDeviations: DeviationReport[] = [];
+let lastDeviationFetchTime = 0;
+const DEVIATION_CACHE_TTL_MS = 60 * 1000; // 60 detik cache di RAM
+
 export const deviationService = {
-  getDeviations: async (): Promise<DeviationReport[]> => {
+  invalidateCache: () => {
+    lastDeviationFetchTime = 0;
+  },
+
+  getDeviations: async (forceRefresh = false): Promise<DeviationReport[]> => {
     if (!isSupabaseConfigured || !supabase) {
       console.warn('[deviationService] Supabase not configured.');
       return [];
     }
 
+    const isCacheValid = !forceRefresh && inMemoryDeviations.length > 0 && (Date.now() - lastDeviationFetchTime < DEVIATION_CACHE_TTL_MS);
+    if (isCacheValid) {
+      return inMemoryDeviations;
+    }
+
     try {
       const { data, error } = await supabase
         .from('deviations')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .select('id, deviation_number, title, category, severity, department, target_departments, batch_number, material_code, material_name, description, initiator_name, initiator_nik, status, impacts, root_cause, capa_actions, created_at, updated_at, closed_at, closed_by')
+        .order('created_at', { ascending: false })
+        .limit(100);
 
       if (error) {
         console.error('[deviationService] Error fetching deviations from Supabase:', error.message);
@@ -21,7 +36,7 @@ export const deviationService = {
 
       if (!data) return [];
 
-      return data.map((d: any) => ({
+      const mapped: DeviationReport[] = data.map((d: any) => ({
         id: d.id,
         deviationNumber: d.deviation_number,
         title: d.title,
@@ -44,6 +59,10 @@ export const deviationService = {
         closedAt: d.closed_at,
         closedBy: d.closed_by,
       }));
+
+      inMemoryDeviations = mapped;
+      lastDeviationFetchTime = Date.now();
+      return mapped;
     } catch (e) {
       console.error('[deviationService] Exception fetching from Supabase:', e);
       return [];
@@ -55,8 +74,8 @@ export const deviationService = {
       throw new Error('Supabase belum dikonfigurasi untuk menyimpan deviasi secara permanen.');
     }
 
-    const { data: existingData } = await supabase.from('deviations').select('id');
-    const count = (existingData?.length || 0) + 1;
+    const { count: exactCount } = await supabase.from('deviations').select('id', { count: 'exact', head: true });
+    const count = (exactCount || 0) + 1;
     const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '').slice(2);
     const deviationNumber = `DEV-${dateStr}-${String(count).padStart(3, '0')}`;
 
@@ -98,6 +117,7 @@ export const deviationService = {
       throw new Error(`Gagal menyimpan ke Supabase: ${error.message}`);
     }
 
+    lastDeviationFetchTime = 0;
     return newReport;
   },
 
@@ -106,7 +126,11 @@ export const deviationService = {
       throw new Error('Supabase belum dikonfigurasi.');
     }
 
-    const { data: currentList, error: fetchErr } = await supabase.from('deviations').select('*').eq('id', id).single();
+    const { data: currentList, error: fetchErr } = await supabase
+      .from('deviations')
+      .select('id, deviation_number, title, category, severity, department, target_departments, batch_number, material_code, material_name, description, initiator_name, initiator_nik, status, impacts, root_cause, capa_actions, created_at, updated_at, closed_at, closed_by')
+      .eq('id', id)
+      .single();
     if (fetchErr || !currentList) {
       throw new Error('Laporan deviasi tidak ditemukan di database.');
     }
@@ -129,6 +153,8 @@ export const deviationService = {
       console.error('[deviationService] Update deviation error:', error.message);
       throw new Error(`Gagal memperbarui data di Supabase: ${error.message}`);
     }
+
+    lastDeviationFetchTime = 0;
 
     const updated: DeviationReport = {
       id: currentList.id,
@@ -167,6 +193,7 @@ export const deviationService = {
       console.error('[deviationService] Delete error:', error.message);
       throw new Error(`Gagal menghapus data dari Supabase: ${error.message}`);
     }
+    lastDeviationFetchTime = 0;
     return true;
   },
 };

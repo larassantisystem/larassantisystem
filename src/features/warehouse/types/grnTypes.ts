@@ -72,3 +72,20 @@ export interface GrnStats {
   rawMaterialsCount: number;
   packagingCount: number;
 }
+
+export interface GrnPaginatedQuery {
+  page?: number;
+  pageSize?: number;
+  materialType?: GrnMaterialType | 'all';
+  status?: string;
+  search?: string;
+  forceRefresh?: boolean;
+}
+
+export interface GrnPaginatedResponse {
+  records: GrnRecord[];
+  totalItems: number;
+  totalPages: number;
+  page: number;
+  pageSize: number;
+}

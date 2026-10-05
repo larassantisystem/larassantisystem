@@ -277,7 +277,7 @@ export const ipcBulkService = {
     try {
       const { data, error, count } = await supabase
         .from('ipc_bulk_batches')
-        .select('*', { count: 'exact' });
+        .select('id, batch_no, product_name, mixing_qty_kg, status, origin', { count: 'exact' });
 
       if (error) {
         return {

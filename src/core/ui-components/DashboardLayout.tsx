@@ -36,10 +36,12 @@ import {
   Clock,
   Camera,
   QrCode,
+  Cloud,
 } from 'lucide-react';
 import { Logo } from '../../components/Logo';
 import { GlobalNotificationCenter } from '../notifications/GlobalNotificationCenter';
 import { UniversalQrScannerModal } from '../../components/UniversalQrScannerModal';
+import { GoogleDriveModal } from '../google/GoogleDriveModal';
 import {
   departmentNotificationService,
   DepartmentNotificationCounts,
@@ -81,6 +83,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const { user, logout } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showQrScanner, setShowQrScanner] = useState(false);
+  const [showGoogleDrive, setShowGoogleDrive] = useState(false);
   const [counts, setCounts] = useState<DepartmentNotificationCounts>({
     all: 0,
     warehouse: 0,
@@ -434,6 +437,17 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           >
             <Camera className="w-4 h-4 text-teal-700" />
             <span className="hidden sm:inline">Pindai QR</span>
+          </button>
+
+          {/* Google Drive Integration Button */}
+          <button
+            type="button"
+            onClick={() => setShowGoogleDrive(true)}
+            title="Google Drive (larassantisystem@gmail.com)"
+            className="px-2.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 transition-all text-xs flex items-center gap-1.5 cursor-pointer font-bold shadow-2xs active:scale-95"
+          >
+            <Cloud className="w-4 h-4 text-blue-600" />
+            <span className="hidden md:inline">Google Drive</span>
           </button>
 
           {/* Universal Department Notification Center Dropdown */}
@@ -809,6 +823,12 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       <UniversalQrScannerModal
         isOpen={showQrScanner}
         onClose={() => setShowQrScanner(false)}
+      />
+
+      {/* Google Drive Integration Modal */}
+      <GoogleDriveModal
+        isOpen={showGoogleDrive}
+        onClose={() => setShowGoogleDrive(false)}
       />
     </div>
   );

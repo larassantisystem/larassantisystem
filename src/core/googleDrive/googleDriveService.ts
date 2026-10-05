@@ -14,16 +14,19 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 
 const provider = new GoogleAuthProvider();
-// Workspace Drive scope configured per metadata
 provider.addScope('https://www.googleapis.com/auth/drive.file');
-// Force Google account picker so users can select or switch accounts
+provider.addScope('https://www.googleapis.com/auth/drive');
 provider.setCustomParameters({
+  login_hint: 'larassantisystem@gmail.com',
   prompt: 'select_account',
 });
 
 let isSigningIn = false;
 let cachedAccessToken: string | null = null;
 let cachedUser: User | null = null;
+
+export const CPKB_ROOT_FOLDER = 'Sistem CPKB PT Larassanti Makmur Sejahtera';
+export const CPKB_COA_FOLDER = '01 - Dokumen CoA Bahan Baku & Kemas';
 
 export interface DriveUploadResult {
   fileId: string;
@@ -101,48 +104,85 @@ export const googleDriveSignOut = async () => {
 };
 
 /**
- * Helper to ensure a dedicated folder exists in Google Drive
+ * Helper to ensure the standard CPKB CoA folder hierarchy exists in Google Drive
  */
 async function getOrCreateCoaFolder(token: string): Promise<string | null> {
   try {
-    const folderName = 'CPKB - Dokumen CoA';
-    const query = encodeURIComponent(
-      `name = '${folderName}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`
+    // 1. Get or create Root CPKB folder
+    let rootId: string | null = null;
+    const rootQuery = encodeURIComponent(
+      `name = '${CPKB_ROOT_FOLDER}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`
     );
 
-    const searchRes = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name)`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      }
+    const rootRes = await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=${rootQuery}&fields=files(id,name)`,
+      { headers: { Authorization: `Bearer ${token}` } }
     );
 
-    if (searchRes.ok) {
-      const data = await searchRes.json();
+    if (rootRes.ok) {
+      const data = await rootRes.json();
       if (data.files && data.files.length > 0) {
-        return data.files[0].id;
+        rootId = data.files[0].id;
       }
     }
 
-    // Create folder if not found
-    const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        name: folderName,
-        mimeType: 'application/vnd.google-apps.folder',
-      }),
-    });
+    if (!rootId) {
+      const createRootRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: CPKB_ROOT_FOLDER,
+          mimeType: 'application/vnd.google-apps.folder',
+          description: 'Folder Induk Sistem Manajemen CPKB PT Larassanti Makmur Sejahtera',
+        }),
+      });
+      if (createRootRes.ok) {
+        const rootFolder = await createRootRes.json();
+        rootId = rootFolder.id;
+      }
+    }
 
-    if (createRes.ok) {
-      const folder = await createRes.json();
-      return folder.id;
+    // 2. Get or create CoA subfolder inside Root
+    if (rootId) {
+      const coaQuery = encodeURIComponent(
+        `name = '${CPKB_COA_FOLDER}' and '${rootId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`
+      );
+      const coaRes = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q=${coaQuery}&fields=files(id,name)`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (coaRes.ok) {
+        const data = await coaRes.json();
+        if (data.files && data.files.length > 0) {
+          return data.files[0].id;
+        }
+      }
+
+      const createCoaRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: CPKB_COA_FOLDER,
+          mimeType: 'application/vnd.google-apps.folder',
+          parents: [rootId],
+          description: 'Arsip Sertifikat Analisis (CoA) Bahan Baku & Kemas Standar CPKB',
+        }),
+      });
+
+      if (createCoaRes.ok) {
+        const coaFolder = await createCoaRes.json();
+        return coaFolder.id;
+      }
     }
   } catch (err) {
-    console.warn('Could not create dedicated folder in Drive, using root:', err);
+    console.warn('Could not create CPKB CoA folder hierarchy, falling back to root:', err);
   }
   return null;
 }

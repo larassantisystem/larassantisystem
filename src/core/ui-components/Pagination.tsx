@@ -27,7 +27,7 @@ export const Pagination: React.FC<PaginationProps> = ({
           onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
           className="text-xs border border-slate-200 rounded-lg px-2 py-1 focus:outline-none focus:border-purple-500"
         >
-          {[5, 25, 50, 100].map((size) => (
+          {[10, 20, 50, 100].map((size) => (
             <option key={size} value={size}>
               {size}
             </option>
