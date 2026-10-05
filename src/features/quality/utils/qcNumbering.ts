@@ -9,8 +9,9 @@ import { QcInspectionReport } from '../types/qcTypes';
  */
 export const generateLotInternalNumber = (
   materialType: GrnMaterialType,
-  existingReports: Array<{ lotInternalNumber?: string; internalLotNumber?: string; reportNumber?: string }>,
-  customDate?: string
+  existingReports: Array<{ lotInternalNumber?: string; internalLotNumber?: string; reportNumber?: string; grnNumber?: string; id?: string }>,
+  customDate?: string,
+  currentGrnNumber?: string
 ): string => {
   const targetDate = customDate ? new Date(customDate) : new Date();
   const yearFull = targetDate.getFullYear().toString();
@@ -20,12 +21,19 @@ export const generateLotInternalNumber = (
   const typeCode = materialType === 'raw' ? 'BB' : 'BK';
   const prefix = `L${typeCode}${yy}${mm}`;
 
-  // Find all existing reports / GRNs that match this prefix
+  // Collect all existing lot numbers used by other GRNs
+  const usedLots = new Set<string>();
   let maxSeq = 0;
+
   existingReports.forEach((item) => {
+    // Skip if it's the same GRN updating itself
+    if (currentGrnNumber && (item.grnNumber === currentGrnNumber || item.id === currentGrnNumber)) {
+      return;
+    }
     const lotNo = item.lotInternalNumber || item.internalLotNumber || item.reportNumber;
     if (lotNo) {
       const normalized = normalizeLotNumber(lotNo);
+      usedLots.add(normalized);
       if (normalized.startsWith(prefix)) {
         const seqStr = normalized.slice(prefix.length);
         const seqNum = parseInt(seqStr, 10);
@@ -36,8 +44,16 @@ export const generateLotInternalNumber = (
     }
   });
 
-  const nextSeq = String(maxSeq + 1).padStart(3, '0');
-  return `${prefix}${nextSeq}`;
+  let nextSeqNum = maxSeq + 1;
+  let candidate = `${prefix}${String(nextSeqNum).padStart(3, '0')}`;
+
+  // Strict collision check: if candidate is already used by another record, keep incrementing
+  while (usedLots.has(candidate)) {
+    nextSeqNum++;
+    candidate = `${prefix}${String(nextSeqNum).padStart(3, '0')}`;
+  }
+
+  return candidate;
 };
 
 /**

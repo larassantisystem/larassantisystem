@@ -114,20 +114,40 @@ export async function syncQcReportToSupabase(
 
   try {
     // 1. Fetch current remote row to avoid overwriting concurrent edits
-    let remoteQuery = supabase
-      .from('warehouse_grn')
-      .select('id, grn_number, notes, internal_lot_number');
+    let remoteRow: any = null;
+    let fetchErr: any = null;
 
     if (report.grnId && isUuid(report.grnId)) {
-      remoteQuery = remoteQuery.or(`id.eq.${report.grnId},grn_number.eq.${report.grnNumber}`);
-    } else {
-      remoteQuery = remoteQuery.eq('grn_number', report.grnNumber);
+      const res = await supabase
+        .from('warehouse_grn')
+        .select('id, grn_number, notes, internal_lot_number')
+        .eq('id', report.grnId)
+        .maybeSingle();
+      remoteRow = res.data;
+      fetchErr = res.error;
     }
 
-    const { data: remoteRow, error: fetchErr } = await remoteQuery.limit(1).maybeSingle();
+    if (!remoteRow && report.grnNumber) {
+      const res = await supabase
+        .from('warehouse_grn')
+        .select('id, grn_number, notes, internal_lot_number')
+        .eq('grn_number', report.grnNumber)
+        .maybeSingle();
+      remoteRow = res.data;
+      if (!fetchErr) fetchErr = res.error;
+    }
 
-    if (fetchErr) {
-      console.warn('[syncQcReportToSupabase] Fetch remote row error:', fetchErr);
+    if (!remoteRow && report.grnId) {
+      // Try stripping qc-rep- prefix
+      const cleanId = report.grnId.replace(/^qc-rep-/, '');
+      if (isUuid(cleanId)) {
+        const res = await supabase
+          .from('warehouse_grn')
+          .select('id, grn_number, notes, internal_lot_number')
+          .eq('id', cleanId)
+          .maybeSingle();
+        remoteRow = res.data;
+      }
     }
 
     const currentNotes = remoteRow?.notes || existingUserNotes || '';
@@ -178,8 +198,10 @@ export async function syncQcReportToSupabase(
     const runUpdate = async (payloadToSync: Record<string, any>) => {
       if (targetId && isUuid(targetId)) {
         return await supabase.from('warehouse_grn').update(payloadToSync).eq('id', targetId);
-      } else {
+      } else if (report.grnNumber) {
         return await supabase.from('warehouse_grn').update(payloadToSync).eq('grn_number', report.grnNumber);
+      } else {
+        return { error: new Error('No valid ID or grn_number found for sync') };
       }
     };
 

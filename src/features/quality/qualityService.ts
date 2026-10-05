@@ -337,12 +337,12 @@ export const qualityService = {
               );
               const remoteVal = typeof remoteP.resultValue === 'string' ? remoteP.resultValue.trim() : '';
               const localVal = localP && typeof localP.resultValue === 'string' ? localP.resultValue.trim() : '';
-              const finalVal = remoteVal !== '' ? remoteP.resultValue : (localVal !== '' ? localP.resultValue : '');
+              const finalVal = localVal !== '' ? localP.resultValue : (remoteVal !== '' ? remoteP.resultValue : '');
 
               return {
                 ...remoteP,
                 resultValue: finalVal,
-                isCompliant: remoteP.isCompliant !== undefined ? remoteP.isCompliant : (localP?.isCompliant ?? true),
+                isCompliant: localP?.isCompliant !== undefined ? localP.isCompliant : (remoteP.isCompliant ?? true),
               };
             });
             needsUpdate = true;
@@ -729,7 +729,7 @@ export const qualityService = {
 
     // 2. Generate or preserve Internal Lot / Report Number (LBB... / LBK...)
     if (!report.lotInternalNumber) {
-      report.lotInternalNumber = generateLotInternalNumber(report.materialType, reports, report.receivedDate);
+      report.lotInternalNumber = generateLotInternalNumber(report.materialType, reports, report.receivedDate, report.grnNumber);
       report.reportNumber = report.lotInternalNumber;
     }
 

@@ -38,92 +38,96 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
   });
 
   const handlePrint = () => {
-    const styleEl = document.createElement('style');
-    styleEl.id = 'thermal-label-print-style';
-    styleEl.innerHTML = `
-      @page {
-        size: 100mm 100mm;
-        margin: 0mm !important;
-      }
-      @media print {
-        *, *::before, *::after {
-          -webkit-print-color-adjust: exact !important;
-          print-color-adjust: exact !important;
-        }
-        html, body {
-          width: 100mm !important;
-          height: auto !important;
-          min-height: 100% !important;
-          margin: 0 !important;
-          padding: 0 !important;
-          background: #ffffff !important;
-          overflow: visible !important;
-        }
-        body * {
-          visibility: hidden !important;
-        }
-        #quarantine-label-printable,
-        #quarantine-label-printable * {
-          visibility: visible !important;
-        }
-        #quarantine-label-printable {
-          display: block !important;
-          position: absolute !important;
-          top: 0 !important;
-          left: 0 !important;
-          width: 100mm !important;
-          margin: 0 !important;
-          padding: 0 !important;
-          background: transparent !important;
-          overflow: visible !important;
-        }
-        .print-page-wrapper {
-          display: block !important;
-          width: 100mm !important;
-          height: 100mm !important;
-          min-width: 100mm !important;
-          min-height: 100mm !important;
-          max-width: 100mm !important;
-          max-height: 100mm !important;
-          margin: 0 !important;
-          padding: 0 !important;
-          page-break-after: always !important;
-          break-after: page !important;
-          page-break-inside: avoid !important;
-          break-inside: avoid !important;
-          overflow: hidden !important;
-        }
-        .print-page-wrapper:last-child {
-          page-break-after: auto !important;
-          break-after: auto !important;
-        }
-        .thermal-label-page {
-          width: 100mm !important;
-          height: 100mm !important;
-          min-width: 100mm !important;
-          min-height: 100mm !important;
-          max-width: 100mm !important;
-          max-height: 100mm !important;
-          box-sizing: border-box !important;
-          display: flex !important;
-          flex-direction: column !important;
-          justify-content: space-between !important;
-          margin: 0 !important;
-          padding: 3mm !important;
-          overflow: hidden !important;
-          background-color: #FEF08A !important;
-          border: 1.5px solid #000000 !important;
-          border-radius: 0 !important;
-          box-shadow: none !important;
-        }
-      }
-    `;
-    document.head.appendChild(styleEl);
-    window.print();
-    setTimeout(() => {
-      const el = document.getElementById('thermal-label-print-style');
-      if (el) el.remove();
-    }, 1500);
+    const printableElement = document.getElementById('quarantine-label-printable');
+    if (!printableElement) {
+      window.print();
+      return;
+    }
+
+    const printWindow = window.open('', '_blank', 'width=800,height=800');
+    if (!printWindow) {
+      alert('Pop-up terblokir oleh browser. Harap izinkan pop-up untuk mencetak label.');
+      return;
+    }
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Cetak Label Karantina CPKB (100x100mm)</title>
+          <style>
+            @page {
+              size: 100mm 100mm;
+              margin: 0mm !important;
+            }
+            * {
+              box-sizing: border-box;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            html, body {
+              width: 100mm !important;
+              height: auto !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              background: #ffffff !important;
+              font-family: sans-serif;
+            }
+            .print-page-wrapper {
+              display: block !important;
+              width: 100mm !important;
+              height: 100mm !important;
+              min-width: 100mm !important;
+              min-height: 100mm !important;
+              max-width: 100mm !important;
+              max-height: 100mm !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              page-break-after: always !important;
+              break-after: page !important;
+              page-break-inside: avoid !important;
+              break-inside: avoid !important;
+              overflow: hidden !important;
+            }
+            .print-page-wrapper:last-child {
+              page-break-after: auto !important;
+              break-after: auto !important;
+            }
+            .thermal-label-page {
+              width: 100mm !important;
+              height: 100mm !important;
+              min-width: 100mm !important;
+              min-height: 100mm !important;
+              max-width: 100mm !important;
+              max-height: 100mm !important;
+              box-sizing: border-box !important;
+              display: flex !important;
+              flex-direction: column !important;
+              justify-content: space-between !important;
+              margin: 0 !important;
+              padding: 3mm !important;
+              overflow: hidden !important;
+              background-color: #FEF08A !important;
+              border: 1.5px solid #000000 !important;
+              border-radius: 0 !important;
+              box-shadow: none !important;
+            }
+          </style>
+        </head>
+        <body>
+          ${printableElement.innerHTML}
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.print();
+                window.close();
+              }, 600);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
   };
 
   const containerList =

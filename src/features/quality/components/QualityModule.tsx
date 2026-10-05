@@ -832,7 +832,10 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
                   </button>
                   {isQualityManager(user) ? (
                     <button
-                      onClick={() => setAuthorizingReport(item)}
+                      onClick={async () => {
+                        const fresh = await qualityService.getReportById(item.id);
+                        setAuthorizingReport(fresh || item);
+                      }}
                       className={`inline-flex items-center gap-1.5 ${isCompactMode ? 'px-2.5 py-1 text-xs' : 'px-3.5 py-1.5'} bg-indigo-700 hover:bg-indigo-800 active:scale-98 text-white rounded-lg font-bold shadow-md transition-all cursor-pointer`}
                     >
                       <KeyRound className="w-3.5 h-3.5" />
@@ -840,7 +843,10 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
                     </button>
                   ) : (
                     <button
-                      onClick={() => setAuthorizingReport(item)}
+                      onClick={async () => {
+                        const fresh = await qualityService.getReportById(item.id);
+                        setAuthorizingReport(fresh || item);
+                      }}
                       className={`inline-flex items-center gap-1.5 ${isCompactMode ? 'px-2 py-1 text-xs' : 'px-3 py-1.5'} bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg font-medium border border-slate-300 transition-all cursor-pointer`}
                       title="Hanya Quality Manager / Admin yang dapat menandatangani"
                     >
