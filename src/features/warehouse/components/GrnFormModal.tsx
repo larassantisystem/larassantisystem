@@ -815,33 +815,18 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
 
                     {/* Google Drive Status Banner */}
                     <div className="mt-2 mb-1 flex items-center justify-between gap-1 text-[11px] flex-wrap">
-                      {isDriveConnected ? (
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="inline-flex items-center gap-1 font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
-                            <Cloud className="w-3 h-3 text-blue-600" />
-                            <span>GDrive Aktif</span>
-                            {driveUserEmail && (
-                              <span className="font-normal text-[10px] text-blue-600 max-w-[130px] truncate">
-                                ({driveUserEmail})
-                              </span>
-                            )}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={handleSwitchDriveAccount}
-                            className="text-[10px] font-semibold text-slate-500 hover:text-blue-700 underline cursor-pointer"
-                            title="Ganti atau hubungkan dengan akun Google lain"
-                          >
-                            Ganti Akun
-                          </button>
-                        </div>
-                      ) : (
+                      <span className="inline-flex items-center gap-1 font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+                        <Cloud className="w-3 h-3 text-blue-600" />
+                        <span>Google Drive Perusahaan: Aktif</span>
+                      </span>
+                      {(user?.role === 'admin' || user?.role === 'superadmin' || user?.department === 'management') && (
                         <button
                           type="button"
-                          onClick={handleConnectDrive}
-                          className="inline-flex items-center gap-1 font-bold text-slate-700 bg-white hover:bg-slate-100 px-2 py-0.5 rounded-md border border-slate-300 cursor-pointer shadow-2xs"
+                          onClick={handleSwitchDriveAccount}
+                          className="text-[10px] font-semibold text-slate-500 hover:text-blue-700 underline cursor-pointer"
+                          title="Ganti atau hubungkan dengan akun Google lain (Admin)"
                         >
-                          <Cloud className="w-3 h-3 text-blue-500" /> Hubungkan GDrive
+                          Ganti Akun
                         </button>
                       )}
                     </div>

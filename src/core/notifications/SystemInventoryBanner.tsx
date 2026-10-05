@@ -13,7 +13,11 @@ export const SystemInventoryBanner: React.FC<SystemInventoryBannerProps> = ({ on
   const [dismissed, setDismissed] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
 
+  const isRelevantDept = ['procurement', 'warehouse', 'admin', 'manager', 'ppic'].includes(user?.department || '');
+
   useEffect(() => {
+    if (!isRelevantDept) return;
+
     const fetchAlerts = async () => {
       try {
         const alerts = await stockService.checkReorderPoints();
@@ -23,16 +27,18 @@ export const SystemInventoryBanner: React.FC<SystemInventoryBannerProps> = ({ on
       }
     };
     fetchAlerts();
-    const interval = setInterval(fetchAlerts, 90000); // 90 detik untuk efisiensi egress
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && !document.hidden) {
+        fetchAlerts();
+      }
+    }, 180000); // 3 menit untuk efisiensi egress
     return () => clearInterval(interval);
-  }, []);
+  }, [isRelevantDept]);
 
   if (dismissed || ropAlerts.length === 0) {
     return null;
   }
 
-  // Check if current user is allowed to see/act on procurement/warehouse banners (all roles or specific depts)
-  const isRelevantDept = ['procurement', 'warehouse', 'admin', 'manager', 'ppic'].includes(user?.department || '');
   if (!isRelevantDept) {
     return null;
   }

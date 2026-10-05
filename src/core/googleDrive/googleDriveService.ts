@@ -8,6 +8,7 @@ import {
   signOut,
 } from 'firebase/auth';
 import firebaseConfig from '../../../firebase-applet-config.json';
+import { supabase } from '../auth/supabaseClient';
 
 // Initialize or reuse Firebase App
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
@@ -21,9 +22,11 @@ provider.setCustomParameters({
   prompt: 'select_account',
 });
 
+const CENTRAL_CONFIG_NIK = 'SYSTEM_GDRIVE_CENTRAL';
+
 let isSigningIn = false;
 let cachedAccessToken: string | null = null;
-let cachedUser: User | null = null;
+let cachedUser: any = null;
 
 export const CPKB_ROOT_FOLDER = 'Sistem CPKB PT Larassanti Makmur Sejahtera';
 export const CPKB_COA_FOLDER = '01 - Dokumen CoA Bahan Baku & Kemas';
@@ -37,16 +40,21 @@ export interface DriveUploadResult {
 }
 
 export const initDriveAuth = (
-  onAuthSuccess?: (user: User, token: string) => void,
+  onAuthSuccess?: (user: any, token: string) => void,
   onAuthFailure?: () => void
 ) => {
+  // Sync central on init
+  getDriveAccessToken().then((token) => {
+    if (token && cachedUser && onAuthSuccess) {
+      onAuthSuccess(cachedUser, token);
+    }
+  }).catch(() => {});
+
   return onAuthStateChanged(auth, async (user: User | null) => {
-    cachedUser = user;
     if (user && cachedAccessToken) {
       if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
     } else {
-      if (!isSigningIn) {
-        cachedAccessToken = null;
+      if (!isSigningIn && !cachedAccessToken) {
         if (onAuthFailure) onAuthFailure();
       }
     }
@@ -80,6 +88,13 @@ export const googleDriveSignIn = async (): Promise<{ user: User; accessToken: st
       );
       (blockedError as any).code = error.code;
       throw blockedError;
+    } else if (error?.code === 'auth/unauthorized-domain') {
+      const hostname = typeof window !== 'undefined' ? window.location.hostname : 'domain ini';
+      const unauthError = new Error(
+        `Domain (${hostname}) belum didaftarkan di Authorized Domains Firebase Console.`
+      );
+      (unauthError as any).code = error.code;
+      throw unauthError;
     }
 
     console.warn('Google Drive sign in notice:', error?.message || error);
@@ -90,10 +105,33 @@ export const googleDriveSignIn = async (): Promise<{ user: User; accessToken: st
 };
 
 export const getDriveAccessToken = async (): Promise<string | null> => {
+  if (cachedAccessToken) return cachedAccessToken;
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('email, password')
+      .eq('nik', CENTRAL_CONFIG_NIK)
+      .single();
+
+    if (!error && data?.password) {
+      const parsed = JSON.parse(data.password);
+      if (parsed?.accessToken) {
+        cachedAccessToken = parsed.accessToken;
+        cachedUser = {
+          displayName: parsed.displayName || 'Google Drive Perusahaan',
+          email: parsed.email || data.email || 'larassantisystem@gmail.com',
+          photoURL: parsed.photoURL,
+        };
+        return cachedAccessToken;
+      }
+    }
+  } catch (err) {
+    console.warn('Central token lookup notice:', err);
+  }
   return cachedAccessToken;
 };
 
-export const getDriveUser = (): User | null => {
+export const getDriveUser = (): any => {
   return cachedUser || auth.currentUser;
 };
 

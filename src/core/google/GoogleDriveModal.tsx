@@ -24,6 +24,7 @@ import {
   CPKB_FOLDERS,
   CPKB_ROOT_FOLDER_NAME,
 } from './googleDriveService';
+import { useAuth } from '../auth/AuthContext';
 import { warehouseService } from '../../features/warehouse/warehouseService';
 import { qualityService } from '../../features/quality/qualityService';
 
@@ -33,8 +34,11 @@ interface GoogleDriveModalProps {
 }
 
 export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({ isOpen, onClose }) => {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'superadmin' || user?.role === 'admin' || user?.department === 'management';
+
   const [isConnected, setIsConnected] = useState<boolean>(googleDriveService.isConnected());
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<any>(googleDriveService.getCentralUser());
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [actionMessage, setActionMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
   
@@ -55,12 +59,18 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({ isOpen, onCl
   useEffect(() => {
     if (!isOpen) return;
 
-    if (googleDriveService.isConnected()) {
-      setIsConnected(true);
-      fetchDriveData();
-    } else {
-      setIsConnected(false);
-    }
+    googleDriveService.syncFromCentralDatabase().then((token) => {
+      if (token) {
+        setIsConnected(true);
+        setCurrentUser(googleDriveService.getCentralUser());
+        fetchDriveData();
+      } else if (googleDriveService.isConnected()) {
+        setIsConnected(true);
+        fetchDriveData();
+      } else {
+        setIsConnected(false);
+      }
+    });
   }, [isOpen]);
 
   const fetchDriveData = async () => {
@@ -286,77 +296,130 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({ isOpen, onCl
         {/* Content Body */}
         <div className="p-6 overflow-y-auto space-y-6 flex-1">
           {!isConnected ? (
-            /* Unconnected State: Show Official Sign in with Google Button */
-            <div className="py-8 text-center max-w-md mx-auto space-y-5">
-              <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto border border-blue-200 shadow-sm">
-                <HardDrive className="w-8 h-8" />
-              </div>
-              <div className="space-y-1">
-                <h4 className="font-black text-slate-800 text-base">
-                  Hubungkan ke Google Drive
-                </h4>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  Sambungkan akun <strong>larassantisystem@gmail.com</strong> untuk mengaktifkan fitur pencadangan otomatis dokumen GRN, sertifikat CoA hasil pengujian QC, dan master formulir CPKB langsung ke Google Drive.
-                </p>
-              </div>
-
-              {/* Official Sign in with Google button styling per Skill guidelines */}
-              <div className="pt-3 flex justify-center">
-                <button
-                  type="button"
-                  onClick={handleSignIn}
-                  disabled={isLoading}
-                  className="flex items-center gap-3 px-5 py-3 rounded-full border border-slate-300 bg-white hover:bg-slate-50 active:bg-slate-100 shadow-sm hover:shadow transition-all cursor-pointer font-medium text-slate-700 text-sm disabled:opacity-50"
-                >
-                  <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="w-5 h-5">
-                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
-                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
-                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
-                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
-                    <path fill="none" d="M0 0h48v48H0z" />
-                  </svg>
-                  <span>{isLoading ? 'Menghubungkan...' : 'Sign in with Google'}</span>
-                </button>
-              </div>
-
-              {/* Troubleshooting Card for "Access blocked: has not completed verification" */}
-              <div className="text-left bg-amber-50/70 border border-amber-200/90 rounded-2xl p-4 space-y-2.5">
-                <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
-                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>Muncul Layar "Access Blocked / Belum Diverifikasi Google"?</span>
+            /* Unconnected State: Show Official Sign in with Google Button (Admin only) or Notice for staff */
+            isAdmin ? (
+              <div className="py-8 text-center max-w-md mx-auto space-y-5">
+                <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto border border-blue-200 shadow-sm">
+                  <HardDrive className="w-8 h-8" />
                 </div>
-                <p className="text-[11px] text-amber-800 leading-relaxed">
-                  Karena aplikasi ini berjalan pada project Google Cloud pribadi (status <em>Testing</em>), Google mewajibkan email penguji didaftarkan terlebih dahulu:
-                </p>
-                <div className="bg-white/80 rounded-xl p-3 border border-amber-200/60 space-y-1.5 text-[11px] text-slate-700">
-                  <div className="font-semibold text-slate-800">Langkah Cepat (1 Menit):</div>
-                  <ol className="list-decimal pl-4 space-y-1 text-slate-600">
-                    <li>
-                      Buka menu{' '}
-                      <a
-                        href="https://console.cloud.google.com/apis/credentials/consent?project=gen-lang-client-0346541486"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-700 font-bold underline hover:text-blue-900 inline-flex items-center gap-0.5"
-                      >
-                        OAuth Consent Screen Console <ExternalLink className="w-2.5 h-2.5" />
-                      </a>
-                    </li>
-                    <li>Gulir ke bawah ke bagian <strong>"Test users"</strong> (Pengguna Penguji).</li>
-                    <li>Klik <strong>"+ ADD USERS"</strong>, masukkan <code className="bg-amber-100 text-amber-900 px-1 py-0.5 rounded font-bold">larassantisystem@gmail.com</code> lalu klik <strong>Save</strong>.</li>
-                    <li>Setelah disimpan, klik tombol <strong>"Sign in with Google"</strong> di atas.</li>
-                  </ol>
-                  <div className="pt-1.5 border-t border-amber-100 text-[10px] text-slate-500">
-                    <em>Opsi alternatif:</em> Anda juga dapat login langsung dengan akun pemilik project (<code className="font-bold">mcmikecoc@gmail.com</code>).
+                <div className="space-y-1">
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 text-[10px] font-black uppercase tracking-wider mb-1">
+                    <ShieldCheck className="w-3 h-3" /> Panel Administrator
+                  </div>
+                  <h4 className="font-black text-slate-800 text-base">
+                    Hubungkan Akun Google Drive Perusahaan
+                  </h4>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Sebagai Administrator, sambungkan akun <strong>larassantisystem@gmail.com</strong> agar seluruh staf (Gudang, QC, Produksi, R&D) otomatis terhubung dan dapat mengunggah berkas ke Google Drive perusahaan tanpa perlu login masing-masing.
+                  </p>
+                </div>
+
+                {/* Official Sign in with Google button styling per Skill guidelines */}
+                <div className="pt-3 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={handleSignIn}
+                    disabled={isLoading}
+                    className="flex items-center gap-3 px-5 py-3 rounded-full border border-slate-300 bg-white hover:bg-slate-50 active:bg-slate-100 shadow-sm hover:shadow transition-all cursor-pointer font-medium text-slate-700 text-sm disabled:opacity-50"
+                  >
+                    <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="w-5 h-5">
+                      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+                      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+                      <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+                      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+                      <path fill="none" d="M0 0h48v48H0z" />
+                    </svg>
+                    <span>{isLoading ? 'Menghubungkan...' : 'Sign in with Google (Admin)'}</span>
+                  </button>
+                </div>
+
+                {/* Troubleshooting Card for Authorized Domains & OAuth Test users */}
+                <div className="text-left bg-amber-50/70 border border-amber-200/90 rounded-2xl p-4 space-y-3">
+                  {/* 1. Unauthorized Domain Troubleshooting */}
+                  <div className="space-y-1.5 border-b border-amber-200/60 pb-3">
+                    <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>Muncul Error "auth/unauthorized-domain"?</span>
+                    </div>
+                    <p className="text-[11px] text-amber-800 leading-relaxed">
+                      Firebase mewajibkan domain web tempat aplikasi berjalan didaftarkan ke daftar domain yang diizinkan:
+                    </p>
+                    <div className="bg-white/80 rounded-xl p-3 border border-amber-200/60 space-y-1.5 text-[11px] text-slate-700">
+                      <ol className="list-decimal pl-4 space-y-1 text-slate-600">
+                        <li>
+                          Buka{' '}
+                          <a
+                            href="https://console.firebase.google.com/project/gen-lang-client-0346541486/authentication/settings"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-700 font-bold underline hover:text-blue-900 inline-flex items-center gap-0.5"
+                          >
+                            Firebase Auth Authorized Domains <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
+                        </li>
+                        <li>Pada bagian <strong>Authorized Domains</strong>, klik <strong>"Add domain"</strong>.</li>
+                        <li>
+                          Masukkan domain web ini: <code className="bg-amber-100 text-amber-900 px-1 py-0.5 rounded font-bold font-mono text-[10px] select-all">{typeof window !== 'undefined' ? window.location.hostname : 'domain web Anda'}</code>
+                        </li>
+                        <li>Klik <strong>Save</strong>, lalu coba login kembali.</li>
+                      </ol>
+                    </div>
+                  </div>
+
+                  {/* 2. Access Blocked / Test Users Troubleshooting */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
+                      <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>Muncul "Access Blocked / Belum Diverifikasi Google"?</span>
+                    </div>
+                    <div className="bg-white/80 rounded-xl p-3 border border-amber-200/60 space-y-1.5 text-[11px] text-slate-700">
+                      <ol className="list-decimal pl-4 space-y-1 text-slate-600">
+                        <li>
+                          Buka{' '}
+                          <a
+                            href="https://console.cloud.google.com/auth/audience?project=gen-lang-client-0346541486"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-700 font-bold underline hover:text-blue-900 inline-flex items-center gap-0.5"
+                          >
+                            Google Cloud Audience (Test Users) <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
+                        </li>
+                        <li>Di bagian <strong>Test users</strong>, klik <strong>+ ADD USERS</strong>.</li>
+                        <li>Masukkan <code className="bg-amber-100 text-amber-900 px-1 py-0.5 rounded font-bold">larassantisystem@gmail.com</code> lalu klik <strong>Save</strong>.</li>
+                      </ol>
+                      <div className="pt-1 border-t border-amber-100 text-[10px] text-slate-500">
+                        <em>Catatan:</em> Anda juga dapat login langsung dengan akun pemilik (<code className="font-bold">mcmikecoc@gmail.com</code>).
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Token OAuth aman di memori sesi & izin terenkripsi Google</span>
+                <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Token OAuth aman di memori sesi & izin terenkripsi Google</span>
+                </div>
               </div>
-            </div>
+            ) : (
+              /* Non-admin notice when drive not yet connected */
+              <div className="py-10 text-center max-w-md mx-auto space-y-4">
+                <div className="w-16 h-16 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto border border-amber-200 shadow-sm">
+                  <AlertTriangle className="w-8 h-8" />
+                </div>
+                <div className="space-y-1.5">
+                  <h4 className="font-black text-slate-800 text-base">
+                    Google Drive Perusahaan Belum Dihubungkan
+                  </h4>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Koneksi Google Drive dikelola secara terpusat oleh <strong>Administrator CPKB</strong>. Setelah Admin menghubungkan akun <code>larassantisystem@gmail.com</code>, akun Anda akan otomatis terhubung tanpa perlu login manual.
+                  </p>
+                </div>
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-left text-[11px] text-slate-600 flex items-start gap-2">
+                  <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                  <span>Silakan hubungi Administrator atau buka akun dengan hak akses Admin / Manajemen untuk mengaktifkan koneksi Google Drive.</span>
+                </div>
+              </div>
+            )
           ) : (
             /* Connected State: Drive Explorer & Backup Tools */
             <div className="space-y-6">
@@ -377,11 +440,11 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({ isOpen, onCl
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold text-slate-900">
-                        {currentUser?.displayName || 'Google Account'}
+                        {currentUser?.displayName || 'Google Drive Perusahaan'}
                       </span>
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 flex items-center gap-1">
                         <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                        Tersambung
+                        {isAdmin ? 'Tersambung (Admin)' : 'Tertaut Otomatis'}
                       </span>
                     </div>
                     <div className="text-[11px] font-mono text-slate-500">
@@ -401,15 +464,17 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({ isOpen, onCl
                     <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
                     <span>Refresh</span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={handleSignOut}
-                    className="p-2 rounded-xl border border-rose-200 bg-white hover:bg-rose-50 text-rose-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
-                    title="Putuskan koneksi Google Drive"
-                  >
-                    <LogOut className="w-3.5 h-3.5" />
-                    <span>Disconnect</span>
-                  </button>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={handleSignOut}
+                      className="p-2 rounded-xl border border-rose-200 bg-white hover:bg-rose-50 text-rose-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                      title="Putuskan koneksi Google Drive (Admin Only)"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>Disconnect</span>
+                    </button>
+                  )}
                 </div>
               </div>
 

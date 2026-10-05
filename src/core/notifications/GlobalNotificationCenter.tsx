@@ -72,9 +72,13 @@ export const GlobalNotificationCenter: React.FC<GlobalNotificationCenterProps> =
 
   useEffect(() => {
     refreshData();
-    const interval = setInterval(refreshData, 60000); // Poll every 60s untuk efisiensi egress
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && !document.hidden && isOpen) {
+        refreshData();
+      }
+    }, 180000); // Poll setiap 3 menit jika aktif untuk meminimalkan egress
     return () => clearInterval(interval);
-  }, []);
+  }, [isOpen]);
 
   // Auto-close on click outside
   useEffect(() => {

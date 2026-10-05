@@ -495,7 +495,7 @@ export const warehouseService = {
         let { data, error } = await withTimeout(
           supabase
             .from('warehouse_grn')
-            .select('id, grn_number, material_type, material_id, material_code, material_name, manufacturer, distributor, delivery_note_number, purchase_order_number, po_number, supplier_batch_number, batch_number, internal_lot_number, received_date, expiration_date, expiry_date, retest_date, quantity_received, current_quantity, unit, container_count, container_type, storage_location, storage_conditions, qc_status, qc_parameters_count, seal_condition, packaging_condition, coa_attachment, received_by, notes, created_at, updated_at')
+            .select('id, grn_number, material_type, material_id, material_code, material_name, manufacturer, distributor, delivery_note_number, purchase_order_number, po_number, supplier_batch_number, batch_number, internal_lot_number, received_date, expiration_date, expiry_date, retest_date, quantity_received, current_quantity, unit, container_count, container_type, storage_location, storage_conditions, qc_status, qc_parameters_count, seal_condition, packaging_condition, received_by, notes, created_at, updated_at')
             .order('created_at', { ascending: false })
             .limit(100),
           5000

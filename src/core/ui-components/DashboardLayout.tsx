@@ -155,8 +155,29 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
   useEffect(() => {
     refreshNotificationCounts();
-    const timer = setInterval(refreshNotificationCounts, 60000); // 60 detik untuk efisiensi egress
-    return () => clearInterval(timer);
+    const timer = setInterval(() => {
+      // Hanya query database jika tab browser sedang aktif/dilihat pengguna
+      if (typeof document !== 'undefined' && !document.hidden) {
+        refreshNotificationCounts();
+      }
+    }, 120000); // 2 menit untuk penghematan egress & query log
+
+    const handleVisibilityChange = () => {
+      if (typeof document !== 'undefined' && !document.hidden) {
+        refreshNotificationCounts();
+      }
+    };
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+
+    return () => {
+      clearInterval(timer);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
+    };
   }, [user]);
   
   // Track which accordion departments are expanded
@@ -439,16 +460,18 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             <span className="hidden sm:inline">Pindai QR</span>
           </button>
 
-          {/* Google Drive Integration Button */}
-          <button
-            type="button"
-            onClick={() => setShowGoogleDrive(true)}
-            title="Google Drive (larassantisystem@gmail.com)"
-            className="px-2.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 transition-all text-xs flex items-center gap-1.5 cursor-pointer font-bold shadow-2xs active:scale-95"
-          >
-            <Cloud className="w-4 h-4 text-blue-600" />
-            <span className="hidden md:inline">Google Drive</span>
-          </button>
+          {/* Google Drive Integration Button (Admin Only) */}
+          {(user?.role === 'admin' || user?.role === 'superadmin' || user?.department === 'management' || canAccessModule(user, 'admin')) && (
+            <button
+              type="button"
+              onClick={() => setShowGoogleDrive(true)}
+              title="Google Drive Perusahaan (Admin CPKB)"
+              className="px-2.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 transition-all text-xs flex items-center gap-1.5 cursor-pointer font-bold shadow-2xs active:scale-95"
+            >
+              <Cloud className="w-4 h-4 text-blue-600" />
+              <span className="hidden md:inline">Google Drive</span>
+            </button>
+          )}
 
           {/* Universal Department Notification Center Dropdown */}
           <GlobalNotificationCenter onNavigate={handleNotificationNavigate} />
