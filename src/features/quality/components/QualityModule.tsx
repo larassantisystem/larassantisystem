@@ -174,6 +174,8 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
   const [revertingReport, setRevertingReport] = useState<QcInspectionReport | null>(null);
   const [pdfReport, setPdfReport] = useState<QcInspectionReport | null>(null);
   const [labelReport, setLabelReport] = useState<QcInspectionReport | null>(null);
+  const [batchArchiveReportsToPrint, setBatchArchiveReportsToPrint] = useState<QcInspectionReport[]>([]);
+  const [selectedArchiveReportIds, setSelectedArchiveReportIds] = useState<string[]>([]);
   const [smartTagReport, setSmartTagReport] = useState<QcInspectionReport | null>(null);
   const [showDiagnosticAudit, setShowDiagnosticAudit] = useState<boolean>(false);
   const [selectedGrnDetail, setSelectedGrnDetail] = useState<GrnRecord | null>(null);
@@ -864,123 +866,204 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
   );
 
   // Table 4: Arsip Laporan & Lot Terbit Table
-  const renderArchiveTable = (items: QcInspectionReport[], emptyText: string, startIndex: number = 0) => (
-    <table className={`w-full text-left border-collapse ${isCompactMode ? 'text-[11px]' : 'text-xs'}`}>
-      <thead>
-        <tr className={`border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider bg-slate-50/50 ${isCompactMode ? 'text-[10px]' : 'text-[11px]'}`}>
-          <th className={`${isCompactMode ? 'p-1.5 w-8' : 'p-3 w-10'} text-center`}>No</th>
-          <th className={isCompactMode ? 'p-1.5' : 'p-3'}>No. Lot / Laporan</th>
-          <th className={isCompactMode ? 'p-1.5' : 'p-3'}>Material & Produsen</th>
-          <th className={isCompactMode ? 'p-1.5' : 'p-3'}>Kuantitas Masuk</th>
-          <th className={isCompactMode ? 'p-1.5' : 'p-3'}>Disposisi Quality Manager</th>
-          <th className={`${isCompactMode ? 'p-1.5' : 'p-3'} text-center`}>Status Akhir</th>
-          <th className={`${isCompactMode ? 'p-1.5' : 'p-3'} text-right`}>Dokumen & Label</th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-slate-100">
-        {items.length === 0 ? (
-          <tr>
-            <td colSpan={7} className={`${isCompactMode ? 'p-4' : 'p-8'} text-center text-slate-400`}>
-              {emptyText}
-            </td>
-          </tr>
-        ) : (
-          items.map((item, idx) => (
-            <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-              <td className={`${isCompactMode ? 'p-1.5' : 'p-3'} text-center font-mono text-slate-400`}>{startIndex + idx + 1}</td>
-              <td className={isCompactMode ? 'p-1.5' : 'p-3'}>
-                <div className={`font-mono font-bold text-slate-900 ${isCompactMode ? 'text-xs' : 'text-sm'}`}>
-                  {item.lotInternalNumber || item.grnNumber}
-                </div>
-                <div className={`${isCompactMode ? 'text-[9.5px]' : 'text-[11px]'} text-slate-400`}>GRN: {item.grnNumber}</div>
-              </td>
-              <td className={isCompactMode ? 'p-1.5' : 'p-3'}>
-                <div className="flex items-center gap-1.5">
-                  <span
-                    className={`font-mono font-bold rounded-md ${
-                      isCompactMode ? 'px-1.5 py-0.2 text-[9.5px]' : 'px-2 py-0.5 text-[11px]'
-                    } ${
-                      item.materialType === 'raw' ? 'bg-teal-100 text-teal-800' : 'bg-purple-100 text-purple-800'
-                    }`}
-                  >
-                    {item.materialCode}
-                  </span>
-                  <span className="font-bold text-slate-900">{item.materialName}</span>
-                </div>
-                <div className={`${isCompactMode ? 'text-[9.5px]' : 'text-[11px]'} text-slate-500`}>
-                  Produsen: {item.manufacturer} • Batch: {item.batchNumberVendor}
-                </div>
-              </td>
-              <td className={isCompactMode ? 'p-1.5' : 'p-3'}>
-                <div className="font-bold text-slate-800">
-                  {item.quantityReceived.toLocaleString('id-ID', { minimumFractionDigits: 3 })} {item.unit}
-                </div>
-                <div className={`${isCompactMode ? 'text-[9.5px]' : 'text-[11px]'} text-slate-500`}>
-                  {item.containerCount} {item.containerType}
-                </div>
-              </td>
-              <td className={isCompactMode ? 'p-1.5' : 'p-3'}>
-                <div className="font-semibold text-slate-800">
-                  {item.qmSignature?.signerName || '-'}
-                </div>
-                <div className={`${isCompactMode ? 'text-[9.5px]' : 'text-[11px]'} text-slate-500 font-mono`}>
-                  {item.qmSignature?.signedAt ? new Date(item.qmSignature.signedAt).toLocaleDateString('id-ID') : '-'}
-                </div>
-              </td>
-              <td className={`${isCompactMode ? 'p-1.5' : 'p-3'} text-center`}>
-                <span
-                  className={`rounded-full font-bold border ${isCompactMode ? 'px-2 py-0.5 text-[9px]' : 'px-2.5 py-1 text-[10px]'} ${
-                    item.status === 'PASSED'
-                      ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                      : item.status === 'PASSED_WITH_DEVIATION'
-                      ? 'bg-amber-100 text-amber-800 border-amber-300'
-                      : item.status === 'REJECTED'
-                      ? 'bg-red-100 text-red-800 border-red-300'
-                      : 'bg-slate-100 text-slate-700 border-slate-300'
-                  }`}
-                >
-                  {item.status === 'PASSED'
-                    ? 'RELEASE'
-                    : item.status === 'PASSED_WITH_DEVIATION'
-                    ? 'RELEASE BY DEVIATION'
-                    : item.status === 'REJECTED'
-                    ? 'REJECT'
-                    : 'KARANTINA'}
-                </span>
-              </td>
-              <td className={`${isCompactMode ? 'p-1.5' : 'p-3'} text-right`}>
-                <div className="flex items-center justify-end gap-1.5">
-                  <button
-                    onClick={() => setSmartTagReport(item)}
-                    title="Buka Smart Tag QR Wadah (Paperless Sampling CPKB)"
-                    className={`inline-flex items-center gap-1 ${isCompactMode ? 'px-2 py-1 text-[11px]' : 'px-2.5 py-1.5 text-xs'} bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold rounded-lg transition-colors cursor-pointer`}
-                  >
-                    <QrCode className="w-3.5 h-3.5 text-emerald-700" />
-                    Smart Tag
-                  </button>
-                  <button
-                    onClick={() => setLabelReport(item)}
-                    title="Cetak Label Status QC"
-                    className={`inline-flex items-center gap-1 ${isCompactMode ? 'px-2 py-1 text-[11px]' : 'px-2.5 py-1.5 text-xs'} bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg transition-colors cursor-pointer`}
-                  >
-                    <Tag className="w-3.5 h-3.5" />
-                    Label
-                  </button>
-                  <button
-                    onClick={() => setPdfReport(item)}
-                    className={`inline-flex items-center gap-1.5 ${isCompactMode ? 'px-2.5 py-1 text-xs' : 'px-3 py-1.5'} bg-teal-700 hover:bg-teal-800 active:scale-98 text-white rounded-lg font-bold shadow-xs cursor-pointer`}
-                  >
-                    <FileText className="w-3.5 h-3.5" />
-                    Laporan PDF
-                  </button>
-                </div>
-              </td>
-            </tr>
-          ))
+  const renderArchiveTable = (items: QcInspectionReport[], emptyText: string, startIndex: number = 0) => {
+    const isAllCurrentSelected = items.length > 0 && items.every((item) => selectedArchiveReportIds.includes(item.id));
+
+    const toggleSelectAllCurrent = () => {
+      if (isAllCurrentSelected) {
+        const itemIds = new Set(items.map((i) => i.id));
+        setSelectedArchiveReportIds((prev) => prev.filter((id) => !itemIds.has(id)));
+      } else {
+        const newIds = new Set(selectedArchiveReportIds);
+        items.forEach((i) => newIds.add(i.id));
+        setSelectedArchiveReportIds(Array.from(newIds));
+      }
+    };
+
+    const toggleSelectReport = (id: string) => {
+      setSelectedArchiveReportIds((prev) =>
+        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+      );
+    };
+
+    const handleTriggerBatchArchivePrint = () => {
+      const selected = reports.filter((r) => selectedArchiveReportIds.includes(r.id));
+      if (selected.length === 0) return;
+      setBatchArchiveReportsToPrint(selected);
+    };
+
+    return (
+      <div className="space-y-3">
+        {/* Batch Action Bar for Multiple QC Labels Printing */}
+        {selectedArchiveReportIds.length > 0 && (
+          <div className="bg-emerald-600 text-white px-4 py-3 rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-lg border border-emerald-500 animate-in fade-in slide-in-from-top-2">
+            <div className="flex items-center gap-3">
+              <span className="bg-slate-900 text-emerald-300 px-3 py-1 rounded-xl text-xs font-black shadow-xs">
+                {selectedArchiveReportIds.length} Lot QC Terpilih
+              </span>
+              <span className="text-xs font-semibold text-emerald-50">
+                Siap cetak massal label status kelulusan QC roll thermal 100×100 mm (Hijau Rilis / Merah Tolak)
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedArchiveReportIds([])}
+                className="px-3.5 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-xs font-bold text-white transition-colors cursor-pointer shadow-2xs"
+              >
+                Batal Pilihan
+              </button>
+              <button
+                type="button"
+                onClick={handleTriggerBatchArchivePrint}
+                className="px-4 py-1.5 rounded-xl bg-slate-950 hover:bg-black text-emerald-300 text-xs font-black shadow-md flex items-center gap-2 transition-all cursor-pointer hover:scale-102 active:scale-98"
+              >
+                <Printer className="w-4 h-4 text-emerald-400" />
+                <span>Cetak Massal Label QC ({selectedArchiveReportIds.length} Lot)</span>
+              </button>
+            </div>
+          </div>
         )}
-      </tbody>
-    </table>
-  );
+
+        <table className={`w-full text-left border-collapse ${isCompactMode ? 'text-[11px]' : 'text-xs'}`}>
+          <thead>
+            <tr className={`border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider bg-slate-50/50 ${isCompactMode ? 'text-[10px]' : 'text-[11px]'}`}>
+              <th className={`${isCompactMode ? 'p-1.5 w-8' : 'p-3 w-9'} text-center`}>
+                <input
+                  type="checkbox"
+                  checked={isAllCurrentSelected}
+                  onChange={toggleSelectAllCurrent}
+                  className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer w-3.5 h-3.5"
+                  title="Pilih semua di halaman ini"
+                />
+              </th>
+              <th className={`${isCompactMode ? 'p-1.5 w-8' : 'p-3 w-10'} text-center`}>No</th>
+              <th className={isCompactMode ? 'p-1.5' : 'p-3'}>No. Lot / Laporan</th>
+              <th className={isCompactMode ? 'p-1.5' : 'p-3'}>Material & Produsen</th>
+              <th className={isCompactMode ? 'p-1.5' : 'p-3'}>Kuantitas Masuk</th>
+              <th className={isCompactMode ? 'p-1.5' : 'p-3'}>Disposisi Quality Manager</th>
+              <th className={`${isCompactMode ? 'p-1.5' : 'p-3'} text-center`}>Status Akhir</th>
+              <th className={`${isCompactMode ? 'p-1.5' : 'p-3'} text-right`}>Dokumen & Label</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {items.length === 0 ? (
+              <tr>
+                <td colSpan={8} className={`${isCompactMode ? 'p-4' : 'p-8'} text-center text-slate-400`}>
+                  {emptyText}
+                </td>
+              </tr>
+            ) : (
+              items.map((item, idx) => {
+                const isSelected = selectedArchiveReportIds.includes(item.id);
+                return (
+                  <tr key={item.id} className={`transition-colors ${isSelected ? 'bg-emerald-50/90 hover:bg-emerald-100/80' : 'hover:bg-slate-50/80'}`}>
+                    <td className={`${isCompactMode ? 'p-1.5' : 'p-3'} text-center`}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleSelectReport(item.id)}
+                        className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer w-3.5 h-3.5"
+                        title={`Pilih ${item.lotInternalNumber || item.grnNumber}`}
+                      />
+                    </td>
+                    <td className={`${isCompactMode ? 'p-1.5' : 'p-3'} text-center font-mono text-slate-400`}>{startIndex + idx + 1}</td>
+                    <td className={isCompactMode ? 'p-1.5' : 'p-3'}>
+                      <div className={`font-mono font-bold text-slate-900 ${isCompactMode ? 'text-xs' : 'text-sm'}`}>
+                        {item.lotInternalNumber || item.grnNumber}
+                      </div>
+                      <div className={`${isCompactMode ? 'text-[9.5px]' : 'text-[11px]'} text-slate-400`}>GRN: {item.grnNumber}</div>
+                    </td>
+                    <td className={isCompactMode ? 'p-1.5' : 'p-3'}>
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className={`font-mono font-bold rounded-md ${
+                            isCompactMode ? 'px-1.5 py-0.2 text-[9.5px]' : 'px-2 py-0.5 text-[11px]'
+                          } ${
+                            item.materialType === 'raw' ? 'bg-teal-100 text-teal-800' : 'bg-purple-100 text-purple-800'
+                          }`}
+                        >
+                          {item.materialCode}
+                        </span>
+                        <span className="font-bold text-slate-900">{item.materialName}</span>
+                      </div>
+                      <div className={`${isCompactMode ? 'text-[9.5px]' : 'text-[11px]'} text-slate-500`}>
+                        Produsen: {item.manufacturer} • Batch: {item.batchNumberVendor}
+                      </div>
+                    </td>
+                    <td className={isCompactMode ? 'p-1.5' : 'p-3'}>
+                      <div className="font-bold text-slate-800">
+                        {item.quantityReceived.toLocaleString('id-ID', { minimumFractionDigits: 3 })} {item.unit}
+                      </div>
+                      <div className={`${isCompactMode ? 'text-[9.5px]' : 'text-[11px]'} text-slate-500`}>
+                        {item.containerCount} {item.containerType}
+                      </div>
+                    </td>
+                    <td className={isCompactMode ? 'p-1.5' : 'p-3'}>
+                      <div className="font-semibold text-slate-800">
+                        {item.qmSignature?.signerName || '-'}
+                      </div>
+                      <div className={`${isCompactMode ? 'text-[9.5px]' : 'text-[11px]'} text-slate-500 font-mono`}>
+                        {item.qmSignature?.signedAt ? new Date(item.qmSignature.signedAt).toLocaleDateString('id-ID') : '-'}
+                      </div>
+                    </td>
+                    <td className={`${isCompactMode ? 'p-1.5' : 'p-3'} text-center`}>
+                      <span
+                        className={`rounded-full font-bold border ${isCompactMode ? 'px-2 py-0.5 text-[9px]' : 'px-2.5 py-1 text-[10px]'} ${
+                          item.status === 'PASSED'
+                            ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                            : item.status === 'PASSED_WITH_DEVIATION'
+                            ? 'bg-amber-100 text-amber-800 border-amber-300'
+                            : item.status === 'REJECTED'
+                            ? 'bg-red-100 text-red-800 border-red-300'
+                            : 'bg-slate-100 text-slate-700 border-slate-300'
+                        }`}
+                      >
+                        {item.status === 'PASSED'
+                          ? 'RELEASE'
+                          : item.status === 'PASSED_WITH_DEVIATION'
+                          ? 'RELEASE BY DEVIATION'
+                          : item.status === 'REJECTED'
+                          ? 'REJECT'
+                          : 'KARANTINA'}
+                      </span>
+                    </td>
+                    <td className={`${isCompactMode ? 'p-1.5' : 'p-3'} text-right`}>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => setSmartTagReport(item)}
+                          title="Buka Smart Tag QR Wadah (Paperless Sampling CPKB)"
+                          className={`inline-flex items-center gap-1 ${isCompactMode ? 'px-2 py-1 text-[11px]' : 'px-2.5 py-1.5 text-xs'} bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold rounded-lg transition-colors cursor-pointer`}
+                        >
+                          <QrCode className="w-3.5 h-3.5 text-emerald-700" />
+                          Smart Tag
+                        </button>
+                        <button
+                          onClick={() => setLabelReport(item)}
+                          title="Cetak Label Status QC"
+                          className={`inline-flex items-center gap-1 ${isCompactMode ? 'px-2 py-1 text-[11px]' : 'px-2.5 py-1.5 text-xs'} bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg transition-colors cursor-pointer`}
+                        >
+                          <Tag className="w-3.5 h-3.5" />
+                          Label
+                        </button>
+                        <button
+                          onClick={() => setPdfReport(item)}
+                          className={`inline-flex items-center gap-1.5 ${isCompactMode ? 'px-2.5 py-1 text-xs' : 'px-3 py-1.5'} bg-teal-700 hover:bg-teal-800 active:scale-98 text-white rounded-lg font-bold shadow-xs cursor-pointer`}
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          Laporan PDF
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -3347,9 +3430,13 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
       />
 
       <QcStatusLabelModal
-        isOpen={!!labelReport}
-        onClose={() => setLabelReport(null)}
+        isOpen={!!labelReport || batchArchiveReportsToPrint.length > 0}
+        onClose={() => {
+          setLabelReport(null);
+          setBatchArchiveReportsToPrint([]);
+        }}
         report={labelReport}
+        reports={batchArchiveReportsToPrint.length > 0 ? batchArchiveReportsToPrint : undefined}
         onViewCoa={(rep) => setPdfReport(rep)}
       />
 

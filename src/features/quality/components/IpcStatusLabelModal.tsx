@@ -51,6 +51,13 @@ export const IpcStatusLabelModal: React.FC<IpcStatusLabelModalProps> = ({
   if (!isOpen || !batch) return null;
 
   const handlePrint = () => {
+    const printableSource = document.getElementById('ipc-labels-printable');
+    if (!printableSource) return;
+
+    const printContainer = printableSource.cloneNode(true) as HTMLElement;
+    printContainer.id = 'direct-ipc-label-print-container';
+    document.body.appendChild(printContainer);
+
     const styleEl = document.createElement('style');
     styleEl.id = 'ipc-label-print-style';
     styleEl.innerHTML = `
@@ -72,18 +79,12 @@ export const IpcStatusLabelModal: React.FC<IpcStatusLabelModalProps> = ({
           background: #ffffff !important;
           overflow: visible !important;
         }
-        body * {
-          visibility: hidden !important;
+        body > *:not(#direct-ipc-label-print-container) {
+          display: none !important;
         }
-        #ipc-labels-printable,
-        #ipc-labels-printable * {
-          visibility: visible !important;
-        }
-        #ipc-labels-printable {
+        #direct-ipc-label-print-container {
           display: block !important;
-          position: absolute !important;
-          top: 0 !important;
-          left: 0 !important;
+          position: static !important;
           width: 100mm !important;
           margin: 0 !important;
           padding: 0 !important;
@@ -122,6 +123,9 @@ export const IpcStatusLabelModal: React.FC<IpcStatusLabelModalProps> = ({
     document.head.appendChild(styleEl);
     window.print();
     setTimeout(() => {
+      if (printContainer && printContainer.parentNode) {
+        printContainer.parentNode.removeChild(printContainer);
+      }
       const el = document.getElementById('ipc-label-print-style');
       if (el) el.remove();
     }, 1500);

@@ -38,6 +38,7 @@ interface GrnTableProps {
   onDeleteRecord: (id: string) => void;
   onUpdateRecord?: (id: string, updatedData: Partial<GrnRecord>) => Promise<void>;
   onPrintLabel?: (record: GrnRecord) => void;
+  onPrintBatchLabels?: (records: GrnRecord[]) => void;
 }
 
 export const GrnTable: React.FC<GrnTableProps> = ({
@@ -45,6 +46,7 @@ export const GrnTable: React.FC<GrnTableProps> = ({
   onDeleteRecord,
   onUpdateRecord,
   onPrintLabel,
+  onPrintBatchLabels,
 }) => {
   const { user } = useAuth();
 
@@ -78,6 +80,10 @@ export const GrnTable: React.FC<GrnTableProps> = ({
 
   // Print Label Modal State
   const [labelRecordToPrint, setLabelRecordToPrint] = useState<GrnRecord | null>(null);
+  const [batchRecordsToPrint, setBatchRecordsToPrint] = useState<GrnRecord[]>([]);
+
+  // Selected records for batch operations
+  const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
 
   // Server-Side Pagination Effect
   useEffect(() => {
@@ -165,6 +171,37 @@ export const GrnTable: React.FC<GrnTableProps> = ({
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = serverPageData ? serverPageData.records : filteredRecords.slice(indexOfFirstItem, indexOfLastItem);
+
+  const isAllCurrentSelected = currentItems.length > 0 && currentItems.every((item) => selectedRecordIds.includes(item.id));
+
+  const toggleSelectAllCurrent = () => {
+    if (isAllCurrentSelected) {
+      const currentIds = new Set(currentItems.map((i) => i.id));
+      setSelectedRecordIds((prev) => prev.filter((id) => !currentIds.has(id)));
+    } else {
+      const newIds = new Set(selectedRecordIds);
+      currentItems.forEach((i) => newIds.add(i.id));
+      setSelectedRecordIds(Array.from(newIds));
+    }
+  };
+
+  const toggleSelectRecord = (id: string) => {
+    setSelectedRecordIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleTriggerBatchPrint = () => {
+    const selected = (serverPageData?.records || filteredRecords).filter((r) =>
+      selectedRecordIds.includes(r.id)
+    );
+    if (selected.length === 0) return;
+    if (onPrintBatchLabels) {
+      onPrintBatchLabels(selected);
+    } else {
+      setBatchRecordsToPrint(selected);
+    }
+  };
 
   const renderStatusBadge = (status: GrnQcStatus) => {
     switch (status) {
@@ -329,6 +366,37 @@ export const GrnTable: React.FC<GrnTableProps> = ({
         </div>
       </div>
 
+      {/* Batch Action Bar for Multiple Quarantine Labels Printing */}
+      {selectedRecordIds.length > 0 && (
+        <div className="bg-amber-500 text-slate-950 px-4 py-3 rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-lg border border-amber-400 animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center gap-3">
+            <span className="bg-slate-950 text-amber-300 px-3 py-1 rounded-xl text-xs font-black shadow-xs">
+              {selectedRecordIds.length} Lot GRN Terpilih
+            </span>
+            <span className="text-xs font-bold text-slate-950">
+              Siap cetak label stiker karantina CPKB sekaligus (Thermal Roll 100×100 mm)
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSelectedRecordIds([])}
+              className="px-3.5 py-1.5 rounded-xl bg-white/80 hover:bg-white text-xs font-bold text-slate-800 transition-colors cursor-pointer shadow-2xs"
+            >
+              Batal Pilihan
+            </button>
+            <button
+              type="button"
+              onClick={handleTriggerBatchPrint}
+              className="px-4 py-1.5 rounded-xl bg-slate-950 hover:bg-black text-amber-300 text-xs font-black shadow-md flex items-center gap-2 transition-all cursor-pointer hover:scale-102 active:scale-98"
+            >
+              <Printer className="w-4 h-4 text-amber-400" />
+              <span>Cetak Massal Label Karantina ({selectedRecordIds.length} Lot)</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Main Table Container: Kolom No., No Grn, Material & Produsen, QTY (3 desimal), Status, Aksi */}
       <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
         <div className="overflow-x-auto">
@@ -339,6 +407,16 @@ export const GrnTable: React.FC<GrnTableProps> = ({
                   isCompactMode ? 'text-[10px]' : 'text-[11px]'
                 }`}
               >
+                <th className={`${isCompactMode ? 'py-2 px-2 w-8' : 'py-3.5 px-3 w-9'} text-center`}>
+                  <input
+                    type="checkbox"
+                    checked={isAllCurrentSelected}
+                    onChange={toggleSelectAllCurrent}
+                    onClick={(e) => e.stopPropagation()}
+                    className="rounded border-slate-300 text-amber-600 focus:ring-amber-500 cursor-pointer w-3.5 h-3.5"
+                    title="Pilih semua di halaman ini"
+                  />
+                </th>
                 <th className={`${isCompactMode ? 'py-2 px-2.5 w-10' : 'py-3.5 px-3.5 w-12'} text-center`}>No.</th>
                 <th className={`${isCompactMode ? 'py-2 px-3 min-w-[130px]' : 'py-3.5 px-4 min-w-[150px]'}`}>No Grn</th>
                 <th className={`${isCompactMode ? 'py-2 px-3 min-w-[200px]' : 'py-3.5 px-4 min-w-[240px]'}`}>Material & Produsen</th>
@@ -358,13 +436,16 @@ export const GrnTable: React.FC<GrnTableProps> = ({
 
                   const isReverted = rec.qcStatus === 'REVERTED_TO_WAREHOUSE';
                   const isDeletable = rec.qcStatus === 'QUARANTINE' || rec.qcStatus === 'REVERTED_TO_WAREHOUSE';
+                  const isSelected = selectedRecordIds.includes(rec.id);
 
                   return (
                     <tr
                       key={rec.id}
                       onClick={() => setSelectedRecord(rec)}
                       className={`cursor-pointer transition-colors group ${
-                        isReverted
+                        isSelected
+                          ? 'bg-amber-100/70 hover:bg-amber-100'
+                          : isReverted
                           ? 'bg-orange-50/70 hover:bg-orange-100/70 border-l-4 border-l-orange-500'
                           : 'hover:bg-amber-50/40'
                       }`}
@@ -374,6 +455,17 @@ export const GrnTable: React.FC<GrnTableProps> = ({
                           : 'Klik baris untuk melihat detail view'
                       }
                     >
+                      {/* Checkbox */}
+                      <td className={`${isCompactMode ? 'py-1.5 px-2' : 'py-3 px-3'} text-center`} onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelectRecord(rec.id)}
+                          className="rounded border-slate-300 text-amber-600 focus:ring-amber-500 cursor-pointer w-3.5 h-3.5"
+                          title={`Pilih ${rec.grnNumber}`}
+                        />
+                      </td>
+
                       {/* 1. No. */}
                       <td className={`${isCompactMode ? 'py-1.5 px-2.5' : 'py-3 px-3.5'} text-center font-bold text-slate-400 group-hover:text-slate-900`}>
                         {rowNumber}
@@ -643,11 +735,15 @@ export const GrnTable: React.FC<GrnTableProps> = ({
         )}
       </div>
 
-      {/* Quarantine Label Print Modal (Triggered via Table Action) */}
+      {/* Quarantine Label Print Modal (Triggered via Table Action / Batch Selection) */}
       <QuarantineLabelModal
-        isOpen={!!labelRecordToPrint}
-        onClose={() => setLabelRecordToPrint(null)}
+        isOpen={!!labelRecordToPrint || batchRecordsToPrint.length > 0}
+        onClose={() => {
+          setLabelRecordToPrint(null);
+          setBatchRecordsToPrint([]);
+        }}
         record={labelRecordToPrint}
+        records={batchRecordsToPrint.length > 0 ? batchRecordsToPrint : undefined}
       />
 
       {/* Record Detail Modal */}

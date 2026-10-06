@@ -56,6 +56,7 @@ export const WarehouseModule: React.FC<WarehouseModuleProps> = ({
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [quarantineRecordToPrint, setQuarantineRecordToPrint] = useState<GrnRecord | null>(null);
+  const [quarantineRecordsToPrint, setQuarantineRecordsToPrint] = useState<GrnRecord[]>([]);
   const [isSqlModalOpen, setIsSqlModalOpen] = useState(false);
 
   // Sync subTab prop
@@ -258,6 +259,7 @@ export const WarehouseModule: React.FC<WarehouseModuleProps> = ({
           onDeleteRecord={handleDeleteGrn}
           onUpdateRecord={handleUpdateGrn}
           onPrintLabel={(rec) => setQuarantineRecordToPrint(rec)}
+          onPrintBatchLabels={(recs) => setQuarantineRecordsToPrint(recs)}
         />
       )}
 
@@ -311,9 +313,13 @@ export const WarehouseModule: React.FC<WarehouseModuleProps> = ({
 
       {/* Quarantine Label Print Modal */}
       <QuarantineLabelModal
-        isOpen={!!quarantineRecordToPrint}
-        onClose={() => setQuarantineRecordToPrint(null)}
+        isOpen={!!quarantineRecordToPrint || quarantineRecordsToPrint.length > 0}
+        onClose={() => {
+          setQuarantineRecordToPrint(null);
+          setQuarantineRecordsToPrint([]);
+        }}
         record={quarantineRecordToPrint}
+        records={quarantineRecordsToPrint.length > 0 ? quarantineRecordsToPrint : undefined}
       />
 
       {/* Supabase Warehouse DB Audit & SQL Modal */}
