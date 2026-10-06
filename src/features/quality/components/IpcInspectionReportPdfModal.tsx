@@ -69,7 +69,88 @@ export const IpcInspectionReportPdfModal: React.FC<IpcInspectionReportPdfModalPr
   if (!isOpen || !batch) return null;
 
   const handlePrintPdf = () => {
+    const printableSource = document.getElementById('printable-ipc-report');
+    if (!printableSource) return;
+
+    const printContainer = printableSource.cloneNode(true) as HTMLElement;
+    printContainer.id = 'direct-ipc-pdf-report-print-container';
+    document.body.appendChild(printContainer);
+
+    const styleEl = document.createElement('style');
+    styleEl.id = 'ipc-pdf-report-print-style';
+    styleEl.innerHTML = `
+      @page {
+        size: A4 portrait;
+        margin: 10mm 12mm 10mm 12mm;
+      }
+      @media print {
+        *, *::before, *::after {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        html, body {
+          width: 100% !important;
+          height: auto !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          background: #ffffff !important;
+          overflow: visible !important;
+        }
+        body > *:not(#direct-ipc-pdf-report-print-container) {
+          display: none !important;
+        }
+        #direct-ipc-pdf-report-print-container {
+          display: block !important;
+          position: static !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          margin: 0 auto !important;
+          padding: 0 !important;
+          background: #ffffff !important;
+        }
+        .no-print {
+          display: none !important;
+        }
+        .print-page {
+          display: flex !important;
+          flex-direction: column !important;
+          justify-content: space-between !important;
+          width: 100% !important;
+          min-height: 268mm !important;
+          box-sizing: border-box !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          page-break-before: auto !important;
+          break-before: auto !important;
+          page-break-after: always !important;
+          break-after: page !important;
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
+          overflow: hidden !important;
+          border: none !important;
+          box-shadow: none !important;
+          border-radius: 0 !important;
+          background: #ffffff !important;
+        }
+        .print-page:last-child {
+          page-break-after: auto !important;
+          break-after: auto !important;
+        }
+        .page-break-inside-avoid {
+          break-inside: avoid !important;
+          page-break-inside: avoid !important;
+        }
+      }
+    `;
+    document.head.appendChild(styleEl);
     window.print();
+    setTimeout(() => {
+      if (printContainer && printContainer.parentNode) {
+        printContainer.parentNode.removeChild(printContainer);
+      }
+      const el = document.getElementById('ipc-pdf-report-print-style');
+      if (el) el.remove();
+    }, 1500);
   };
 
   const isPassed = batch.status === 'RELEASED' || batch.status === 'PASSED';

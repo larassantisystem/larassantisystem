@@ -63,10 +63,9 @@
     break-after: auto !important;
   }
 
-  #printable-qc-report {
-    position: absolute;
-    left: 0;
-    top: 0;
+  #printable-qc-report,
+  #printable-ipc-report {
+    position: static;
     width: 100% !important;
     max-width: 100% !important;
     margin: 0 !important;
