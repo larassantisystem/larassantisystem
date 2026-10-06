@@ -96,6 +96,7 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
   });
 
   const handlePrint = () => {
+    document.body.classList.add('printing-label');
     const styleEl = document.createElement('style');
     styleEl.id = 'quarantine-label-print-style';
     styleEl.innerHTML = `
@@ -107,6 +108,7 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
     document.head.appendChild(styleEl);
     window.print();
     setTimeout(() => {
+      document.body.classList.remove('printing-label');
       const el = document.getElementById('quarantine-label-print-style');
       if (el) el.remove();
     }, 1000);

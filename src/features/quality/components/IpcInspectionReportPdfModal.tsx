@@ -69,7 +69,11 @@ export const IpcInspectionReportPdfModal: React.FC<IpcInspectionReportPdfModalPr
   if (!isOpen || !batch) return null;
 
   const handlePrintPdf = () => {
+    document.body.classList.add('printing-report');
     window.print();
+    setTimeout(() => {
+      document.body.classList.remove('printing-report');
+    }, 1000);
   };
 
   const isPassed = batch.status === 'RELEASED' || batch.status === 'PASSED';
@@ -182,8 +186,8 @@ export const IpcInspectionReportPdfModal: React.FC<IpcInspectionReportPdfModalPr
   const qrValidationUrl = `https://larassanti.co.id/qc/verify-ipc?ipc=${encodeURIComponent(ipcNumber)}&batch=${encodeURIComponent(batch.batchNo)}`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-2 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
-      <div className="bg-slate-900 rounded-3xl shadow-2xl max-w-5xl w-full my-4 overflow-hidden border border-slate-700 flex flex-col max-h-[96vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-2 sm:p-4 overflow-y-auto animate-in fade-in duration-200 print:static print:p-0 print:m-0 print:bg-white print:overflow-visible">
+      <div className="bg-slate-900 rounded-3xl shadow-2xl max-w-5xl w-full my-4 overflow-hidden border border-slate-700 flex flex-col max-h-[96vh] print:max-h-none print:h-auto print:max-w-none print:w-full print:m-0 print:p-0 print:border-none print:shadow-none print:rounded-none print:bg-white">
         
         {/* Modal Top Control Bar (Hidden on Print) */}
         <div className="bg-slate-950 text-white px-5 py-3.5 flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 shrink-0 no-print">
@@ -229,12 +233,12 @@ export const IpcInspectionReportPdfModal: React.FC<IpcInspectionReportPdfModalPr
         </div>
 
         {/* Printable Document Sheet Container */}
-        <div className="p-4 sm:p-8 overflow-y-auto grow bg-slate-200/90 flex flex-col items-center gap-8">
+        <div className="p-4 sm:p-8 overflow-y-auto grow bg-slate-200/90 flex flex-col items-center gap-8 print:p-0 print:m-0 print:gap-0 print:bg-white print:overflow-visible print:block">
           
           <div
             ref={printContentRef}
             id="printable-ipc-report"
-            className="w-full max-w-3xl space-y-8 print:space-y-0"
+            className="w-full max-w-3xl space-y-8 print:max-w-none print:w-full print:space-y-0 print:m-0 print:p-0"
           >
             {/* Control Badge */}
             <div className="no-print flex items-center justify-between text-xs font-bold text-slate-600 px-2">
@@ -248,77 +252,76 @@ export const IpcInspectionReportPdfModal: React.FC<IpcInspectionReportPdfModalPr
             </div>
 
             {/* Document A4 Sheet */}
-            <div className="print-page bg-white p-8 sm:p-10 shadow-xl rounded-2xl border border-slate-300 text-slate-900 space-y-4 print:p-0 print:shadow-none print:border-none print:rounded-none relative flex flex-col justify-between"
-                 style={{ minHeight: '1050px' }}>
+            <div className="print-page bg-white p-6 sm:p-8 shadow-xl rounded-2xl border border-slate-300 text-slate-900 space-y-3 print:space-y-1.5 print:p-0 print:shadow-none print:border-none print:rounded-none relative flex flex-col justify-between min-h-[900px] print:min-h-0 print:h-auto">
               
-              <div className="space-y-4">
+              <div className="space-y-3 print:space-y-1.5">
                 {/* Header Perusahaan PT. LARASSANTI MAKMUR SEJAHTERA */}
-                <div className="border-b-2 border-slate-900 pb-3">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-center gap-3.5">
+                <div className="border-b-2 border-slate-900 pb-2.5 print:pb-1.5">
+                  <div className="flex items-start justify-between gap-4 print:gap-2">
+                    <div className="flex items-center gap-3 print:gap-2">
                       <div className="p-1 bg-white rounded-xl border border-slate-200 shrink-0 shadow-2xs flex items-center justify-center">
                         <img
                           src="/logo.png"
                           alt="Logo Larassanti"
-                          className="h-12 w-auto max-w-[120px] object-contain"
+                          className="h-11 print:h-8 w-auto max-w-[110px] print:max-w-[85px] object-contain"
                           referrerPolicy="no-referrer"
                         />
                       </div>
                       <div>
-                        <h1 className="text-lg font-black tracking-tight text-slate-900 uppercase">
+                        <h1 className="text-base sm:text-lg print:text-[13px] font-black tracking-tight text-slate-900 uppercase">
                           PT. LARASSANTI MAKMUR SEJAHTERA
                         </h1>
-                        <p className="text-[11px] text-slate-700 font-semibold">
+                        <p className="text-[10px] sm:text-[11px] print:text-[8px] text-slate-700 font-semibold">
                           Industri Kosmetika & Personal Care • Sertifikasi CPKB Golongan A
                         </p>
-                        <p className="text-[10px] text-slate-600 max-w-md leading-tight mt-0.5">
+                        <p className="text-[9px] sm:text-[10px] print:text-[7.5px] text-slate-600 max-w-md leading-tight mt-0.5">
                           Jl. Pembangunan 3 No.38 A, B, C, D, RT.002/RW.001, Batusari, Kec. Batuceper, Kota Tangerang, Banten 15121
                         </p>
                       </div>
                     </div>
                     
                     {/* Kotak Dokumen Kontrol Mutu */}
-                    <div className="text-right text-[10px] text-slate-700 border border-slate-300 rounded-lg p-2.5 bg-slate-50 shrink-0 font-mono space-y-0.5 leading-tight">
+                    <div className="text-right text-[9px] sm:text-[10px] print:text-[7.5px] text-slate-700 border border-slate-300 rounded-lg p-2 print:p-1 bg-slate-50 shrink-0 font-mono space-y-0.5 leading-tight">
                       <div><span className="font-sans font-semibold text-slate-500">No. Dokumen :</span> <strong className="text-slate-900 font-bold">{docNumber}</strong></div>
                       <div><span className="font-sans font-semibold text-slate-500">TANGGAL BERLAKU :</span> <strong className="text-slate-900 font-bold">{effectiveDate}</strong></div>
                       <div><span className="font-sans font-semibold text-slate-500">MENGGANTI NO. :</span> <strong className="text-slate-900 font-bold">{replacesDocNumber}</strong></div>
                     </div>
                   </div>
 
-                  <div className="mt-3 pt-2.5 border-t border-slate-200 text-center">
-                    <h2 className="text-sm sm:text-base font-black uppercase tracking-wider text-slate-900">
+                  <div className="mt-2.5 print:mt-1 pt-2 print:pt-1 border-t border-slate-200 text-center">
+                    <h2 className="text-xs sm:text-sm print:text-[11px] font-black uppercase tracking-wider text-slate-900">
                       {docTitle}
                     </h2>
-                    <div className="text-xs font-mono font-bold text-purple-900 mt-0.5">
+                    <div className="text-[11px] sm:text-xs print:text-[9.5px] font-mono font-bold text-purple-900 mt-0.5">
                       NOMOR IPC: {ipcNumber} • NOMOR BETS RUAHAN: {batch.batchNo}
                     </div>
                   </div>
                 </div>
 
                 {/* I. Identitas Sediaan Ruahan & Formula */}
-                <div className="border border-slate-300 rounded-lg overflow-hidden text-xs">
-                  <div className="bg-slate-100 px-3 py-1.5 font-bold uppercase tracking-wider border-b border-slate-300 text-slate-800 text-[11px]">
+                <div className="border border-slate-300 rounded-lg overflow-hidden text-xs print:text-[8.5px]">
+                  <div className="bg-slate-100 px-3 py-1.5 print:px-2 print:py-0.5 font-bold uppercase tracking-wider border-b border-slate-300 text-slate-800 text-[11px] print:text-[9px]">
                     I. Identitas Sediaan Ruahan & Formula
                   </div>
-                  <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-slate-800 text-[11px]">
+                  <div className="p-3 print:p-1.5 grid grid-cols-1 sm:grid-cols-2 print:grid-cols-2 gap-x-6 print:gap-x-4 gap-y-1.5 print:gap-y-0.5 text-slate-800 text-[11px] print:text-[8.5px]">
                     {/* Left Column */}
-                    <div className="space-y-1">
-                      <div className="grid grid-cols-[140px_10px_1fr] items-baseline">
+                    <div className="space-y-1 print:space-y-0.5">
+                      <div className="grid grid-cols-[140px_10px_1fr] print:grid-cols-[110px_8px_1fr] items-baseline">
                         <span className="text-slate-500 font-medium">Nomor IPC</span>
                         <span className="text-slate-400 font-bold">:</span>
                         <span className="font-mono font-bold text-purple-950">{ipcNumber}</span>
                       </div>
-                      <div className="grid grid-cols-[140px_10px_1fr] items-baseline">
+                      <div className="grid grid-cols-[140px_10px_1fr] print:grid-cols-[110px_8px_1fr] items-baseline">
                         <span className="text-slate-500 font-medium">Kode Produk (RnD)</span>
                         <span className="text-slate-400 font-bold">:</span>
                         <span className="font-mono font-bold text-slate-900">{batch.productCode || matchedProduct?.productCode || matchedProduct?.code || '-'}</span>
                       </div>
-                      <div className="grid grid-cols-[140px_10px_1fr] items-baseline">
+                      <div className="grid grid-cols-[140px_10px_1fr] print:grid-cols-[110px_8px_1fr] items-baseline">
                         <span className="text-slate-500 font-medium">Nama Produk Jadi</span>
                         <span className="text-slate-400 font-bold">:</span>
                         <span className="font-bold text-slate-900">{matchedProduct?.name || batch.productName}</span>
                       </div>
-                      <div className="grid grid-cols-[140px_10px_1fr] items-baseline">
+                      <div className="grid grid-cols-[140px_10px_1fr] print:grid-cols-[110px_8px_1fr] items-baseline">
                         <span className="text-slate-500 font-medium">No. Registrasi BPOM</span>
                         <span className="text-slate-400 font-bold">:</span>
                         <span className="font-semibold text-slate-800">{matchedProduct?.bpomNotificationNumber || matchedProduct?.bpomNumber || '-'}</span>
@@ -326,27 +329,27 @@ export const IpcInspectionReportPdfModal: React.FC<IpcInspectionReportPdfModalPr
                     </div>
 
                     {/* Right Column */}
-                    <div className="space-y-1">
-                      <div className="grid grid-cols-[140px_10px_1fr] items-baseline">
+                    <div className="space-y-1 print:space-y-0.5">
+                      <div className="grid grid-cols-[140px_10px_1fr] print:grid-cols-[110px_8px_1fr] items-baseline">
                         <span className="text-slate-500 font-medium">Nomor Bets Ruahan</span>
                         <span className="text-slate-400 font-bold">:</span>
                         <span className="font-mono font-bold text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded inline-block">
                           {batch.batchNo}
                         </span>
                       </div>
-                      <div className="grid grid-cols-[140px_10px_1fr] items-baseline">
+                      <div className="grid grid-cols-[140px_10px_1fr] print:grid-cols-[110px_8px_1fr] items-baseline">
                         <span className="text-slate-500 font-medium">Jumlah Adonan Ruahan</span>
                         <span className="text-slate-400 font-bold">:</span>
                         <span className="font-bold text-slate-900">
                           {(batch.mixingQtyKg || 100).toLocaleString('id-ID')} Kg
                         </span>
                       </div>
-                      <div className="grid grid-cols-[140px_10px_1fr] items-baseline">
+                      <div className="grid grid-cols-[140px_10px_1fr] print:grid-cols-[110px_8px_1fr] items-baseline">
                         <span className="text-slate-500 font-medium">Tanggal Mixing / Masak</span>
                         <span className="text-slate-400 font-bold">:</span>
                         <span className="font-semibold text-slate-800">{formatDateDDMMMYYYY(batch.mixingDate)}</span>
                       </div>
-                      <div className="grid grid-cols-[140px_10px_1fr] items-baseline">
+                      <div className="grid grid-cols-[140px_10px_1fr] print:grid-cols-[110px_8px_1fr] items-baseline">
                         <span className="text-slate-500 font-medium">Tanggal Analisa Lab</span>
                         <span className="text-slate-400 font-bold">:</span>
                         <span className="font-semibold text-slate-800">{formatDateDDMMMYYYY(batch.testDate || batch.mixingDate)}</span>
@@ -356,31 +359,31 @@ export const IpcInspectionReportPdfModal: React.FC<IpcInspectionReportPdfModalPr
                 </div>
 
                 {/* II. Hasil Pengujian In-Process Control (IPC) */}
-                <div className="border border-slate-300 rounded-lg overflow-hidden text-xs">
-                  <div className="bg-slate-100 px-3 py-1.5 font-bold uppercase tracking-wider border-b border-slate-300 text-slate-800 text-[11px] flex items-center justify-between">
+                <div className="border border-slate-300 rounded-lg overflow-hidden text-xs print:text-[8.5px]">
+                  <div className="bg-slate-100 px-3 py-1.5 print:px-2 print:py-0.5 font-bold uppercase tracking-wider border-b border-slate-300 text-slate-800 text-[11px] print:text-[9px] flex items-center justify-between">
                     <span>II. Hasil Pengujian Mutu Fisika, Kimia & Organoleptis Laboratorium</span>
-                    <span className="text-[10px] text-slate-500 font-normal">Metode Standar CPKB & Spesifikasi RnD</span>
+                    <span className="text-[10px] print:text-[7.5px] text-slate-500 font-normal">Metode Standar CPKB & Spesifikasi RnD</span>
                   </div>
 
-                  <table className="w-full text-left border-collapse text-[11px]">
+                  <table className="w-full text-left border-collapse text-[11px] print:text-[8.5px]">
                     <thead>
-                      <tr className="bg-slate-50 border-b border-slate-300 text-slate-700 font-bold text-[10px] uppercase">
-                        <th className="p-2.5 w-8 text-center border-r border-slate-200">No</th>
-                        <th className="p-2.5 w-1/4 border-r border-slate-200">Parameter Uji</th>
-                        <th className="p-2.5 w-1/3 border-r border-slate-200">Spesifikasi Penerimaan (RnD)</th>
-                        <th className="p-2.5 w-1/4 border-r border-slate-200">Hasil Analisa LAB</th>
-                        <th className="p-2.5 w-16 text-center">Kesimpulan</th>
+                      <tr className="bg-slate-50 border-b border-slate-300 text-slate-700 font-bold text-[10px] print:text-[8px] uppercase">
+                        <th className="p-2 print:p-1 w-8 text-center border-r border-slate-200">No</th>
+                        <th className="p-2 print:p-1 w-1/4 border-r border-slate-200">Parameter Uji</th>
+                        <th className="p-2 print:p-1 w-1/3 border-r border-slate-200">Spesifikasi Penerimaan (RnD)</th>
+                        <th className="p-2 print:p-1 w-1/4 border-r border-slate-200">Hasil Analisa LAB</th>
+                        <th className="p-2 print:p-1 w-16 text-center">Kesimpulan</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200">
                       {parameters.map((param, index) => (
                         <tr key={param.id || index} className="even:bg-slate-50/50">
-                          <td className="p-2.5 text-center font-mono text-slate-500 border-r border-slate-200">{index + 1}</td>
-                          <td className="p-2.5 font-bold text-slate-900 border-r border-slate-200">{param.parameterName}</td>
-                          <td className="p-2.5 font-mono text-slate-700 border-r border-slate-200">{param.specification}</td>
-                          <td className="p-2.5 font-bold text-slate-900 border-r border-slate-200">{param.resultValue}</td>
-                          <td className="p-2.5 text-center">
-                            <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                          <td className="p-2 print:p-1 text-center font-mono text-slate-500 border-r border-slate-200">{index + 1}</td>
+                          <td className="p-2 print:p-1 font-bold text-slate-900 border-r border-slate-200">{param.parameterName}</td>
+                          <td className="p-2 print:p-1 font-mono text-slate-700 border-r border-slate-200">{param.specification}</td>
+                          <td className="p-2 print:p-1 font-bold text-slate-900 border-r border-slate-200">{param.resultValue}</td>
+                          <td className="p-2 print:p-1 text-center">
+                            <span className={`inline-block px-1.5 py-0.2 rounded text-[9px] print:text-[7.5px] font-bold ${
                               param.isCompliant
                                 ? 'bg-emerald-100 text-emerald-800'
                                 : 'bg-rose-100 text-rose-800'
@@ -395,12 +398,12 @@ export const IpcInspectionReportPdfModal: React.FC<IpcInspectionReportPdfModalPr
                 </div>
 
                 {/* III. Kesimpulan & Evaluasi Mutu */}
-                <div className="border border-slate-300 rounded-lg p-3 bg-slate-50 text-[11px] space-y-2">
-                  <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-                    <span className="font-bold text-slate-800 uppercase tracking-wider text-[11px]">
+                <div className="border border-slate-300 rounded-lg p-2.5 print:p-1.5 bg-slate-50 text-[11px] print:text-[8.5px] space-y-1.5 print:space-y-0.5">
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-1 print:pb-0.5">
+                    <span className="font-bold text-slate-800 uppercase tracking-wider text-[10px] print:text-[8px]">
                       III. Kesimpulan Akhir Quality Control:
                     </span>
-                    <span className={`px-3 py-1 rounded-full text-xs font-black tracking-wider uppercase ${
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] print:text-[8px] font-black tracking-wider uppercase ${
                       isPassed
                         ? 'bg-emerald-600 text-white'
                         : isRejected
@@ -420,7 +423,7 @@ export const IpcInspectionReportPdfModal: React.FC<IpcInspectionReportPdfModalPr
                         : 'DALAM PEMERIKSAAN (ANALISA)'}
                     </span>
                   </div>
-                  <div className="text-slate-700 text-[11px] leading-relaxed">
+                  <div className="text-slate-700 text-[10px] print:text-[8px] leading-tight">
                     <strong>Keterangan: </strong>
                     {batch.rejectionReason
                       ? batch.rejectionReason
@@ -431,46 +434,62 @@ export const IpcInspectionReportPdfModal: React.FC<IpcInspectionReportPdfModalPr
                 </div>
 
                 {/* IV. Tanda Tangan Digital & Otorisasi CPKB */}
-                <div className="border border-slate-300 rounded-lg p-3 bg-white text-xs">
-                  <div className="text-center font-bold text-slate-800 uppercase tracking-wider text-[11px] mb-2.5">
+                <div className="border border-slate-300 rounded-lg p-2.5 print:p-1.5 bg-white text-xs print:text-[8.5px]">
+                  <div className="text-center font-bold text-slate-800 uppercase tracking-wider text-[10px] print:text-[8px] mb-1.5 print:mb-1">
                     IV. Otorisasi & Pengesahan Mutu (Sesuai Regulasi CPKB / BPOM RI)
                   </div>
-                  <div className="grid grid-cols-2 gap-6 text-center text-[11px] page-break-inside-avoid">
+                  <div className="grid grid-cols-2 gap-4 print:gap-2 text-center text-[10px] print:text-[8px] page-break-inside-avoid">
                     {/* Staf Analis QC */}
-                    <div className="space-y-1.5 flex flex-col items-center border-r border-slate-200 pr-3">
-                      <span className="text-slate-700 font-bold uppercase text-[10px]">Diuji & Dianalisa Oleh:</span>
-                      <div className="p-2 border border-slate-200 rounded-xl bg-slate-50 my-1">
-                        <QrCodeBadge
-                          value={qrValidationUrl}
-                          size={72}
-                        />
+                    <div className="space-y-1 print:space-y-0.5 flex flex-col items-center border-r border-slate-200 pr-3 print:pr-1">
+                      <span className="text-slate-700 font-bold uppercase text-[9px] print:text-[7.5px]">Diuji & Dianalisa Oleh:</span>
+                      <div className="p-1.5 print:p-0.5 border border-slate-200 rounded-xl bg-slate-50 my-0.5">
+                        <div className="print:hidden">
+                          <QrCodeBadge
+                            value={qrValidationUrl}
+                            size={64}
+                          />
+                        </div>
+                        <div className="hidden print:block">
+                          <QrCodeBadge
+                            value={qrValidationUrl}
+                            size={44}
+                          />
+                        </div>
                       </div>
-                      <div className="font-bold text-slate-900 text-[11px] underline">{analystName}</div>
-                      <div className="text-[10px] text-slate-600 font-medium">{analystPosition} • NIK: {analystNik}</div>
-                      <div className="text-[9px] text-slate-400 font-mono">Tgl TTD: {formatDateDDMMMYYYY(analystDate)}</div>
+                      <div className="font-bold text-slate-900 text-[11px] print:text-[8.5px] underline">{analystName}</div>
+                      <div className="text-[9.5px] print:text-[7.5px] text-slate-600 font-medium">{analystPosition} • NIK: {analystNik}</div>
+                      <div className="text-[8.5px] print:text-[7px] text-slate-400 font-mono">Tgl TTD: {formatDateDDMMMYYYY(analystDate)}</div>
                     </div>
 
                     {/* Quality Manager */}
-                    <div className="space-y-1.5 flex flex-col items-center pl-1">
-                      <span className="text-purple-900 font-bold uppercase text-[10px]">Disetujui & Diotorisasi Oleh:</span>
-                      <div className="p-2 border border-purple-200 rounded-xl bg-purple-50/80 my-1">
-                        <QrCodeBadge
-                          value={qrValidationUrl}
-                          size={72}
-                        />
+                    <div className="space-y-1 print:space-y-0.5 flex flex-col items-center pl-1 print:pl-0.5">
+                      <span className="text-purple-900 font-bold uppercase text-[9px] print:text-[7.5px]">Disetujui & Diotorisasi Oleh:</span>
+                      <div className="p-1.5 print:p-0.5 border border-purple-200 rounded-xl bg-purple-50/80 my-0.5">
+                        <div className="print:hidden">
+                          <QrCodeBadge
+                            value={qrValidationUrl}
+                            size={64}
+                          />
+                        </div>
+                        <div className="hidden print:block">
+                          <QrCodeBadge
+                            value={qrValidationUrl}
+                            size={44}
+                          />
+                        </div>
                       </div>
-                      <div className="font-bold text-purple-950 text-[11px] underline">
+                      <div className="font-bold text-purple-950 text-[11px] print:text-[8.5px] underline">
                         {isPassed || isRejected || batch.qmSignature?.signatureHash ? qmName : 'Belum Diotorisasi'}
                       </div>
-                      <div className="text-[10px] text-purple-800 font-medium">{qmPosition} • NIK: {qmNik}</div>
-                      <div className="text-[9px] text-slate-400 font-mono">Tgl Otorisasi: {formatDateDDMMMYYYY(qmDate)}</div>
+                      <div className="text-[9.5px] print:text-[7.5px] text-purple-800 font-medium">{qmPosition} • NIK: {qmNik}</div>
+                      <div className="text-[8.5px] print:text-[7px] text-slate-400 font-mono">Tgl Otorisasi: {formatDateDDMMMYYYY(qmDate)}</div>
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* Dokumen Footer */}
-              <div className="border-t border-slate-200 pt-2 text-[9px] text-slate-400 flex items-center justify-between font-mono">
+              <div className="border-t border-slate-200 pt-1.5 print:pt-1 text-[8.5px] print:text-[7.5px] text-slate-400 flex items-center justify-between font-mono">
                 <span>Dokumen Sah Quality Assurance PT. Larassanti Makmur Sejahtera</span>
                 <span>Halaman 1 dari 1 • Form: {docNumber}</span>
               </div>

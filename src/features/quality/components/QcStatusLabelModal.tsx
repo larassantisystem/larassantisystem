@@ -139,6 +139,7 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
   };
 
   const handlePrint = () => {
+    document.body.classList.add('printing-label');
     const styleEl = document.createElement('style');
     styleEl.id = 'qc-status-label-print-style';
     styleEl.innerHTML = `
@@ -150,6 +151,7 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
     document.head.appendChild(styleEl);
     window.print();
     setTimeout(() => {
+      document.body.classList.remove('printing-label');
       const el = document.getElementById('qc-status-label-print-style');
       if (el) el.remove();
     }, 1000);

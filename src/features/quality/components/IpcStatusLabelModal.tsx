@@ -51,6 +51,7 @@ export const IpcStatusLabelModal: React.FC<IpcStatusLabelModalProps> = ({
   if (!isOpen || !batch) return null;
 
   const handlePrint = () => {
+    document.body.classList.add('printing-label');
     const styleEl = document.createElement('style');
     styleEl.id = 'ipc-label-print-style';
     styleEl.innerHTML = `
@@ -62,6 +63,7 @@ export const IpcStatusLabelModal: React.FC<IpcStatusLabelModalProps> = ({
     document.head.appendChild(styleEl);
     window.print();
     setTimeout(() => {
+      document.body.classList.remove('printing-label');
       const el = document.getElementById('ipc-label-print-style');
       if (el) el.remove();
     }, 1000);

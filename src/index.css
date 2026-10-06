@@ -3,7 +3,7 @@
 @media print {
   @page {
     size: A4 portrait;
-    margin: 10mm 12mm 10mm 12mm;
+    margin: 8mm 10mm 8mm 10mm;
   }
 
   *, *::before, *::after {
@@ -21,12 +21,14 @@
     min-height: 100% !important;
   }
 
-  /* Sembunyikan elemen secara default */
-  body * {
-    visibility: hidden;
+  /* Sembunyikan elemen no-print secara mutlak */
+  .no-print {
+    display: none !important;
   }
 
-  .no-print {
+  /* Saat mencetak dari modal, sembunyikan semua elemen aplikasi utama di belakang modal agar tidak ada ruang kosong / halaman hantu */
+  body.printing-report #root > div > *:not(:has(#printable-qc-report, #printable-ipc-report)),
+  body.printing-label #root > div > *:not(:has(#quarantine-label-printable, #qc-status-label-printable, #ipc-labels-printable)) {
     display: none !important;
   }
 
@@ -132,16 +134,21 @@
   }
 
   .print-page {
-    display: flex !important;
-    flex-direction: column !important;
-    justify-content: space-between !important;
-    page-break-after: always !important;
-    break-after: page !important;
-    min-height: 268mm !important;
+    display: block !important;
+    position: relative !important;
+    width: 100% !important;
+    max-width: 100% !important;
     box-sizing: border-box !important;
     padding: 0 !important;
-    margin-bottom: 0 !important;
+    margin: 0 !important;
     background: white !important;
+    page-break-before: auto !important;
+    break-before: auto !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    overflow: visible !important;
   }
 
   .print-page:last-child {
