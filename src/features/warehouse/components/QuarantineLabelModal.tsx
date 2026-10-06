@@ -96,14 +96,6 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
   });
 
   const handlePrint = () => {
-    const printableSource = document.getElementById('quarantine-label-printable');
-    if (!printableSource) return;
-
-    // Clone printable node directly to document.body to bypass modal viewport and overflow clipping
-    const printContainer = printableSource.cloneNode(true) as HTMLElement;
-    printContainer.id = 'direct-thermal-print-container';
-    document.body.appendChild(printContainer);
-
     const styleEl = document.createElement('style');
     styleEl.id = 'quarantine-label-print-style';
     styleEl.innerHTML = `
@@ -111,84 +103,13 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
         size: 100mm 100mm;
         margin: 0mm !important;
       }
-      @media print {
-        *, *::before, *::after {
-          -webkit-print-color-adjust: exact !important;
-          print-color-adjust: exact !important;
-        }
-        html, body {
-          width: 100mm !important;
-          height: auto !important;
-          margin: 0 !important;
-          padding: 0 !important;
-          background: #ffffff !important;
-          overflow: visible !important;
-        }
-        /* Sembunyikan semua konten website & modal saat mencetak */
-        body > *:not(#direct-thermal-print-container) {
-          display: none !important;
-        }
-        #direct-thermal-print-container {
-          display: block !important;
-          position: static !important;
-          width: 100mm !important;
-          margin: 0 !important;
-          padding: 0 !important;
-          background: transparent !important;
-        }
-        .print-page-wrapper {
-          display: block !important;
-          width: 100mm !important;
-          height: 100mm !important;
-          min-width: 100mm !important;
-          min-height: 100mm !important;
-          max-width: 100mm !important;
-          max-height: 100mm !important;
-          margin: 0 !important;
-          padding: 0 !important;
-          page-break-before: auto !important;
-          break-before: auto !important;
-          page-break-after: always !important;
-          break-after: page !important;
-          page-break-inside: avoid !important;
-          break-inside: avoid !important;
-          overflow: hidden !important;
-          box-sizing: border-box !important;
-        }
-        .print-page-wrapper:last-child {
-          page-break-after: auto !important;
-          break-after: auto !important;
-        }
-        .thermal-label-page {
-          width: 100mm !important;
-          height: 100mm !important;
-          min-width: 100mm !important;
-          min-height: 100mm !important;
-          max-width: 100mm !important;
-          max-height: 100mm !important;
-          box-sizing: border-box !important;
-          display: flex !important;
-          flex-direction: column !important;
-          justify-content: space-between !important;
-          margin: 0 !important;
-          padding: 3mm !important;
-          overflow: hidden !important;
-          background-color: #FEF08A !important;
-          border: 1.5px solid #000000 !important;
-          border-radius: 0 !important;
-          box-shadow: none !important;
-        }
-      }
     `;
     document.head.appendChild(styleEl);
     window.print();
     setTimeout(() => {
-      if (printContainer && printContainer.parentNode) {
-        printContainer.parentNode.removeChild(printContainer);
-      }
       const el = document.getElementById('quarantine-label-print-style');
       if (el) el.remove();
-    }, 1500);
+    }, 1000);
   };
 
   return (

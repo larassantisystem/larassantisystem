@@ -6,13 +6,22 @@
     margin: 10mm 12mm 10mm 12mm;
   }
 
-  body {
+  *, *::before, *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  html, body {
     background: white !important;
     color: black !important;
     margin: 0 !important;
     padding: 0 !important;
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 100% !important;
   }
 
+  /* Sembunyikan elemen secara default */
   body * {
     visibility: hidden;
   }
@@ -21,74 +30,123 @@
     display: none !important;
   }
 
+  /* Netralkan semua kontainer modal, overlay, dan root React agar tidak memotong halaman */
+  #root,
+  .fixed,
+  [class*="fixed"],
+  .overflow-y-auto,
+  [class*="overflow-"] {
+    position: static !important;
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    max-width: none !important;
+    width: 100% !important;
+    inset: auto !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Tampilkan kontainer cetak resmi secara utuh */
   #quarantine-label-printable,
   #quarantine-label-printable *,
   #qc-status-label-printable,
   #qc-status-label-printable *,
   #printable-qc-report,
-  #printable-qc-report * {
-    visibility: visible;
+  #printable-qc-report *,
+  #printable-ipc-report,
+  #printable-ipc-report *,
+  #ipc-labels-printable,
+  #ipc-labels-printable * {
+    visibility: visible !important;
+  }
+
+  #printable-qc-report,
+  #printable-ipc-report {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: white !important;
   }
 
   #quarantine-label-printable,
-  #qc-status-label-printable {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    margin: 0;
-    padding: 0;
+  #qc-status-label-printable,
+  #ipc-labels-printable {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    position: static !important;
+    width: 100mm !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
     background: transparent !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
+  }
+
+  .print-page-wrapper {
+    display: block !important;
+    width: 100mm !important;
+    height: 100mm !important;
+    min-width: 100mm !important;
+    min-height: 100mm !important;
+    max-width: 100mm !important;
+    max-height: 100mm !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    page-break-before: auto !important;
+    break-before: auto !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+  }
+
+  .print-page-wrapper:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
   }
 
   .thermal-label-page {
     width: 100mm !important;
     height: 100mm !important;
+    min-width: 100mm !important;
+    min-height: 100mm !important;
     max-width: 100mm !important;
     max-height: 100mm !important;
-    margin: 0 auto !important;
-    padding: 3mm 4mm !important;
+    margin: 0 !important;
+    padding: 3mm !important;
     box-sizing: border-box !important;
-    page-break-after: always !important;
-    break-after: page !important;
-    background: transparent !important;
-    color: #000000 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
     overflow: hidden !important;
   }
 
-  .thermal-label-page:last-child {
-    page-break-after: auto !important;
-    break-after: auto !important;
-  }
-
-  #printable-qc-report,
-  #printable-ipc-report {
-    position: static;
-    width: 100% !important;
-    max-width: 100% !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    border: none !important;
-    box-shadow: none !important;
-    background: white !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
   .print-page {
-    page-break-after: always;
-    break-after: page;
-    min-height: 265mm;
-    box-sizing: border-box;
-    padding: 0;
-    margin-bottom: 0;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    min-height: 268mm !important;
+    box-sizing: border-box !important;
+    padding: 0 !important;
+    margin-bottom: 0 !important;
+    background: white !important;
   }
 
   .print-page:last-child {
-    page-break-after: auto;
-    break-after: auto;
+    page-break-after: auto !important;
+    break-after: auto !important;
   }
 
   .page-break-inside-avoid {

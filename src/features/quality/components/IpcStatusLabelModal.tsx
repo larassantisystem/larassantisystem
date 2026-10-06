@@ -51,13 +51,6 @@ export const IpcStatusLabelModal: React.FC<IpcStatusLabelModalProps> = ({
   if (!isOpen || !batch) return null;
 
   const handlePrint = () => {
-    const printableSource = document.getElementById('ipc-labels-printable');
-    if (!printableSource) return;
-
-    const printContainer = printableSource.cloneNode(true) as HTMLElement;
-    printContainer.id = 'direct-ipc-label-print-container';
-    document.body.appendChild(printContainer);
-
     const styleEl = document.createElement('style');
     styleEl.id = 'ipc-label-print-style';
     styleEl.innerHTML = `
@@ -65,70 +58,13 @@ export const IpcStatusLabelModal: React.FC<IpcStatusLabelModalProps> = ({
         size: 100mm 100mm;
         margin: 0mm !important;
       }
-      @media print {
-        *, *::before, *::after {
-          -webkit-print-color-adjust: exact !important;
-          print-color-adjust: exact !important;
-        }
-        html, body {
-          width: 100mm !important;
-          height: auto !important;
-          min-height: 100% !important;
-          margin: 0 !important;
-          padding: 0 !important;
-          background: #ffffff !important;
-          overflow: visible !important;
-        }
-        body > *:not(#direct-ipc-label-print-container) {
-          display: none !important;
-        }
-        #direct-ipc-label-print-container {
-          display: block !important;
-          position: static !important;
-          width: 100mm !important;
-          margin: 0 !important;
-          padding: 0 !important;
-          background: transparent !important;
-          overflow: visible !important;
-        }
-        .ipc-label-card {
-          width: 100mm !important;
-          height: 100mm !important;
-          min-width: 100mm !important;
-          min-height: 100mm !important;
-          max-width: 100mm !important;
-          max-height: 100mm !important;
-          box-sizing: border-box !important;
-          display: flex !important;
-          flex-direction: column !important;
-          justify-content: space-between !important;
-          margin: 0 !important;
-          padding: 3mm !important;
-          page-break-before: auto !important;
-          break-before: auto !important;
-          page-break-after: always !important;
-          break-after: page !important;
-          page-break-inside: avoid !important;
-          break-inside: avoid !important;
-          overflow: hidden !important;
-          border-radius: 0 !important;
-          box-shadow: none !important;
-        }
-        .ipc-label-card:last-child {
-          page-break-after: auto !important;
-          break-after: auto !important;
-        }
-      }
     `;
     document.head.appendChild(styleEl);
     window.print();
     setTimeout(() => {
-      if (printContainer && printContainer.parentNode) {
-        printContainer.parentNode.removeChild(printContainer);
-      }
       const el = document.getElementById('ipc-label-print-style');
       if (el) el.remove();
-    }, 1500);
+    }, 1000);
   };
 
   const isReleased = activeType === 'RELEASED';
