@@ -767,19 +767,29 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
     }
   };
 
-  // --- DOWNLOAD TEMPLATE EXCEL MASTER BOM ---
+  // --- DOWNLOAD TEMPLATE EXCEL MASTER BOM LENGKAP STANDAR CPKB ---
   const handleDownloadTemplate = () => {
     const templateData = [
       [
-        'Kode BOM',
-        'Kode Produk',
-        'Nama Produk',
-        'Versi Formula',
-        'Kode Bahan Baku',
+        'Kode BOM *',
+        'Kode Produk *',
+        'Nama Produk *',
+        'Versi Formula *',
+        'Status BOM (ACTIVE/DRAFT/ARCHIVED)',
+        'Basis Batch (kg) *',
+        'Tujuan / Keterangan Formula',
+        'Mesin Utama (Wadah Stainless Steel)',
+        'Mesin Homogenizer / Mixer Pendukung',
+        'Fase Pengolahan *',
+        'Judul Langkah Proses CPKB',
+        'Target Suhu (°C)',
+        'Kecepatan Pengaduk (RPM)',
+        'Durasi Waktu',
+        'Kode Bahan Baku *',
         'Nama Bahan Baku',
-        'Persentase (%)',
-        'Fase Pengolahan',
-        'Instruksi / Catatan Teknis'
+        'Persentase (%) *',
+        'Qty Basis (kg)',
+        'Instruksi / Prosedur Pengerjaan'
       ],
       // Contoh Formula 1: Brightening Facial Serum 30ml (Total 100.00%)
       [
@@ -787,66 +797,126 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
         'PJ0001',
         'Brightening Facial Serum 30ml',
         'v1.0',
+        'ACTIVE',
+        100,
+        'Formula Master Ruahan standar CPKB basis 100 kg',
+        'PRD-057 Wadah Stainless Steel 300 kg (5)',
+        'PRD-049 Homogenizer 70 kg',
+        'Fase A',
+        'Peleburan & Pemanasan Basis Pelarut',
+        '70-75°C',
+        '300 RPM',
+        '20 menit',
         'RM-AQUA',
         'Aqua Demineralisata',
         74.50,
-        'Fase A',
-        'Pelarut utama, panaskan hingga 70°C'
+        74.50,
+        'Pelarut utama, panaskan tangki hingga 70°C'
       ],
       [
         'BOM-PJ0001-V1.0',
         'PJ0001',
         'Brightening Facial Serum 30ml',
         'v1.0',
+        'ACTIVE',
+        100,
+        'Formula Master Ruahan standar CPKB basis 100 kg',
+        'PRD-057 Wadah Stainless Steel 300 kg (5)',
+        'PRD-049 Homogenizer 70 kg',
+        'Fase A',
+        'Peleburan & Pemanasan Basis Pelarut',
+        '70-75°C',
+        '300 RPM',
+        '20 menit',
         'RM-GLYC',
         'Glycerin 99.5%',
         5.00,
-        'Fase A',
-        'Humektan pelembap kulit'
+        5.00,
+        'Humektan pelembap kulit, aduk rata bersama Fase A'
       ],
       [
         'BOM-PJ0001-V1.0',
         'PJ0001',
         'Brightening Facial Serum 30ml',
         'v1.0',
+        'ACTIVE',
+        100,
+        'Formula Master Ruahan standar CPKB basis 100 kg',
+        'PRD-057 Wadah Stainless Steel 300 kg (5)',
+        'PRD-049 Homogenizer 70 kg',
+        'Fase B',
+        'Pelarutan Bahan Aktif Pencerah & Anti-Aging',
+        'Suhu Ruang',
+        '500 RPM',
+        '15 menit',
         'RM-NIAC',
         'Niacinamide PC',
         4.00,
-        'Fase B',
-        'Bahan aktif pencerah, larutkan suhu ruang'
+        4.00,
+        'Bahan aktif pencerah, larutkan hingga jernih sempurna'
       ],
       [
         'BOM-PJ0001-V1.0',
         'PJ0001',
         'Brightening Facial Serum 30ml',
         'v1.0',
+        'ACTIVE',
+        100,
+        'Formula Master Ruahan standar CPKB basis 100 kg',
+        'PRD-057 Wadah Stainless Steel 300 kg (5)',
+        'PRD-049 Homogenizer 70 kg',
+        'Fase B',
+        'Pelarutan Bahan Aktif Pencerah & Anti-Aging',
+        'Suhu Ruang',
+        '500 RPM',
+        '15 menit',
         'RM-HA',
         'Sodium Hyaluronate',
         0.50,
-        'Fase B',
-        'Anti-aging & hidrasi mendalam'
+        0.50,
+        'Anti-aging hidrasi, taburkan perlahan agar tidak menggumpal'
       ],
       [
         'BOM-PJ0001-V1.0',
         'PJ0001',
         'Brightening Facial Serum 30ml',
         'v1.0',
+        'ACTIVE',
+        100,
+        'Formula Master Ruahan standar CPKB basis 100 kg',
+        'PRD-057 Wadah Stainless Steel 300 kg (5)',
+        'PRD-049 Homogenizer 70 kg',
+        'Fase C',
+        'Homogenisasi & Co-Solvent Penetration',
+        'Suhu Ruang',
+        '1500 RPM',
+        '10 menit',
         'RM-BUTYL',
         'Butylene Glycol',
         15.00,
-        'Fase C',
-        'Co-solvent dan penetration enhancer'
+        15.00,
+        'Co-solvent penetrasi, homogenisasi berkecepatan tinggi'
       ],
       [
         'BOM-PJ0001-V1.0',
         'PJ0001',
         'Brightening Facial Serum 30ml',
         'v1.0',
+        'ACTIVE',
+        100,
+        'Formula Master Ruahan standar CPKB basis 100 kg',
+        'PRD-057 Wadah Stainless Steel 300 kg (5)',
+        'PRD-049 Homogenizer 70 kg',
+        'Fase D',
+        'Pengawetan & Finishing Akhir Bets',
+        'Suhu Ruang',
+        '300 RPM',
+        '10 menit',
         'RM-PHENOXY',
         'Phenoxyethanol',
         1.00,
-        'Fase D',
-        'Sistem pengawet ramah kulit'
+        1.00,
+        'Sistem pengawet ramah kulit, aduk perlahan hingga merata'
       ],
       // Contoh Formula 2: Aloe Vera Soothing Gel 100g (Total 100.00%)
       [
@@ -854,55 +924,105 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
         'PJ0002',
         'Aloe Vera Soothing Gel 100g',
         'v1.0',
+        'ACTIVE',
+        100,
+        'Formula Gel Ruahan Sejuk Lidah Buaya standar CPKB basis 100 kg',
+        'PRD-057 Wadah Stainless Steel 300 kg (5)',
+        'PRD-049 Homogenizer 70 kg',
+        'Fase A',
+        'Dispersi Basis Polimer Gel',
+        'Suhu Ruang',
+        '800 RPM',
+        '30 menit',
         'RM-AQUA',
         'Aqua Demineralisata',
         91.00,
-        'Fase A',
-        'Basis pelarut gel'
+        91.00,
+        'Basis pelarut utama, masukkan ke tangki utama'
       ],
       [
         'BOM-PJ0002-V1.0',
         'PJ0002',
         'Aloe Vera Soothing Gel 100g',
         'v1.0',
+        'ACTIVE',
+        100,
+        'Formula Gel Ruahan Sejuk Lidah Buaya standar CPKB basis 100 kg',
+        'PRD-057 Wadah Stainless Steel 300 kg (5)',
+        'PRD-049 Homogenizer 70 kg',
+        'Fase A',
+        'Dispersi Basis Polimer Gel',
+        'Suhu Ruang',
+        '800 RPM',
+        '30 menit',
         'RM-CARBOMER',
         'Carbomer 940',
         1.50,
-        'Fase A',
-        'Gelling agent, dispersi hingga mengembang'
+        1.50,
+        'Gelling agent, dispersi dan hidrasi hingga mengembang'
       ],
       [
         'BOM-PJ0002-V1.0',
         'PJ0002',
         'Aloe Vera Soothing Gel 100g',
         'v1.0',
+        'ACTIVE',
+        100,
+        'Formula Gel Ruahan Sejuk Lidah Buaya standar CPKB basis 100 kg',
+        'PRD-057 Wadah Stainless Steel 300 kg (5)',
+        'PRD-049 Homogenizer 70 kg',
+        'Fase B',
+        'Netralisasi pH & Pembentukan Struktur Gel',
+        'Suhu Ruang',
+        '400 RPM',
+        '10 menit',
         'RM-TEA',
         'Triethanolamine 99%',
         1.50,
-        'Fase B',
-        'Penetral pH & pengental gel'
+        1.50,
+        'Penetral pH & agen pembentuk gel kental transparan'
       ],
       [
         'BOM-PJ0002-V1.0',
         'PJ0002',
         'Aloe Vera Soothing Gel 100g',
         'v1.0',
+        'ACTIVE',
+        100,
+        'Formula Gel Ruahan Sejuk Lidah Buaya standar CPKB basis 100 kg',
+        'PRD-057 Wadah Stainless Steel 300 kg (5)',
+        'PRD-049 Homogenizer 70 kg',
+        'Fase C',
+        'Penambahan Ekstrak Aktif Herbal',
+        'Suhu Ruang',
+        '300 RPM',
+        '10 menit',
         'RM-ALOE',
         'Aloe Barbadensis Leaf Extract',
         5.00,
-        'Fase C',
-        'Ekstrak aktif lidah buaya'
+        5.00,
+        'Ekstrak aktif lidah buaya murni, aduk perlahan'
       ],
       [
         'BOM-PJ0002-V1.0',
         'PJ0002',
         'Aloe Vera Soothing Gel 100g',
         'v1.0',
+        'ACTIVE',
+        100,
+        'Formula Gel Ruahan Sejuk Lidah Buaya standar CPKB basis 100 kg',
+        'PRD-057 Wadah Stainless Steel 300 kg (5)',
+        'PRD-049 Homogenizer 70 kg',
+        'Fase D',
+        'Finishing & Pengawetan',
+        'Suhu Ruang',
+        '300 RPM',
+        '10 menit',
         'RM-PHENOXY',
         'Phenoxyethanol',
         1.00,
-        'Fase D',
-        'Pengawet kosmetik'
+        1.00,
+        'Pengawet kosmetik, pastikan homogen sebelum evaluasi IPC'
       ]
     ];
 
@@ -910,22 +1030,32 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
     const ws = XLSX.utils.aoa_to_sheet(templateData);
 
     ws['!cols'] = [
-      { wch: 20 }, // Kode BOM
-      { wch: 15 }, // Kode Produk
-      { wch: 32 }, // Nama Produk
+      { wch: 18 }, // Kode BOM
+      { wch: 14 }, // Kode Produk
+      { wch: 30 }, // Nama Produk
       { wch: 14 }, // Versi Formula
+      { wch: 14 }, // Status BOM
+      { wch: 16 }, // Basis Batch (kg)
+      { wch: 35 }, // Tujuan / Keterangan Formula
+      { wch: 34 }, // Mesin Utama (Wadah Stainless Steel)
+      { wch: 30 }, // Mesin Homogenizer / Mixer
+      { wch: 16 }, // Fase Pengolahan
+      { wch: 34 }, // Judul Langkah Proses CPKB
+      { wch: 18 }, // Target Suhu (°C)
+      { wch: 22 }, // Kecepatan Pengaduk (RPM)
+      { wch: 16 }, // Durasi Waktu
       { wch: 18 }, // Kode Bahan Baku
       { wch: 28 }, // Nama Bahan Baku
       { wch: 16 }, // Persentase (%)
-      { wch: 16 }, // Fase Pengolahan
-      { wch: 42 }, // Instruksi / Catatan Teknis
+      { wch: 16 }, // Qty Basis (kg)
+      { wch: 45 }, // Instruksi / Prosedur Pengerjaan
     ];
 
     XLSX.utils.book_append_sheet(wb, ws, 'Template Master BOM');
     XLSX.writeFile(wb, 'Template_Import_Master_BOM.xlsx');
   };
 
-  // --- PARSE MATRIX DATA (EXCEL / SPREADSHEET AOA) ---
+  // --- PARSE MATRIX DATA (EXCEL / SPREADSHEET AOA DENGAN DUKUNGAN 19 KOLOM CPKB LENGKAP) ---
   const parseMatrixData = (rawRows: any[][]) => {
     if (!rawRows || rawRows.length < 2) {
       setImportError('File atau teks tidak memiliki data yang cukup (minimal 1 baris header dan 1 baris data).');
@@ -936,16 +1066,29 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
 
     const headerRow = rawRows[0].map((c) => String(c || '').trim().toLowerCase());
     
-    let colBomCode = headerRow.findIndex((h) => h.includes('bom') || h.includes('kode formula'));
-    let colProductCode = headerRow.findIndex((h) => (h.includes('produk') || h.includes('product')) && h.includes('kode'));
-    let colProductName = headerRow.findIndex((h) => (h.includes('produk') || h.includes('product')) && (h.includes('nama') || h.includes('name')));
-    let colVersion = headerRow.findIndex((h) => h.includes('versi') || h.includes('version'));
-    let colRmCode = headerRow.findIndex((h) => (h.includes('bahan') || h.includes('material') || h.includes('raw')) && h.includes('kode'));
-    let colRmName = headerRow.findIndex((h) => (h.includes('bahan') || h.includes('material')) && h.includes('nama'));
-    let colPercentage = headerRow.findIndex((h) => h.includes('persen') || h.includes('%') || h.includes('percentage'));
-    let colPhase = headerRow.findIndex((h) => h.includes('fase') || h.includes('phase'));
-    let colInstructions = headerRow.findIndex((h) => h.includes('instruksi') || h.includes('mixing') || h.includes('catatan') || h.includes('prosedur'));
+    const findCol = (predicate: (h: string) => boolean) => headerRow.findIndex(predicate);
 
+    let colBomCode = findCol((h) => h.includes('kode bom') || h.includes('bom') || h.includes('kode formula'));
+    let colProductCode = findCol((h) => (h.includes('produk') || h.includes('product')) && h.includes('kode'));
+    let colProductName = findCol((h) => (h.includes('produk') || h.includes('product')) && (h.includes('nama') || h.includes('name')));
+    let colVersion = findCol((h) => h.includes('versi') || h.includes('version'));
+    let colStatus = findCol((h) => h.includes('status'));
+    let colBatchQty = findCol((h) => h.includes('basis') || h.includes('batch') || h.includes('ukuran batch'));
+    let colPurpose = findCol((h) => h.includes('tujuan') || h.includes('keterangan formula') || h.includes('purpose'));
+    let colMachine1 = findCol((h) => (h.includes('mesin') || h.includes('wadah')) && (h.includes('utama') || h.includes('stainless')));
+    let colMachine2 = findCol((h) => h.includes('homogenizer') || h.includes('mixer') || (h.includes('mesin') && h.includes('pendukung')));
+    let colPhase = findCol((h) => h.includes('fase') || h.includes('phase'));
+    let colStepTitle = findCol((h) => h.includes('langkah') || h.includes('judul') || h.includes('tahap'));
+    let colTargetTemp = findCol((h) => h.includes('suhu') || h.includes('temp') || h.includes('°c'));
+    let colTargetRpm = findCol((h) => h.includes('rpm') || h.includes('kecepatan') || h.includes('pengaduk'));
+    let colDuration = findCol((h) => h.includes('durasi') || h.includes('waktu') || h.includes('menit'));
+    let colRmCode = findCol((h) => (h.includes('bahan') || h.includes('material') || h.includes('raw')) && h.includes('kode'));
+    let colRmName = findCol((h) => (h.includes('bahan') || h.includes('material')) && h.includes('nama'));
+    let colPercentage = findCol((h) => h.includes('persen') || h.includes('%') || h.includes('percentage'));
+    let colQtyBasisKg = findCol((h) => (h.includes('qty') || h.includes('bobot')) && (h.includes('kg') || h.includes('basis')));
+    let colInstructions = findCol((h) => h.includes('instruksi') || h.includes('prosedur') || h.includes('catatan') || h.includes('mixing'));
+
+    // Fallbacks if not detected
     if (colBomCode === -1) colBomCode = 0;
     if (colProductCode === -1) colProductCode = 1;
     if (colProductName === -1) colProductName = 2;
@@ -986,11 +1129,42 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
       const phase = String(row[colPhase] || 'Fase A').trim();
       const instruction = String(row[colInstructions] || '').trim();
 
+      // Advanced column extraction
+      const rawStatus = colStatus !== -1 ? String(row[colStatus] || '').trim().toUpperCase() : 'ACTIVE';
+      const status: 'ACTIVE' | 'DRAFT' | 'ARCHIVED' = ['ACTIVE', 'DRAFT', 'ARCHIVED'].includes(rawStatus)
+        ? (rawStatus as any)
+        : 'ACTIVE';
+
+      let batchKg = 100;
+      if (colBatchQty !== -1 && row[colBatchQty] !== undefined && row[colBatchQty] !== null && String(row[colBatchQty]).trim() !== '') {
+        const parsedBatch = parseFloat(String(row[colBatchQty]).replace(',', '.'));
+        if (!isNaN(parsedBatch) && parsedBatch > 0) batchKg = parsedBatch;
+      }
+
+      const purpose = colPurpose !== -1 && row[colPurpose] ? String(row[colPurpose]).trim() : '';
+      const m1 = colMachine1 !== -1 && row[colMachine1] ? String(row[colMachine1]).trim() : '';
+      const m2 = colMachine2 !== -1 && row[colMachine2] ? String(row[colMachine2]).trim() : '';
+
+      const stepTitle = colStepTitle !== -1 && row[colStepTitle] ? String(row[colStepTitle]).trim() : '';
+      const targetTemp = colTargetTemp !== -1 && row[colTargetTemp] ? String(row[colTargetTemp]).trim() : '';
+      const targetRpm = colTargetRpm !== -1 && row[colTargetRpm] ? String(row[colTargetRpm]).trim() : '';
+      const durationMin = colDuration !== -1 && row[colDuration] ? String(row[colDuration]).trim() : '';
+
       let pct = 0;
       const rawPctStr = String(row[colPercentage] ?? '').replace(',', '.').replace('%', '').trim();
       pct = parseFloat(rawPctStr) || 0;
 
+      let customQtyKg = 0;
+      if (colQtyBasisKg !== -1 && row[colQtyBasisKg] !== undefined && row[colQtyBasisKg] !== null && String(row[colQtyBasisKg]).trim() !== '') {
+        const parsedQty = parseFloat(String(row[colQtyBasisKg]).replace(',', '.'));
+        if (!isNaN(parsedQty) && parsedQty >= 0) customQtyKg = parsedQty;
+      }
+
       if (!importedMap.has(bomCode)) {
+        const techNotesCompiled = m1 || m2
+          ? `Mesin Utama: ${m1 || '-'} | Homogenizer: ${m2 || '-'}`
+          : '';
+
         importedMap.set(bomCode, {
           id: `bom-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
           code: bomCode,
@@ -999,10 +1173,12 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
           productCode: pCode,
           productName: pName,
           version: ver,
-          status: 'ACTIVE',
-          bulkQuantityKg: 100,
-          purposeDescription: `Master BOM Ruahan CPKB untuk produk ${pName} basis 100 kg.`,
+          status: status,
+          bulkQuantityKg: batchKg,
+          purposeDescription: purpose || `Master BOM Ruahan CPKB untuk produk ${pName} basis ${batchKg} kg.`,
           mixingInstructions: instruction || 'Prosedur standar mixing pengolahan bulk ruahan CPKB.',
+          technicalNotes: techNotesCompiled,
+          dynamicProcessSteps: [],
           ingredients: [],
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -1011,8 +1187,10 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
 
       const targetForm = importedMap.get(bomCode)!;
 
-      if (instruction && (!targetForm.mixingInstructions || targetForm.mixingInstructions.includes('Prosedur standar'))) {
-        targetForm.mixingInstructions = instruction;
+      // Update basic fields if subsequent row fills them
+      if (!targetForm.purposeDescription && purpose) targetForm.purposeDescription = purpose;
+      if (!targetForm.technicalNotes && (m1 || m2)) {
+        targetForm.technicalNotes = `Mesin Utama: ${m1 || '-'} | Homogenizer: ${m2 || '-'}`;
       }
 
       if (rmCodeRaw) {
@@ -1028,20 +1206,66 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
           });
         }
 
+        const calculatedKg = customQtyKg > 0 ? customQtyKg : Number(((pct * targetForm.bulkQuantityKg) / 100).toFixed(4));
+
         targetForm.ingredients.push({
           rawMaterialCode: rmCode,
           percentage: pct,
-          qtyBasisKg: Number(((pct * 100) / 100).toFixed(4)),
+          qtyBasisKg: calculatedKg,
           phase: phase,
           description: rmDesc,
         });
+
+        // Dynamic Process Step association
+        if (!targetForm.dynamicProcessSteps) targetForm.dynamicProcessSteps = [];
+        
+        // Find existing step by phaseCode or stepTitle
+        let existingStep = targetForm.dynamicProcessSteps.find(
+          (s: any) => (stepTitle && s.title.toLowerCase() === stepTitle.toLowerCase()) || (s.phaseCode && s.phaseCode.toLowerCase() === phase.toLowerCase())
+        );
+
+        if (existingStep) {
+          if (!existingStep.ingredientCodes) existingStep.ingredientCodes = [];
+          if (!existingStep.ingredientCodes.includes(rmCode)) {
+            existingStep.ingredientCodes.push(rmCode);
+          }
+          if (!existingStep.targetTemp && targetTemp) existingStep.targetTemp = targetTemp;
+          if (!existingStep.targetRpm && targetRpm) existingStep.targetRpm = targetRpm;
+          if (!existingStep.durationMin && durationMin) existingStep.durationMin = durationMin;
+          if ((!existingStep.instruction || existingStep.instruction.includes('Masukkan bahan')) && instruction) {
+            existingStep.instruction = instruction;
+          }
+        } else {
+          const stepNum = targetForm.dynamicProcessSteps.length + 1;
+          targetForm.dynamicProcessSteps.push({
+            id: `step-${Date.now()}-${stepNum}`,
+            stepNumber: stepNum,
+            title: stepTitle || `Tahap ${stepNum}: Pengolahan ${phase}`,
+            phaseCode: phase,
+            ingredientCodes: [rmCode],
+            targetTemp: targetTemp || '',
+            targetRpm: targetRpm || '',
+            durationMin: durationMin || '',
+            instruction: instruction || `Masukkan bahan ${phase}, aduk hingga homogen.`,
+          });
+        }
       }
     }
 
     const formulationList = Array.from(importedMap.values());
 
-    // Validasi total persen per BOM
+    // Compile mixingInstructions from dynamicProcessSteps if available
     formulationList.forEach((f) => {
+      if (f.dynamicProcessSteps && f.dynamicProcessSteps.length > 0) {
+        const compiled = f.dynamicProcessSteps
+          .map((s: any) => `${s.stepNumber}. [${s.title}] (${s.targetTemp || '-'}, ${s.targetRpm || '-'}, ${s.durationMin || '-'}) - ${s.instruction}`)
+          .join('\n');
+        if (compiled.trim()) {
+          f.mixingInstructions = compiled;
+        }
+      }
+
+      // Validasi total persen per BOM
       const sumPct = f.ingredients.reduce((acc, curr) => acc + curr.percentage, 0);
       const rounded = Math.round(sumPct * 100) / 100;
       if (Math.abs(rounded - 100) > 0.05) {
@@ -3066,8 +3290,8 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
                           key={form.code}
                           className="border border-slate-200 rounded-2xl p-3 bg-white shadow-2xs space-y-2"
                         >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div className="flex flex-wrap items-center gap-1.5">
                               <span className="font-mono text-xs font-extrabold text-teal-800 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-lg">
                                 {form.code}
                               </span>
@@ -3075,9 +3299,26 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
                               <span className="text-[10px] font-mono text-slate-500 font-bold">
                                 ({form.version})
                               </span>
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                                form.status === 'ACTIVE'
+                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                  : form.status === 'DRAFT'
+                                  ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                  : 'bg-slate-100 text-slate-600 border-slate-200'
+                              }`}>
+                                {form.status || 'ACTIVE'}
+                              </span>
+                              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                                Basis: {form.bulkQuantityKg || 100} kg
+                              </span>
+                              {form.dynamicProcessSteps && form.dynamicProcessSteps.length > 0 && (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-800 border border-purple-200">
+                                  {form.dynamicProcessSteps.length} Tahap CPKB
+                                </span>
+                              )}
                             </div>
 
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 self-end sm:self-auto">
                               <span
                                 className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
                                   isBalanced
@@ -3098,40 +3339,86 @@ export const RndFormulaTab: React.FC<RndFormulaTabProps> = ({
                                 }
                                 className="px-2 py-1 rounded-lg border border-slate-200 text-[10px] font-bold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
                               >
-                                {isExpanded ? 'Tutup Rincian' : `Lihat ${form.ingredients.length} Bahan`}
+                                {isExpanded ? 'Tutup Rincian' : `Lihat Rincian (${form.ingredients.length} Bahan)`}
                               </button>
                             </div>
                           </div>
 
-                          {/* Expanded Ingredients Table */}
+                          {/* Technical Notes Summary */}
+                          {form.technicalNotes && (
+                            <div className="text-[11px] text-slate-600 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100 font-medium">
+                              🛠️ <strong className="text-slate-700">Peralatan:</strong> {form.technicalNotes}
+                            </div>
+                          )}
+
+                          {/* Expanded Details: Ingredients & CPKB Steps */}
                           {isExpanded && (
-                            <div className="border border-slate-100 rounded-xl overflow-hidden mt-2 bg-slate-50/50">
-                              <table className="w-full text-left text-[11px]">
-                                <thead className="bg-slate-100 text-[10px] font-bold text-slate-600 uppercase">
-                                  <tr>
-                                    <th className="py-1 px-2.5">Fase</th>
-                                    <th className="py-1 px-2.5">Kode Bahan</th>
-                                    <th className="py-1 px-2.5">Deskripsi / Nama</th>
-                                    <th className="py-1 px-2.5 text-right">Persen (%)</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100">
-                                  {form.ingredients.map((ing, ingIdx) => (
-                                    <tr key={ingIdx} className="hover:bg-white">
-                                      <td className="py-1 px-2.5 font-bold text-slate-500">{ing.phase}</td>
-                                      <td className="py-1 px-2.5 font-mono font-bold text-teal-700">
-                                        {ing.rawMaterialCode}
-                                      </td>
-                                      <td className="py-1 px-2.5 text-slate-700">
-                                        {ing.description || '-'}
-                                      </td>
-                                      <td className="py-1 px-2.5 text-right font-mono font-bold text-slate-900">
-                                        {ing.percentage.toFixed(2)}%
-                                      </td>
+                            <div className="space-y-2 mt-2">
+                              {/* Ingredients Table */}
+                              <div className="border border-slate-100 rounded-xl overflow-hidden bg-slate-50/50">
+                                <table className="w-full text-left text-[11px]">
+                                  <thead className="bg-slate-100 text-[10px] font-bold text-slate-600 uppercase">
+                                    <tr>
+                                      <th className="py-1 px-2.5">Fase</th>
+                                      <th className="py-1 px-2.5">Kode Bahan</th>
+                                      <th className="py-1 px-2.5">Deskripsi / Nama</th>
+                                      <th className="py-1 px-2.5 text-right">Persen (%)</th>
+                                      <th className="py-1 px-2.5 text-right">Bobot (kg)</th>
                                     </tr>
-                                  ))}
-                                </tbody>
-                              </table>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-100">
+                                    {form.ingredients.map((ing, ingIdx) => (
+                                      <tr key={ingIdx} className="hover:bg-white">
+                                        <td className="py-1 px-2.5 font-bold text-slate-500">{ing.phase}</td>
+                                        <td className="py-1 px-2.5 font-mono font-bold text-teal-700">
+                                          {ing.rawMaterialCode}
+                                        </td>
+                                        <td className="py-1 px-2.5 text-slate-700">
+                                          {ing.description || '-'}
+                                        </td>
+                                        <td className="py-1 px-2.5 text-right font-mono font-bold text-slate-900">
+                                          {ing.percentage.toFixed(2)}%
+                                        </td>
+                                        <td className="py-1 px-2.5 text-right font-mono text-slate-600">
+                                          {(ing.qtyBasisKg ?? Number(((ing.percentage * (form.bulkQuantityKg || 100)) / 100).toFixed(4))).toFixed(2)} kg
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+
+                              {/* Process Steps Preview */}
+                              {form.dynamicProcessSteps && form.dynamicProcessSteps.length > 0 && (
+                                <div className="p-2.5 bg-purple-50/50 rounded-xl border border-purple-100 space-y-1.5">
+                                  <div className="text-[10px] font-bold uppercase tracking-wider text-purple-900 flex items-center gap-1">
+                                    <Sliders className="w-3 h-3 text-purple-700" />
+                                    <span>Langkah Proses Alur CPKB ({form.dynamicProcessSteps.length} Tahap Terdeteksi)</span>
+                                  </div>
+                                  <div className="space-y-1">
+                                    {form.dynamicProcessSteps.map((st: any, sIdx: number) => (
+                                      <div key={sIdx} className="text-[11px] bg-white p-2 rounded-lg border border-purple-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                                        <div className="flex items-center gap-2">
+                                          <span className="w-5 h-5 rounded-md bg-purple-100 text-purple-900 text-[10px] font-bold flex items-center justify-center shrink-0">
+                                            {st.stepNumber}
+                                          </span>
+                                          <span className="font-bold text-slate-800">{st.title}</span>
+                                          {st.phaseCode && (
+                                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-semibold">
+                                              {st.phaseCode}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="flex items-center gap-2 text-[10px] text-purple-800 font-mono">
+                                          {st.targetTemp && <span>🌡️ {st.targetTemp}</span>}
+                                          {st.targetRpm && <span>🔄 {st.targetRpm}</span>}
+                                          {st.durationMin && <span>⏱️ {st.durationMin}</span>}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>

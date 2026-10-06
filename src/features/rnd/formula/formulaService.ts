@@ -56,6 +56,46 @@ let inMemoryFormulations: BulkFormulation[] = [...defaultFormulations];
 let lastFormulationsFetchTime = 0;
 const FORMULATIONS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 menit cache di RAM untuk efisiensi egress Supabase
 
+/**
+ * Lossless packing of CPKB Dynamic Process Steps and Technical Notes into mixing_instructions
+ * Ensures complete persistence in Supabase even when dedicated schema columns are not present.
+ */
+function packFormulationMeta(instructions?: string, steps?: any, techNotes?: string): string {
+  const cleanInst = (instructions || '').replace(/<!--CPKB_META_START-->[\s\S]*?<!--CPKB_META_END-->/g, '').trim();
+  const hasSteps = Array.isArray(steps) && steps.length > 0;
+  const hasTech = Boolean(techNotes && techNotes.trim());
+
+  if (!hasSteps && !hasTech) {
+    return cleanInst;
+  }
+
+  const meta = {
+    steps: hasSteps ? steps : [],
+    techNotes: techNotes || '',
+  };
+
+  return `${cleanInst}\n\n<!--CPKB_META_START-->\n${JSON.stringify(meta)}\n<!--CPKB_META_END-->`.trim();
+}
+
+function unpackFormulationMeta(raw?: string | null): { userInstructions: string; dynamicProcessSteps?: any; technicalNotes?: string } {
+  if (!raw) return { userInstructions: '', dynamicProcessSteps: undefined, technicalNotes: '' };
+  const match = raw.match(/<!--CPKB_META_START-->([\s\S]*?)<!--CPKB_META_END-->/);
+  if (match && match[1]) {
+    try {
+      const parsed = JSON.parse(match[1].trim());
+      const cleanInst = raw.replace(/<!--CPKB_META_START-->[\s\S]*?<!--CPKB_META_END-->/g, '').trim();
+      return {
+        userInstructions: cleanInst,
+        dynamicProcessSteps: Array.isArray(parsed.steps) && parsed.steps.length > 0 ? parsed.steps : undefined,
+        technicalNotes: parsed.techNotes || '',
+      };
+    } catch {
+      // Fall through to plain text
+    }
+  }
+  return { userInstructions: raw.trim(), dynamicProcessSteps: undefined, technicalNotes: '' };
+}
+
 // Bersihkan data demo lama dari local storage jika masih tersisa di browser
 export const purgeLegacyDemoFormulas = () => {
   if (typeof window !== 'undefined' && window.localStorage) {
@@ -104,25 +144,28 @@ export const formulaService = {
           .limit(300);
 
         if (!error && data) {
-          const mapped: BulkFormulation[] = data.map((row: any) => ({
-            id: row.id,
-            code: row.code,
-            name: row.name,
-            productId: row.product_id || '',
-            productCode: row.product_code || '',
-            productName: row.product_name || row.name || '',
-            version: row.version || 'v1.0',
-            status: row.status || 'ACTIVE',
-            bulkQuantityKg: Number(row.bulk_quantity_kg) || 100,
-            purposeDescription: row.purpose_description || '',
-            ingredients: Array.isArray(row.ingredients) ? row.ingredients : [],
-            mixingInstructions: row.mixing_instructions || '',
-            dynamicProcessSteps: row.dynamic_process_steps || undefined,
-            technicalNotes: row.technical_notes || '',
-            createdBy: row.created_by || '',
-            createdAt: row.created_at || new Date().toISOString(),
-            updatedAt: row.updated_at || new Date().toISOString(),
-          }));
+          const mapped: BulkFormulation[] = data.map((row: any) => {
+            const unpacked = unpackFormulationMeta(row.mixing_instructions);
+            return {
+              id: row.id,
+              code: row.code,
+              name: row.name,
+              productId: row.product_id || '',
+              productCode: row.product_code || '',
+              productName: row.product_name || row.name || '',
+              version: row.version || 'v1.0',
+              status: row.status || 'ACTIVE',
+              bulkQuantityKg: Number(row.bulk_quantity_kg) || 100,
+              purposeDescription: row.purpose_description || '',
+              ingredients: Array.isArray(row.ingredients) ? row.ingredients : [],
+              mixingInstructions: unpacked.userInstructions || row.mixing_instructions || '',
+              dynamicProcessSteps: row.dynamic_process_steps || unpacked.dynamicProcessSteps || undefined,
+              technicalNotes: row.technical_notes || unpacked.technicalNotes || '',
+              createdBy: row.created_by || '',
+              createdAt: row.created_at || new Date().toISOString(),
+              updatedAt: row.updated_at || new Date().toISOString(),
+            };
+          });
 
           inMemoryFormulations = mapped;
           lastFormulationsFetchTime = Date.now();
@@ -154,6 +197,12 @@ export const formulaService = {
    * Menyimpan atau memperbarui satu formulasi bulk ke Supabase
    */
   saveSingleFormulation: async (formula: BulkFormulation): Promise<{ success: boolean; error?: string }> => {
+    const packedInstructions = packFormulationMeta(
+      formula.mixingInstructions,
+      formula.dynamicProcessSteps,
+      formula.technicalNotes
+    );
+
     const payload = {
       id: formula.id,
       code: formula.code.trim().toUpperCase(),
@@ -166,7 +215,7 @@ export const formulaService = {
       bulk_quantity_kg: formula.bulkQuantityKg || 100,
       purpose_description: formula.purposeDescription || '',
       ingredients: formula.ingredients || [],
-      mixing_instructions: formula.mixingInstructions || '',
+      mixing_instructions: packedInstructions,
       dynamic_process_steps: formula.dynamicProcessSteps || null,
       technical_notes: formula.technicalNotes || '',
       created_by: formula.createdBy || '',
@@ -181,9 +230,8 @@ export const formulaService = {
           .upsert(payload, { onConflict: 'id' });
 
         if (error) {
-          // Bila gagal karena kolom tidak ada, coba upsert tanpa kolom baru
+          // Bila gagal karena kolom tidak ada, coba upsert tanpa kolom baru (metadata tetap aman di mixing_instructions)
           if (error.code === 'PGRST204' || error.message?.includes('column')) {
-            console.warn('Supabase schema cache miss for new columns, falling back to core columns.');
             const fallbackPayload = { ...payload };
             delete (fallbackPayload as any).dynamic_process_steps;
             delete (fallbackPayload as any).technical_notes;
@@ -220,24 +268,31 @@ export const formulaService = {
   saveBulkFormulations: async (formulas: BulkFormulation[]): Promise<{ success: boolean; error?: string; savedCount?: number }> => {
     if (!formulas || formulas.length === 0) return { success: true, savedCount: 0 };
 
-    const payloads = formulas.map((formula) => ({
-      id: formula.id,
-      code: formula.code.trim().toUpperCase(),
-      name: formula.name.trim(),
-      product_id: formula.productId || null,
-      product_code: formula.productCode.trim().toUpperCase(),
-      product_name: formula.productName.trim(),
-      version: formula.version || 'v1.0',
-      status: formula.status || 'ACTIVE',
-      bulk_quantity_kg: formula.bulkQuantityKg || 100,
-      purpose_description: formula.purposeDescription || '',
-      ingredients: formula.ingredients || [],
-      mixing_instructions: formula.mixingInstructions || '',
-      dynamic_process_steps: formula.dynamicProcessSteps || null,
-      technical_notes: formula.technicalNotes || '',
-      created_by: formula.createdBy || '',
-      updated_at: new Date().toISOString(),
-    }));
+    const payloads = formulas.map((formula) => {
+      const packedInstructions = packFormulationMeta(
+        formula.mixingInstructions,
+        formula.dynamicProcessSteps,
+        formula.technicalNotes
+      );
+      return {
+        id: formula.id,
+        code: formula.code.trim().toUpperCase(),
+        name: formula.name.trim(),
+        product_id: formula.productId || null,
+        product_code: formula.productCode.trim().toUpperCase(),
+        product_name: formula.productName.trim(),
+        version: formula.version || 'v1.0',
+        status: formula.status || 'ACTIVE',
+        bulk_quantity_kg: formula.bulkQuantityKg || 100,
+        purpose_description: formula.purposeDescription || '',
+        ingredients: formula.ingredients || [],
+        mixing_instructions: packedInstructions,
+        dynamic_process_steps: formula.dynamicProcessSteps || null,
+        technical_notes: formula.technicalNotes || '',
+        created_by: formula.createdBy || '',
+        updated_at: new Date().toISOString(),
+      };
+    });
 
     if (isSupabaseConfigured && supabase) {
       try {
