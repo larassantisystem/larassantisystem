@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Printer,
   X,
@@ -159,7 +160,7 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
 
   const firstTheme = getTheme(firstReport);
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto bg-slate-900/70 backdrop-blur-xs">
       <div className="bg-white w-full max-w-4xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[96vh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
         {/* Modal Header */}
@@ -580,6 +581,7 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

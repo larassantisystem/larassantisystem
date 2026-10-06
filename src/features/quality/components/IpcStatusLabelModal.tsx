@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Printer,
   X,
@@ -109,7 +110,7 @@ export const IpcStatusLabelModal: React.FC<IpcStatusLabelModalProps> = ({
     ? Array.from({ length: Math.max(1, containerCount) }, (_, i) => i + 1)
     : [1];
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4 overflow-y-auto animate-in fade-in duration-200">
       <div className="bg-slate-900 rounded-3xl shadow-2xl max-w-4xl w-full my-4 overflow-hidden border border-slate-700 flex flex-col max-h-[95vh]">
         
@@ -356,6 +357,7 @@ export const IpcStatusLabelModal: React.FC<IpcStatusLabelModalProps> = ({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

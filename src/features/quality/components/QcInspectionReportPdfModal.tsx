@@ -1,4 +1,5 @@
 import React, { useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   X,
   Printer,
@@ -111,7 +112,7 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
   const page2Params = needsMultiPage ? parameters.slice(5) : [];
   const totalPages = needsMultiPage ? 2 : 1;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-2 sm:p-4 overflow-y-auto animate-in fade-in duration-200 print:static print:p-0 print:m-0 print:bg-white print:overflow-visible">
       <div className="bg-slate-900 rounded-3xl shadow-2xl max-w-5xl w-full my-4 overflow-hidden border border-slate-700 flex flex-col max-h-[96vh] print:max-h-none print:h-auto print:max-w-none print:w-full print:m-0 print:p-0 print:border-none print:shadow-none print:rounded-none print:bg-white">
         
@@ -751,6 +752,7 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

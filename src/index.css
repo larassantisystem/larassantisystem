@@ -26,19 +26,28 @@
     display: none !important;
   }
 
-  /* Saat mencetak dari modal, sembunyikan semua elemen aplikasi utama di belakang modal agar tidak ada ruang kosong / halaman hantu */
-  body.printing-report #root > div > *:not(:has(#printable-qc-report, #printable-ipc-report)),
-  body.printing-label #root > div > *:not(:has(#quarantine-label-printable, #qc-status-label-printable, #ipc-labels-printable)) {
+  /* Sembunyikan seluruh root aplikasi saat mencetak laporan atau label dari modal */
+  body.printing-report #root,
+  body.printing-label #root {
     display: none !important;
   }
 
-  /* Netralkan semua kontainer modal, overlay, dan root React agar tidak memotong halaman */
-  #root,
-  .fixed,
-  [class*="fixed"],
+  /* Sembunyikan elemen latar secara default sebagai perlindungan tambahan */
+  body * {
+    visibility: hidden;
+  }
+
+  /* Netralkan modal portal langsung di bawah body */
+  body > .fixed,
+  body > [class*="fixed"],
+  body.printing-report > .fixed,
+  body.printing-report > [class*="fixed"],
+  body.printing-label > .fixed,
+  body.printing-label > [class*="fixed"],
   .overflow-y-auto,
   [class*="overflow-"] {
     position: static !important;
+    display: block !important;
     overflow: visible !important;
     height: auto !important;
     max-height: none !important;
