@@ -25,6 +25,7 @@ import {
   Loader2,
   Check,
   ZoomIn,
+  Eye,
 } from 'lucide-react';
 import jsQR from 'jsqr';
 import { qualityService } from '../features/quality/qualityService';
@@ -32,6 +33,7 @@ import { warehouseService } from '../features/warehouse/warehouseService';
 import { authService } from '../core/auth/authService';
 import { isContainerSampled } from '../features/quality/utils/samplingUtils';
 import { normalizeLotNumber } from '../features/quality/utils/qcNumbering';
+import { QcInspectionReportPdfModal } from '../features/quality/components/QcInspectionReportPdfModal';
 
 interface UniversalQrScannerModalProps {
   isOpen: boolean;
@@ -74,6 +76,8 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
   const [scannedResult, setScannedResult] = useState<ParsedQrData | null>(null);
   const [isScanning, setIsScanning] = useState<boolean>(true);
   const [matchedReport, setMatchedReport] = useState<any | null>(null);
+  const [showPdfModal, setShowPdfModal] = useState<boolean>(false);
+  const [isLoadingMatch, setIsLoadingMatch] = useState<boolean>(false);
 
   // Field sampling states for QC
   const [currentUser] = useState(() => authService.getCurrentUser());
@@ -168,6 +172,8 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
     if (isOpen) {
       setScannedResult(null);
       setMatchedReport(null);
+      setShowPdfModal(false);
+      setIsLoadingMatch(false);
       startCamera();
     } else {
       stopCamera();
@@ -239,9 +245,10 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
     }
   };
 
-  const handleSuccessfulScan = (rawData: string) => {
+  const handleSuccessfulScan = async (rawData: string) => {
     setIsScanning(false);
     stopCamera();
+    setIsLoadingMatch(true);
 
     // Play subtle audio beep
     try {
@@ -260,63 +267,137 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
       // Audio not permitted without user gesture, safe to ignore
     }
 
-    // Parse payload
+    // 1. Parse payload
     let parsed: ParsedQrData = { raw: rawData, company: 'PT. LARASSANTI MAKMUR SEJAHTERA' };
-    try {
-      const json = JSON.parse(rawData);
-      if (typeof json === 'object' && json !== null) {
-        parsed = { ...json, raw: rawData };
-      }
-    } catch (e) {
-      // Standard compact pipe-delimited format:
-      // LMS|QC|LOT:LOT-BB-2609-001|W:1/5|S:100g|ST:PASSED
-      const map: any = { raw: rawData, company: 'PT. LARASSANTI MAKMUR SEJAHTERA' };
-      const parts = rawData.split('|');
 
-      parts.forEach((p) => {
-        const trimmed = p.trim();
-        if (trimmed.startsWith('LOT:')) {
-          map.lot = trimmed.substring(4);
-        } else if (trimmed.startsWith('W:')) {
-          const wStr = trimmed.substring(2);
-          map.containerLabel = `Wadah ${wStr}`;
-          const [cIdx, tIdx] = wStr.split('/');
-          if (cIdx) map.containerIndex = parseInt(cIdx, 10);
-          if (tIdx) map.totalContainers = parseInt(tIdx, 10);
-        } else if (trimmed.startsWith('S:')) {
-          const sVal = trimmed.substring(2);
-          if (sVal === 'NO' || sVal === '0' || sVal === 'false') {
-            map.sampled = false;
-          } else {
-            map.sampled = true;
-            if (sVal !== 'YES' && sVal !== '1') {
-              map.sampleSize = sVal;
-            }
-          }
-        } else if (trimmed.startsWith('ST:')) {
-          const stVal = trimmed.substring(3);
-          map.status = stVal === 'PASS' ? 'PASSED' : stVal === 'REJ' ? 'REJECTED' : stVal === 'DEV' ? 'PASSED_WITH_DEVIATION' : stVal;
-        } else if (trimmed.startsWith('STATUS:')) {
-          map.status = trimmed.substring(7);
-        } else if (trimmed.startsWith('CODE:')) {
-          map.matCode = trimmed.substring(5);
-        } else if (trimmed.startsWith('GRN:')) {
-          map.grn = trimmed.substring(4);
-        } else if (trimmed.startsWith('NO:')) {
-          map.grn = trimmed.substring(3);
-        } else if (trimmed.startsWith('BATCH:')) {
-          map.batch = trimmed.substring(6);
-        } else if (trimmed.startsWith('LOT-') || trimmed.startsWith('GRN-')) {
-          map.lot = trimmed;
-        } else if (trimmed === 'PASSED' || trimmed === 'PASS') {
-          map.status = 'PASSED';
-        } else if (trimmed === 'REJECTED' || trimmed === 'REJ') {
-          map.status = 'REJECTED';
-        } else if (trimmed === 'PASSED_WITH_DEVIATION' || trimmed === 'DEV') {
-          map.status = 'PASSED_WITH_DEVIATION';
+    // Check if rawData is a URL or contains query parameters (?coa=...&st=...&w=...)
+    let isUrl = false;
+    let urlLot: string | null = null;
+    let urlStatus: string | null = null;
+    let urlContainer: string | null = null;
+
+    if (
+      rawData.includes('coa=') ||
+      rawData.includes('?coa=') ||
+      rawData.startsWith('http://') ||
+      rawData.startsWith('https://') ||
+      rawData.includes('ais-') ||
+      rawData.includes('/?coa=')
+    ) {
+      try {
+        const fullUrl = rawData.startsWith('http')
+          ? rawData
+          : `https://example.com${rawData.startsWith('/') ? '' : '/'}${rawData}`;
+        const parsedUrl = new URL(fullUrl);
+        urlLot = parsedUrl.searchParams.get('coa');
+        urlStatus = parsedUrl.searchParams.get('st');
+        urlContainer = parsedUrl.searchParams.get('w');
+        if (urlLot) isUrl = true;
+      } catch (err) {
+        const matchLot = rawData.match(/[?&]coa=([^&]+)/);
+        if (matchLot) urlLot = decodeURIComponent(matchLot[1]);
+        const matchSt = rawData.match(/[?&]st=([^&]+)/);
+        if (matchSt) urlStatus = decodeURIComponent(matchSt[1]);
+        const matchW = rawData.match(/[?&]w=([^&]+)/);
+        if (matchW) urlContainer = decodeURIComponent(matchW[1]);
+        if (urlLot) isUrl = true;
+      }
+    }
+
+    if (isUrl && urlLot) {
+      parsed.lot = decodeURIComponent(urlLot).trim();
+      if (urlStatus) {
+        const st = decodeURIComponent(urlStatus).trim();
+        parsed.status =
+          st === 'PASS' || st === 'PASSED'
+            ? 'PASSED'
+            : st === 'REJ' || st === 'REJECTED'
+            ? 'REJECTED'
+            : st === 'DEV' || st === 'PASSED_WITH_DEVIATION'
+            ? 'PASSED_WITH_DEVIATION'
+            : st;
+      }
+      if (urlContainer) {
+        const wStr = decodeURIComponent(urlContainer).trim();
+        parsed.containerLabel = `Wadah ${wStr}`;
+        const [cIdx, tIdx] = wStr.split('/');
+        if (cIdx) parsed.containerIndex = parseInt(cIdx, 10);
+        if (tIdx) parsed.totalContainers = parseInt(tIdx, 10);
+      }
+    } else {
+      // 2. Try JSON format
+      try {
+        const json = JSON.parse(rawData);
+        if (typeof json === 'object' && json !== null) {
+          parsed = { ...json, raw: rawData };
         }
-      });
-      parsed = map;
+      } catch (e) {
+        // 3. Pipe-delimited or key-value format (LMS|QC|LOT:...|W:...|S:...|ST:...)
+        const map: any = { raw: rawData, company: 'PT. LARASSANTI MAKMUR SEJAHTERA' };
+        const parts = rawData.split('|');
+
+        parts.forEach((p) => {
+          const trimmed = p.trim();
+          if (trimmed.startsWith('LOT:')) {
+            map.lot = trimmed.substring(4);
+          } else if (trimmed.startsWith('W:')) {
+            const wStr = trimmed.substring(2);
+            map.containerLabel = `Wadah ${wStr}`;
+            const [cIdx, tIdx] = wStr.split('/');
+            if (cIdx) map.containerIndex = parseInt(cIdx, 10);
+            if (tIdx) map.totalContainers = parseInt(tIdx, 10);
+          } else if (trimmed.startsWith('S:')) {
+            const sVal = trimmed.substring(2);
+            if (sVal === 'NO' || sVal === '0' || sVal === 'false') {
+              map.sampled = false;
+            } else {
+              map.sampled = true;
+              if (sVal !== 'YES' && sVal !== '1') {
+                map.sampleSize = sVal;
+              }
+            }
+          } else if (trimmed.startsWith('ST:')) {
+            const stVal = trimmed.substring(3);
+            map.status =
+              stVal === 'PASS' || stVal === 'PASSED'
+                ? 'PASSED'
+                : stVal === 'REJ' || stVal === 'REJECTED'
+                ? 'REJECTED'
+                : stVal === 'DEV' || stVal === 'PASSED_WITH_DEVIATION'
+                ? 'PASSED_WITH_DEVIATION'
+                : stVal;
+          } else if (trimmed.startsWith('STATUS:')) {
+            map.status = trimmed.substring(7);
+          } else if (trimmed.startsWith('CODE:')) {
+            map.matCode = trimmed.substring(5);
+          } else if (trimmed.startsWith('GRN:')) {
+            map.grn = trimmed.substring(4);
+          } else if (trimmed.startsWith('NO:')) {
+            map.grn = trimmed.substring(3);
+          } else if (trimmed.startsWith('BATCH:')) {
+            map.batch = trimmed.substring(6);
+          } else if (
+            trimmed.startsWith('LOT-') ||
+            trimmed.startsWith('GRN-') ||
+            trimmed.startsWith('LBB') ||
+            trimmed.startsWith('LBK')
+          ) {
+            map.lot = trimmed;
+          } else if (trimmed === 'PASSED' || trimmed === 'PASS') {
+            map.status = 'PASSED';
+          } else if (trimmed === 'REJECTED' || trimmed === 'REJ') {
+            map.status = 'REJECTED';
+          } else if (trimmed === 'PASSED_WITH_DEVIATION' || trimmed === 'DEV') {
+            map.status = 'PASSED_WITH_DEVIATION';
+          }
+        });
+        parsed = map;
+      }
+    }
+
+    // Fallback if lot wasn't extracted from prefixes
+    if (!parsed.lot && !parsed.grn && rawData.length < 50 && !rawData.includes('http')) {
+      parsed.lot = rawData.trim();
     }
 
     setScannedResult(parsed);
@@ -324,40 +405,73 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
     setActiveContainerIndex(parsedContainer);
     setSamplingSuccessMessage(null);
 
-    // Cross-match with internal records
+    // 2. Cross-match directly from Supabase database (Real transaction, NO LOCAL STORAGE)
     try {
-      const qcReports = qualityService.getLocalReports();
-      const targetLot = parsed.lot || parsed.grn;
-      let found: any = null;
-      if (targetLot) {
-        found = qcReports.find(
-          (r) =>
-            r.lotInternalNumber === targetLot ||
-            r.grnNumber === targetLot ||
-            r.grnId === targetLot ||
-            (parsed.matCode && r.materialCode === parsed.matCode)
-        );
-      }
-      if (!found && parsed.matCode) {
-        found = qcReports.find((r) => r.materialCode === parsed.matCode);
+      const [allReports, grnRecords] = await Promise.all([
+        qualityService.getReports(),
+        warehouseService.getGrnRecords(),
+      ]);
+
+      const targetTerm = (parsed.lot || parsed.grn || parsed.raw || '').trim().toLowerCase();
+      let cleanQuery = targetTerm;
+      if (cleanQuery.includes('lot:')) {
+        const parts = cleanQuery.split('|');
+        const lotPart = parts.find((p) => p.startsWith('lot:'));
+        if (lotPart) cleanQuery = lotPart.replace('lot:', '').trim();
       }
 
-      // If not in QC local cache, query warehouse records
-      if (!found) {
-        const warehouseRecords = warehouseService.getLocalRecords();
-        const grnFound = warehouseRecords.find(
-          (g) =>
-            g.grnNumber === targetLot ||
-            g.id === targetLot ||
-            (g as any).internalLotNumber === targetLot ||
-            g.materialCode === parsed.matCode
+      // Exact & normalized matching across all QC inspection reports
+      let found: any = allReports.find((r) => {
+        const lot = (r.lotInternalNumber || '').toLowerCase();
+        const grn = (r.grnNumber || '').toLowerCase();
+        const repNum = (r.reportNumber || '').toLowerCase();
+        const id = (r.id || '').toLowerCase();
+        const batch = (r.batchNumber || '').toLowerCase();
+        const normLot = normalizeLotNumber(r.lotInternalNumber || r.grnNumber).toLowerCase();
+
+        return (
+          id === cleanQuery ||
+          lot === cleanQuery ||
+          grn === cleanQuery ||
+          repNum === cleanQuery ||
+          batch === cleanQuery ||
+          normLot === cleanQuery ||
+          (cleanQuery.length > 3 && (
+            (lot && (lot.includes(cleanQuery) || cleanQuery.includes(lot))) ||
+            (grn && (grn.includes(cleanQuery) || cleanQuery.includes(grn))) ||
+            (normLot && (normLot.includes(cleanQuery) || cleanQuery.includes(normLot)))
+          )) ||
+          (parsed.matCode && r.materialCode === parsed.matCode)
         );
+      });
+
+      // If not yet found in QC reports, cross match with Warehouse GRN Records
+      if (!found) {
+        const grnFound = grnRecords.find((g) => {
+          const gNum = (g.grnNumber || '').toLowerCase();
+          const gId = (g.id || '').toLowerCase();
+          const gLot = ((g as any).internalLotNumber || '').toLowerCase();
+          const gMat = (g.materialCode || '').toLowerCase();
+          return (
+            gNum === cleanQuery ||
+            gId === cleanQuery ||
+            gLot === cleanQuery ||
+            (cleanQuery.length > 3 && (gNum.includes(cleanQuery) || cleanQuery.includes(gNum))) ||
+            (parsed.matCode && gMat === parsed.matCode.toLowerCase())
+          );
+        });
+
         if (grnFound) {
-          found = qcReports.find((r) => r.grnId === grnFound.id || r.grnNumber === grnFound.grnNumber) || {
+          found = allReports.find((r) => r.grnId === grnFound.id || r.grnNumber === grnFound.grnNumber) || {
             id: grnFound.id,
             grnId: grnFound.id,
             grnNumber: grnFound.grnNumber,
-            lotInternalNumber: normalizeLotNumber((grnFound as any).internalLotNumber || (grnFound.materialType === 'raw' ? `LBB2609${grnFound.grnNumber.replace(/[^0-9]/g, '').slice(-3) || '001'}` : `LBK2609${grnFound.grnNumber.replace(/[^0-9]/g, '').slice(-3) || '001'}`)),
+            lotInternalNumber: normalizeLotNumber(
+              (grnFound as any).internalLotNumber ||
+                (grnFound.materialType === 'raw'
+                  ? `LBB2609${grnFound.grnNumber.replace(/[^0-9]/g, '').slice(-3) || '001'}`
+                  : `LBK2609${grnFound.grnNumber.replace(/[^0-9]/g, '').slice(-3) || '001'}`)
+            ),
             materialCode: grnFound.materialCode,
             materialName: grnFound.materialName,
             materialType: grnFound.materialType,
@@ -365,7 +479,7 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
             containerType: grnFound.containerType,
             quantityReceived: grnFound.quantityReceived,
             unit: grnFound.unit,
-            status: grnFound.qcStatus || 'QUARANTINE',
+            status: grnFound.qcStatus || parsed.status || 'QUARANTINE',
             sampledContainers: grnFound.sampledContainers,
             sampledBy: grnFound.sampledBy,
             samplingDateTime: grnFound.samplingDateTime,
@@ -379,6 +493,27 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
 
       if (found) {
         setMatchedReport(found);
+
+        // Enrich parsed payload with verified Supabase data
+        parsed = {
+          ...parsed,
+          status: found.status || parsed.status,
+          lot: found.lotInternalNumber || parsed.lot || found.grnNumber,
+          grn: found.grnNumber || parsed.grn,
+          matCode: found.materialCode || parsed.matCode,
+          matName: found.materialName || parsed.matName,
+          docCode: found.materialType === 'raw' ? 'L-DQC-001-01' : 'L-DQC-003-01',
+          expDate: found.expiryDate || parsed.expDate,
+          retestDate: found.retestDate || parsed.retestDate,
+          mfg: found.manufacturer || parsed.mfg,
+          qmSigner: found.qmSignature?.signerName || parsed.qmSigner,
+          totalContainers: found.containerCount || parsed.totalContainers || 1,
+        };
+        if (!parsed.containerLabel) {
+          parsed.containerLabel = `Wadah #${parsed.containerIndex || 1} dari ${found.containerCount || 1}`;
+        }
+        setScannedResult(parsed);
+
         if (found.actualSampleSize) {
           setSampleSizeInput(String(found.actualSampleSize));
         } else if (found.samplingInfo?.sampleSizeWeight) {
@@ -396,7 +531,9 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
         }
       }
     } catch (e) {
-      console.warn('Error matching reports:', e);
+      console.warn('Error matching reports from Supabase:', e);
+    } finally {
+      setIsLoadingMatch(false);
     }
   };
 
@@ -508,6 +645,8 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
   const handleResetScan = () => {
     setScannedResult(null);
     setMatchedReport(null);
+    setShowPdfModal(false);
+    setIsLoadingMatch(false);
     setSamplingSuccessMessage(null);
     setIsScanning(true);
     startCamera();
@@ -669,6 +808,12 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
                 </div>
               </div>
             </div>
+          ) : isLoadingMatch ? (
+            <div className="p-10 bg-white rounded-3xl border border-slate-200 shadow-sm text-center flex flex-col items-center justify-center gap-3 my-6 animate-in fade-in duration-200">
+              <div className="w-10 h-10 border-4 border-teal-200 border-t-teal-600 rounded-full animate-spin" />
+              <h3 className="font-bold text-slate-800 text-sm">Memverifikasi Data di Database Supabase...</h3>
+              <p className="text-xs text-slate-500">Mencocokkan nomor identitas lot/GRN dengan arsip mutu resmi CPKB</p>
+            </div>
           ) : (
             /* Scanned Result Detail View */
             <div className="space-y-5 animate-in fade-in duration-200">
@@ -714,14 +859,26 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
                   </div>
                 </div>
 
-                <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-white border shadow-2xs">
-                  {scannedResult.docCode || (matchedReport?.materialType === 'raw' ? 'L-DQC-001-01' : 'L-DQC-003-01')}
-                </span>
+                <div className="flex items-center gap-2">
+                  {matchedReport && (
+                    <button
+                      type="button"
+                      onClick={() => setShowPdfModal(true)}
+                      className="px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white rounded-xl text-xs font-bold border border-white/30 flex items-center gap-1.5 transition-all cursor-pointer shadow-xs shrink-0"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>View CoA</span>
+                    </button>
+                  )}
+                  <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-white border shadow-2xs">
+                    {scannedResult.docCode || (matchedReport?.materialType === 'raw' ? 'L-DQC-001-01' : 'L-DQC-003-01')}
+                  </span>
+                </div>
               </div>
 
               {/* Material & Lot Card */}
               <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
-                <div className="border-b border-slate-100 pb-3 flex items-start justify-between gap-3">
+                <div className="border-b border-slate-100 pb-3 flex items-start justify-between gap-3 flex-wrap">
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-800 border border-slate-200">
@@ -736,13 +893,37 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
                     </h4>
                   </div>
 
-                  {/* Wadah Tag */}
-                  <div className="text-right">
+                  {/* Wadah Tag & Mobile View CoA Button */}
+                  <div className="flex items-center gap-2">
+                    {matchedReport && (
+                      <button
+                        type="button"
+                        onClick={() => setShowPdfModal(true)}
+                        className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>View CoA</span>
+                      </button>
+                    )}
                     <span className="inline-block px-3 py-1 rounded-xl bg-indigo-50 text-indigo-900 border border-indigo-200 font-extrabold text-xs">
                       {scannedResult.containerLabel || (scannedResult.containerIndex ? `Wadah #${scannedResult.containerIndex} dari ${scannedResult.totalContainers || 1}` : 'Wadah Utama')}
                     </span>
                   </div>
                 </div>
+
+                {/* Tombol Utama View CoA */}
+                {matchedReport && (
+                  <div className="pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setShowPdfModal(true)}
+                      className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-2xl text-xs font-black shadow-md shadow-emerald-900/20 flex items-center justify-center gap-2 border border-emerald-500/30 transition-all cursor-pointer"
+                    >
+                      <FileText className="w-4 h-4" />
+                      <span>Lihat Dokumen CoA Resmi (View CoA)</span>
+                    </button>
+                  </div>
+                )}
 
                 {/* FIELD SAMPLING ACTION PANEL (Paperless CPKB Database Sync) */}
                 {(() => {
@@ -986,6 +1167,20 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
                   </div>
 
                   <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase block">Batch / Lot Vendor</span>
+                    <span className="font-mono font-bold text-slate-900 text-xs block mt-0.5 truncate">
+                      {matchedReport?.batchNumber || scannedResult.batch || '-'}
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase block">Total Kuantitas</span>
+                    <span className="font-mono font-bold text-slate-900 text-xs block mt-0.5">
+                      {matchedReport?.quantityReceived ? `${Number(matchedReport.quantityReceived).toLocaleString('id-ID')} ${matchedReport.unit || 'kg'}` : '-'}
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
                     <span className="text-[10px] font-bold text-slate-400 uppercase block">Tgl Kedaluwarsa (Exp)</span>
                     <span className="font-bold text-rose-700 text-xs block mt-0.5">
                       {scannedResult.expDate || matchedReport?.expiryDate || 'Non-Exp'}
@@ -993,9 +1188,9 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
                   </div>
 
                   <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase block">Tgl Retest (Uji Ulang)</span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase block">Tgl Otorisasi Rilis</span>
                     <span className="font-bold text-teal-800 text-xs block mt-0.5">
-                      {scannedResult.retestDate || matchedReport?.retestDate || '-'}
+                      {matchedReport?.updatedAt ? matchedReport.updatedAt.slice(0, 10) : (scannedResult.retestDate || '-')}
                     </span>
                   </div>
 
@@ -1006,11 +1201,11 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
                         {scannedResult.mfg || matchedReport?.manufacturer || '-'}
                       </span>
                     </div>
-                    {scannedResult.qmSigner && (
+                    {(scannedResult.qmSigner || matchedReport?.qmSignature?.signerName) && (
                       <div className="text-right">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Otorisasi QM</span>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Otorisasi Mutu</span>
                         <span className="font-bold text-emerald-800 text-xs block mt-0.5">
-                          {scannedResult.qmSigner}
+                          {scannedResult.qmSigner || matchedReport?.qmSignature?.signerName}
                         </span>
                       </div>
                     )}
@@ -1047,6 +1242,15 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
             </button>
           </div>
         </div>
+
+        {/* Official CoA PDF Preview Modal */}
+        {matchedReport && showPdfModal && (
+          <QcInspectionReportPdfModal
+            isOpen={showPdfModal}
+            onClose={() => setShowPdfModal(false)}
+            report={matchedReport}
+          />
+        )}
       </div>
     </div>
   );
