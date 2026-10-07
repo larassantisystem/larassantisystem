@@ -122,7 +122,7 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
   });
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-2 sm:p-4 overflow-y-auto animate-in fade-in duration-200 print:static print:p-0 print:m-0 print:bg-white print:overflow-visible">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-2 sm:p-4 overflow-y-auto print:static print:p-0 print:m-0 print:bg-white print:overflow-visible">
       <div className="bg-slate-900 rounded-3xl shadow-2xl max-w-5xl w-full my-4 overflow-hidden border border-slate-700 flex flex-col max-h-[96vh] print:max-h-none print:h-auto print:max-w-none print:w-full print:m-0 print:p-0 print:border-none print:shadow-none print:rounded-none print:bg-white">
         
         {/* Modal Top Control Bar (Hidden on Print) */}
@@ -188,169 +188,169 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
           <div
             ref={printContentRef}
             id="printable-qc-report"
-            className={`w-full max-w-3xl bg-white p-6 sm:p-8 shadow-xl rounded-2xl border border-slate-300 text-slate-900 print:max-w-none print:w-full print:p-0 print:shadow-none print:border-none print:rounded-none print:bg-white flex flex-col justify-between ${
+            className={`w-full max-w-3xl bg-white p-6 sm:p-8 shadow-xl rounded-2xl border border-slate-300 text-slate-900 print:max-w-none print:w-full print:p-0 print:shadow-none print:border-none print:rounded-none print:bg-white flex flex-col justify-between font-sans ${
               isCompactMode
-                ? 'compact-sheet space-y-2.5 print:space-y-1'
+                ? 'compact-sheet space-y-2.5 print:space-y-1.5'
                 : 'space-y-3.5 print:space-y-2'
             }`}
           >
             {/* ========================================================================= */}
-            {/* DOKUMEN RESMI CPKB INTERNAL COA (ALIRAN ALAMI A4) */}
+            {/* DOKUMEN RESMI CPKB INTERNAL COA (ALIRAN ALAMI A4 DENGAN KONTRAS TINGGI) */}
             {/* ========================================================================= */}
-            <div className="space-y-3 print:space-y-1.5">
+            <div className="space-y-3 print:space-y-2">
               
               {/* Header Perusahaan PT. LARASSANTI MAKMUR SEJAHTERA */}
-              <div className="border-b-2 border-slate-900 pb-2.5 print:pb-1.5">
+              <div className="border-b-2 border-slate-950 pb-2.5 print:pb-1.5">
                 <div className="flex items-start justify-between gap-4 print:gap-2">
                   <div className="flex items-center gap-3 print:gap-2">
-                    <div className="p-1 bg-white rounded-xl border border-slate-200 shrink-0 shadow-2xs flex items-center justify-center">
+                    <div className="p-1 bg-white rounded-xl border border-slate-300 shrink-0 shadow-2xs flex items-center justify-center">
                       <img
                         src="/logo.png"
                         alt="Logo Larassanti"
-                        className="h-11 print:h-8 w-auto max-w-[110px] print:max-w-[85px] object-contain"
+                        className="h-11 print:h-9 w-auto max-w-[110px] print:max-w-[90px] object-contain"
                         referrerPolicy="no-referrer"
                       />
                     </div>
                     <div>
-                      <h1 className="text-base sm:text-lg print:text-[13px] font-black tracking-tight text-slate-900 uppercase">
+                      <h1 className="text-base sm:text-lg print:text-[14px] font-black tracking-tight text-slate-950 print:text-black uppercase">
                         PT. LARASSANTI MAKMUR SEJAHTERA
                       </h1>
-                      <p className="text-[10px] sm:text-[11px] print:text-[8px] text-slate-700 font-semibold">
+                      <p className="text-[10px] sm:text-[11px] print:text-[8.5px] text-slate-800 print:text-black font-bold">
                         Industri Kosmetika & Personal Care • Sertifikasi CPKB Golongan A
                       </p>
-                      <p className="text-[9px] sm:text-[10px] print:text-[7.5px] text-slate-600 max-w-md leading-tight mt-0.5">
+                      <p className="text-[9px] sm:text-[10px] print:text-[8px] text-slate-700 print:text-black max-w-md leading-tight mt-0.5 font-medium">
                         Jl. Pembangunan 3 No.38 A, B, C, D, RT.002/RW.001, Batusari, Kec. Batuceper, Kota Tangerang, Banten 15121
                       </p>
                     </div>
                   </div>
                   
                   {/* Kotak Dokumen Kontrol Mutu */}
-                  <div className="text-right text-[9px] sm:text-[10px] print:text-[7.5px] text-slate-700 border border-slate-300 rounded-lg p-2 print:p-1 bg-slate-50 shrink-0 font-mono space-y-0.5 leading-tight">
-                    <div><span className="font-sans font-semibold text-slate-500">No. Dokumen :</span> <strong className="text-slate-900 font-bold">{docNumber}</strong></div>
-                    <div><span className="font-sans font-semibold text-slate-500">TANGGAL BERLAKU :</span> <strong className="text-slate-900 font-bold">{effectiveDate}</strong></div>
-                    <div><span className="font-sans font-semibold text-slate-500">MENGGANTI NO. :</span> <strong className="text-slate-900 font-bold">{replacesDocNumber}</strong></div>
+                  <div className="text-right text-[9px] sm:text-[10px] print:text-[8px] text-slate-900 print:text-black border border-slate-400 print:border-black rounded-lg p-2 print:p-1.5 bg-slate-50 print:bg-white shrink-0 font-mono space-y-0.5 leading-tight">
+                    <div><span className="font-sans font-bold text-slate-700 print:text-black">No. Dokumen :</span> <strong className="text-slate-950 print:text-black font-black">{docNumber}</strong></div>
+                    <div><span className="font-sans font-bold text-slate-700 print:text-black">TANGGAL BERLAKU :</span> <strong className="text-slate-950 print:text-black font-black">{effectiveDate}</strong></div>
+                    <div><span className="font-sans font-bold text-slate-700 print:text-black">MENGGANTI NO. :</span> <strong className="text-slate-950 print:text-black font-black">{replacesDocNumber}</strong></div>
                   </div>
                 </div>
 
-                <div className="mt-2.5 print:mt-1 pt-2 print:pt-1 border-t border-slate-200 text-center">
-                  <h2 className="text-xs sm:text-sm print:text-[11px] font-black uppercase tracking-wider text-slate-900">
+                <div className="mt-2.5 print:mt-1.5 pt-2 print:pt-1 border-t border-slate-300 print:border-black text-center">
+                  <h2 className="text-xs sm:text-sm print:text-[12px] font-black uppercase tracking-wider text-slate-950 print:text-black">
                     {docTitle}
                   </h2>
-                  <div className="text-[11px] sm:text-xs print:text-[9.5px] font-mono font-bold text-emerald-900 mt-0.5">
+                  <div className="text-[11px] sm:text-xs print:text-[10px] font-mono font-black text-slate-900 print:text-black mt-0.5">
                     NO. LOT / LAPORAN: {normalizeLotNumber(report.lotInternalNumber || report.grnNumber)}
                   </div>
                 </div>
               </div>
 
               {/* I. Identitas Bahan & Penerimaan (GRN) */}
-              <div className="border border-slate-300 rounded-lg overflow-hidden text-xs print:text-[8.5px]">
-                <div className="bg-slate-100 px-3 py-1.5 print:px-2 print:py-0.5 font-bold uppercase tracking-wider border-b border-slate-300 text-slate-800 text-[11px] print:text-[9px]">
+              <div className="border border-slate-400 print:border-black rounded-lg overflow-hidden text-xs print:text-[9px]">
+                <div className="bg-slate-100 print:bg-slate-200 px-3 py-1.5 print:px-2 print:py-1 font-black uppercase tracking-wider border-b border-slate-400 print:border-black text-slate-950 print:text-black text-[11px] print:text-[9.5px]">
                   I. Identitas Bahan & Penerimaan (GRN)
                 </div>
-                <div className="p-3 print:p-1.5 grid grid-cols-1 sm:grid-cols-2 print:grid-cols-2 gap-x-6 print:gap-x-4 gap-y-1.5 print:gap-y-0.5 text-slate-800 text-[11px] print:text-[8.5px]">
+                <div className="p-3 print:p-2 grid grid-cols-1 sm:grid-cols-2 print:grid-cols-2 gap-x-6 print:gap-x-4 gap-y-1.5 print:gap-y-0.5 text-slate-900 print:text-black text-[11px] print:text-[9px]">
                   {/* Left Column */}
                   <div className="space-y-1 print:space-y-0.5">
-                    <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[105px_8px_1fr] items-baseline">
-                      <span className="text-slate-500 font-medium">Kode Material</span>
-                      <span className="text-slate-400 font-bold">:</span>
-                      <span className="font-mono font-bold text-slate-900">{report.materialCode}</span>
+                    <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[110px_8px_1fr] items-baseline">
+                      <span className="text-slate-700 print:text-black font-bold">Kode Material</span>
+                      <span className="text-slate-600 print:text-black font-bold">:</span>
+                      <span className="font-mono font-black text-slate-950 print:text-black">{report.materialCode}</span>
                     </div>
-                    <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[105px_8px_1fr] items-baseline">
-                      <span className="text-slate-500 font-medium">Nama Bahan</span>
-                      <span className="text-slate-400 font-bold">:</span>
-                      <span className="font-bold text-slate-900">{report.materialName}</span>
+                    <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[110px_8px_1fr] items-baseline">
+                      <span className="text-slate-700 print:text-black font-bold">Nama Bahan</span>
+                      <span className="text-slate-600 print:text-black font-bold">:</span>
+                      <span className="font-black text-slate-950 print:text-black">{report.materialName}</span>
                     </div>
-                    <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[105px_8px_1fr] items-baseline">
-                      <span className="text-slate-500 font-medium">Produsen</span>
-                      <span className="text-slate-400 font-bold">:</span>
-                      <span className="font-semibold text-slate-800">{report.manufacturer || '-'}</span>
+                    <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[110px_8px_1fr] items-baseline">
+                      <span className="text-slate-700 print:text-black font-bold">Produsen</span>
+                      <span className="text-slate-600 print:text-black font-bold">:</span>
+                      <span className="font-bold text-slate-900 print:text-black">{report.manufacturer || '-'}</span>
                     </div>
-                    <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[105px_8px_1fr] items-baseline">
-                      <span className="text-slate-500 font-medium">Supplier</span>
-                      <span className="text-slate-400 font-bold">:</span>
-                      <span className="text-slate-800">{report.distributor || '-'}</span>
+                    <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[110px_8px_1fr] items-baseline">
+                      <span className="text-slate-700 print:text-black font-bold">Supplier</span>
+                      <span className="text-slate-600 print:text-black font-bold">:</span>
+                      <span className="font-bold text-slate-900 print:text-black">{report.distributor || '-'}</span>
                     </div>
-                    <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[105px_8px_1fr] items-baseline">
-                      <span className="text-slate-500 font-medium">No. Batch Vendor</span>
-                      <span className="text-slate-400 font-bold">:</span>
-                      <span className="font-mono font-bold text-slate-900">{report.batchNumberVendor || '-'}</span>
+                    <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[110px_8px_1fr] items-baseline">
+                      <span className="text-slate-700 print:text-black font-bold">No. Batch Vendor</span>
+                      <span className="text-slate-600 print:text-black font-bold">:</span>
+                      <span className="font-mono font-black text-slate-950 print:text-black">{report.batchNumberVendor || '-'}</span>
                     </div>
                   </div>
 
                   {/* Right Column */}
                   <div className="space-y-1 print:space-y-0.5">
-                    <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[105px_8px_1fr] items-baseline">
-                      <span className="text-slate-500 font-medium">No. Bukti Terima (GRN)</span>
-                      <span className="text-slate-400 font-bold">:</span>
-                      <span className="font-mono font-bold text-slate-900">{report.grnNumber}</span>
+                    <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[110px_8px_1fr] items-baseline">
+                      <span className="text-slate-700 print:text-black font-bold">No. Bukti Terima (GRN)</span>
+                      <span className="text-slate-600 print:text-black font-bold">:</span>
+                      <span className="font-mono font-black text-slate-950 print:text-black">{report.grnNumber}</span>
                     </div>
-                    <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[105px_8px_1fr] items-baseline">
-                      <span className="text-slate-500 font-medium">Tanggal Penerimaan</span>
-                      <span className="text-slate-400 font-bold">:</span>
-                      <span className="text-slate-800">{report.receivedDate || '-'}</span>
+                    <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[110px_8px_1fr] items-baseline">
+                      <span className="text-slate-700 print:text-black font-bold">Tanggal Penerimaan</span>
+                      <span className="text-slate-600 print:text-black font-bold">:</span>
+                      <span className="font-bold text-slate-900 print:text-black">{report.receivedDate || '-'}</span>
                     </div>
-                    <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[105px_8px_1fr] items-baseline">
-                      <span className="text-slate-500 font-medium">Tanggal Kedaluwarsa</span>
-                      <span className="text-slate-400 font-bold">:</span>
-                      <span className="font-semibold text-slate-800">{report.expiryDate || 'N/A'}</span>
+                    <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[110px_8px_1fr] items-baseline">
+                      <span className="text-slate-700 print:text-black font-bold">Tanggal Kedaluwarsa</span>
+                      <span className="text-slate-600 print:text-black font-bold">:</span>
+                      <span className="font-bold text-slate-900 print:text-black">{report.expiryDate || 'N/A'}</span>
                     </div>
                     {isRawMaterial && (
-                      <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[105px_8px_1fr] items-baseline bg-emerald-50/70 px-1 py-0.5 rounded border border-emerald-200/60">
-                        <span className="text-emerald-800 font-bold">Tanggal Retest (Uji Ulang)</span>
-                        <span className="text-emerald-700 font-bold">:</span>
-                        <span className="font-bold text-emerald-950 font-mono">
+                      <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[110px_8px_1fr] items-baseline bg-slate-50 print:bg-transparent px-1 py-0.5 rounded border border-slate-200 print:border-black">
+                        <span className="text-slate-900 print:text-black font-black">Tanggal Retest (Uji Ulang)</span>
+                        <span className="text-slate-700 print:text-black font-bold">:</span>
+                        <span className="font-black text-slate-950 print:text-black font-mono">
                           {report.retestDate || 'N/A (Sesuai ED)'}
                         </span>
                       </div>
                     )}
-                    <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[105px_8px_1fr] items-baseline">
-                      <span className="text-slate-500 font-medium">Kuantitas Diterima</span>
-                      <span className="text-slate-400 font-bold">:</span>
-                      <span className="font-bold text-slate-900">{formattedQty} {report.unit}</span>
+                    <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[110px_8px_1fr] items-baseline">
+                      <span className="text-slate-700 print:text-black font-bold">Kuantitas Diterima</span>
+                      <span className="text-slate-600 print:text-black font-bold">:</span>
+                      <span className="font-black text-slate-950 print:text-black">{formattedQty} {report.unit}</span>
                     </div>
-                    <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[105px_8px_1fr] items-baseline">
-                      <span className="text-slate-500 font-medium">Jumlah Kemasan</span>
-                      <span className="text-slate-400 font-bold">:</span>
-                      <span className="text-slate-800">{report.containerCount} {report.containerType}</span>
+                    <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[110px_8px_1fr] items-baseline">
+                      <span className="text-slate-700 print:text-black font-bold">Jumlah Kemasan</span>
+                      <span className="text-slate-600 print:text-black font-bold">:</span>
+                      <span className="font-bold text-slate-900 print:text-black">{report.containerCount} {report.containerType}</span>
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* II. Metode & Pengambilan Contoh (Sampling) */}
-              <div className="border border-slate-300 rounded-lg p-2.5 print:p-1.5 text-[11px] print:text-[8px] bg-slate-50/70 space-y-1.5 print:space-y-0.5">
-                <div className="flex justify-between items-center border-b border-slate-200 pb-1 print:pb-0.5">
-                  <span className="font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5 text-[10px] print:text-[8.5px]">
+              <div className="border border-slate-400 print:border-black rounded-lg p-2.5 print:p-2 text-[11px] print:text-[9px] bg-slate-50 print:bg-white space-y-1.5 print:space-y-1">
+                <div className="flex justify-between items-center border-b border-slate-300 print:border-black pb-1 print:pb-0.5">
+                  <span className="font-black uppercase tracking-wider text-slate-950 print:text-black flex items-center gap-1.5 text-[10px] print:text-[9.5px]">
                     II. Metode & Pengambilan Contoh (Sampling)
                   </span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-4 print:grid-cols-4 gap-2 print:gap-1.5 text-slate-700 pt-0.5">
+                <div className="grid grid-cols-1 sm:grid-cols-4 print:grid-cols-4 gap-2 print:gap-1.5 text-slate-900 print:text-black pt-0.5">
                   <div>
-                    <span className="text-slate-500 block text-[10px] print:text-[7.5px]">Rencana Sampling (n):</span>
-                    <span className="font-bold text-slate-900 block text-[11px] print:text-[8px]">
+                    <span className="text-slate-700 print:text-black block text-[10px] print:text-[8px] font-bold">Rencana Sampling (n):</span>
+                    <span className="font-black text-slate-950 print:text-black block text-[11px] print:text-[9px]">
                       {report.samplingInfo?.sampleSizeQuantity || 1} {report.samplingInfo?.sampleUnit || 'wadah'}
                     </span>
-                    <span className="inline-block mt-0.5 px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 font-mono font-bold text-[9px] print:text-[7.5px] border border-emerald-300">
+                    <span className="inline-block mt-0.5 px-1.5 py-0.2 rounded bg-slate-200 print:bg-white text-slate-950 print:text-black font-mono font-black text-[9px] print:text-[8px] border border-slate-400 print:border-black">
                       {isRawMaterial ? 'n = 1 + √N' : (report.samplingInfo?.samplingStandard || 'MIL-STD-105E Level II')}
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block text-[10px] print:text-[7.5px]">Sampel Diuji Lab:</span>
-                    <span className="font-bold text-emerald-950 text-[11px] print:text-[8px]">
+                    <span className="text-slate-700 print:text-black block text-[10px] print:text-[8px] font-bold">Sampel Diuji Lab:</span>
+                    <span className="font-black text-slate-950 print:text-black text-[11px] print:text-[9px] block">
                       {report.actualSampleSize !== undefined && report.actualSampleSize !== null
                         ? `${report.actualSampleSize} ${report.actualSampleUnit || (report.materialType === 'raw' ? 'gram' : 'pcs')}`
                         : `${report.samplingInfo?.sampleSizeQuantity || 1} ${report.samplingInfo?.sampleUnit || 'wadah'}`}
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block text-[10px] print:text-[7.5px]">Wadah yang Disampling:</span>
-                    <span className="font-bold text-slate-900 text-[11px] print:text-[8px]">
+                    <span className="text-slate-700 print:text-black block text-[10px] print:text-[8px] font-bold">Wadah yang Disampling:</span>
+                    <span className="font-bold text-slate-950 print:text-black text-[11px] print:text-[8.5px] block">
                       {report.sampledContainers || `Wadah #1 s/d #${Math.min(report.containerCount, report.samplingInfo?.sampleSizeQuantity || 1)} (Total ${report.containerCount} ${report.containerType})`}
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block text-[10px] print:text-[7.5px]">Waktu & Petugas Sampling:</span>
-                    <span className="text-slate-800 font-medium text-[11px] print:text-[8px]">
+                    <span className="text-slate-700 print:text-black block text-[10px] print:text-[8px] font-bold">Waktu & Petugas Sampling:</span>
+                    <span className="text-slate-950 print:text-black font-bold text-[11px] print:text-[8.5px] block">
                       {report.samplingDateTime ? new Date(report.samplingDateTime).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : (report.receivedDate || '-')} • {analystName} ({analystJabatan})
                     </span>
                   </div>
@@ -358,44 +358,44 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
               </div>
 
               {/* III. Tabel Hasil Pemeriksaan & Analisis Laboratorium QC (Aliran Alami Penuh) */}
-              <div className="border border-slate-300 rounded-lg overflow-hidden text-xs print:text-[8.5px]">
-                <div className="bg-slate-100 px-3 py-1.5 print:px-2 print:py-0.5 font-bold uppercase tracking-wider border-b border-slate-300 text-slate-800 text-[11px] print:text-[9px] flex items-center justify-between">
+              <div className="border border-slate-400 print:border-black rounded-lg overflow-hidden text-xs print:text-[9px]">
+                <div className="bg-slate-100 print:bg-slate-200 px-3 py-1.5 print:px-2 print:py-1 font-black uppercase tracking-wider border-b border-slate-400 print:border-black text-slate-950 print:text-black text-[11px] print:text-[9.5px] flex items-center justify-between">
                   <span>III. Hasil Pemeriksaan & Analisis Laboratorium QC</span>
-                  <span className="text-[10px] print:text-[8px] text-slate-500 font-normal">
+                  <span className="text-[10px] print:text-[8.5px] text-slate-700 print:text-black font-bold">
                     (Total {parameters.length} Parameter Uji)
                   </span>
                 </div>
                 <table className="w-full text-left border-collapse">
                   <thead className="print:table-header-group">
-                    <tr className="bg-slate-50 border-b border-slate-300 text-slate-700 font-bold uppercase text-[10px] print:text-[8px]">
-                      <th className="p-2 print:p-1 w-8 text-center border-r border-slate-200">No</th>
-                      <th className="p-2 print:p-1 w-1/3 border-r border-slate-200">Parameter Uji</th>
-                      <th className="p-2 print:p-1 w-1/3 border-r border-slate-200">Spesifikasi Standar</th>
-                      <th className="p-2 print:p-1 w-1/4 border-r border-slate-200">Hasil Analisa Lab</th>
-                      <th className="p-2 print:p-1 w-14 text-center">Hasil</th>
+                    <tr className="bg-slate-100 print:bg-slate-200 border-b-2 border-slate-400 print:border-black text-slate-950 print:text-black font-black uppercase text-[10px] print:text-[8.5px]">
+                      <th className="p-2 print:p-1.5 w-8 text-center border-r border-slate-300 print:border-black">No</th>
+                      <th className="p-2 print:p-1.5 w-1/3 border-r border-slate-300 print:border-black">Parameter Uji</th>
+                      <th className="p-2 print:p-1.5 w-1/3 border-r border-slate-300 print:border-black">Spesifikasi Standar</th>
+                      <th className="p-2 print:p-1.5 w-1/4 border-r border-slate-300 print:border-black">Hasil Analisa Lab</th>
+                      <th className="p-2 print:p-1.5 w-14 text-center">Hasil</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-200 text-[11px] print:text-[8.5px]">
+                  <tbody className="divide-y divide-slate-300 print:divide-slate-400 text-[11px] print:text-[9px] text-slate-950 print:text-black">
                     {parameters.map((param, idx) => (
                       <tr key={param.id || idx} className="hover:bg-slate-50/50 break-inside-avoid page-break-inside-avoid">
-                        <td className="p-2 print:p-1 text-center font-mono text-slate-500 border-r border-slate-200">
+                        <td className="p-2 print:p-1.5 text-center font-mono font-bold text-slate-800 print:text-black border-r border-slate-300 print:border-black">
                           {idx + 1}
                         </td>
-                        <td className="p-2 print:p-1 font-semibold text-slate-800 border-r border-slate-200">
+                        <td className="p-2 print:p-1.5 font-bold text-slate-950 print:text-black border-r border-slate-300 print:border-black">
                           {param.parameterName}
                         </td>
-                        <td className="p-2 print:p-1 text-slate-700 border-r border-slate-200">
+                        <td className="p-2 print:p-1.5 text-slate-900 print:text-black font-medium border-r border-slate-300 print:border-black">
                           {param.specification}
                         </td>
-                        <td className="p-2 print:p-1 font-bold text-slate-900 border-r border-slate-200">
+                        <td className="p-2 print:p-1.5 font-black text-slate-950 print:text-black border-r border-slate-300 print:border-black">
                           {param.resultValue || '-'}
                         </td>
-                        <td className="p-2 print:p-1 text-center font-bold">
+                        <td className="p-2 print:p-1.5 text-center font-black">
                           <span
-                            className={`px-1.5 py-0.2 rounded text-[9px] print:text-[7.5px] font-black ${
+                            className={`px-1.5 py-0.5 rounded text-[9px] print:text-[8px] font-black border ${
                               param.isCompliant
-                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                : 'bg-red-100 text-red-800 border border-red-300'
+                                ? 'bg-emerald-100 print:bg-white text-emerald-950 print:text-black border-emerald-400 print:border-black'
+                                : 'bg-red-100 print:bg-white text-red-950 print:text-black border-red-400 print:border-black'
                             }`}
                           >
                             {param.isCompliant ? 'MS' : 'TMS'}
@@ -409,26 +409,26 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
 
               {/* IV. Kesimpulan & Disposisi Mutu */}
               <div
-                className={`border-2 rounded-xl p-3 print:p-1.5 text-xs print:text-[8.5px] break-inside-avoid page-break-inside-avoid ${
+                className={`border-2 print:border-black rounded-xl p-3 print:p-2 text-xs print:text-[9px] break-inside-avoid page-break-inside-avoid ${
                   isRejected
-                    ? 'border-red-400 bg-red-50/60'
+                    ? 'border-red-500 bg-red-50/60 print:bg-white'
                     : hasDeviation
-                    ? 'border-amber-400 bg-amber-50/60'
-                    : 'border-emerald-400 bg-emerald-50/60'
+                    ? 'border-amber-500 bg-amber-50/60 print:bg-white'
+                    : 'border-emerald-600 bg-emerald-50/60 print:bg-white'
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="font-bold text-slate-700 uppercase tracking-wider text-[10px] print:text-[8px]">
+                    <div className="font-bold text-slate-800 print:text-black uppercase tracking-wider text-[10px] print:text-[8.5px]">
                       IV. KESIMPULAN & DISPOSISI KELULUSAN MUTU
                     </div>
                     <div
-                      className={`text-sm sm:text-base print:text-[11px] font-black mt-0.5 ${
+                      className={`text-sm sm:text-base print:text-[11.5px] font-black mt-0.5 ${
                         isRejected
-                          ? 'text-red-700'
+                          ? 'text-red-700 print:text-black'
                           : hasDeviation
-                          ? 'text-amber-800'
-                          : 'text-emerald-800'
+                          ? 'text-amber-800 print:text-black'
+                          : 'text-emerald-800 print:text-black'
                       }`}
                     >
                       STATUS DISPOSISI:{' '}
@@ -440,8 +440,8 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-[10px] print:text-[7.5px] text-slate-500 font-semibold">TANGGAL OTORISASI</div>
-                    <div className="font-bold font-mono text-slate-800 text-xs print:text-[9px]">
+                    <div className="text-[10px] print:text-[8px] text-slate-700 print:text-black font-bold">TANGGAL OTORISASI</div>
+                    <div className="font-black font-mono text-slate-950 print:text-black text-xs print:text-[9.5px]">
                       {report.qmSignature?.signedAt
                         ? new Date(report.qmSignature.signedAt).toLocaleDateString('id-ID', {
                             day: '2-digit',
@@ -454,69 +454,69 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
                 </div>
 
                 {report.qmNotes && (
-                  <div className="mt-1.5 print:mt-1 pt-1.5 print:pt-0.5 border-t border-slate-200/60 text-slate-700 text-[10px] print:text-[8px]">
+                  <div className="mt-1.5 print:mt-1 pt-1.5 print:pt-1 border-t border-slate-300 print:border-black text-slate-900 print:text-black text-[10px] print:text-[8.5px] font-medium">
                     <strong>Catatan Disposisi:</strong> {report.qmNotes}
                   </div>
                 )}
               </div>
 
               {/* V. Blok Dual Digital Signature (Staf Analis & Quality Manager) */}
-              <div className="border border-slate-300 rounded-xl p-3 print:p-1.5 grid grid-cols-2 gap-4 print:gap-2 text-xs print:text-[8px] text-slate-800 break-inside-avoid page-break-inside-avoid">
-                <div className="space-y-1 print:space-y-0.5 border-r border-slate-200 pr-3 print:pr-1.5">
-                  <div className="font-bold text-slate-700 uppercase tracking-wider text-[9px] print:text-[7.5px] flex items-center justify-between">
+              <div className="border border-slate-400 print:border-black rounded-xl p-3 print:p-2 grid grid-cols-2 gap-4 print:gap-3 text-xs print:text-[8.5px] text-slate-950 print:text-black break-inside-avoid page-break-inside-avoid">
+                <div className="space-y-1 print:space-y-0.5 border-r border-slate-300 print:border-black pr-3 print:pr-2">
+                  <div className="font-bold text-slate-800 print:text-black uppercase tracking-wider text-[9px] print:text-[8px] flex items-center justify-between">
                     <span>{analystJabatan} :</span>
-                    <span className="text-[8px] print:text-[7px] text-slate-400 font-normal lowercase">(pemeriksa lab)</span>
+                    <span className="text-[8px] print:text-[7.5px] text-slate-600 print:text-black font-normal lowercase">(pemeriksa lab)</span>
                   </div>
-                  <div className="h-14 print:h-8 flex flex-col justify-center">
-                    <div className="font-mono font-bold text-emerald-800 text-[10px] print:text-[8px]">
+                  <div className="h-14 print:h-9 flex flex-col justify-center">
+                    <div className="font-mono font-black text-emerald-900 print:text-black text-[10px] print:text-[8.5px]">
                       DIGITALLY SIGNED ELECTRONICALLY
                     </div>
-                    <div className="text-[9px] print:text-[7.5px] font-mono text-slate-500 truncate">
+                    <div className="text-[9px] print:text-[8px] font-mono text-slate-700 print:text-black truncate font-semibold">
                       Hash: {report.staffSignature?.signatureHash || 'SIG-STF-VERIFIED'}
                     </div>
-                    <div className="text-[9px] print:text-[7px] text-slate-400">
+                    <div className="text-[9px] print:text-[7.5px] text-slate-600 print:text-black font-medium">
                       Waktu: {report.staffSignature?.signedAt ? new Date(report.staffSignature.signedAt).toLocaleString('id-ID') : '-'}
                     </div>
                   </div>
-                  <div className="border-t border-slate-300 pt-1 print:pt-0.5">
-                    <div className="font-bold text-slate-900 text-[11px] print:text-[8.5px]">
+                  <div className="border-t border-slate-300 print:border-black pt-1 print:pt-0.5">
+                    <div className="font-black text-slate-950 print:text-black text-[11px] print:text-[9.5px]">
                       {analystName}
                     </div>
-                    <div className="text-[9px] print:text-[7.5px] text-slate-600 font-medium font-mono">
+                    <div className="text-[9px] print:text-[8px] text-slate-800 print:text-black font-bold font-mono">
                       NIK: {analystNik} • {analystJabatan}
                     </div>
                   </div>
                 </div>
 
                 <div className="space-y-1 print:space-y-0.5 pl-1 print:pl-0.5">
-                  <div className="font-bold text-slate-700 uppercase tracking-wider text-[9px] print:text-[7.5px] flex items-center justify-between">
+                  <div className="font-bold text-slate-800 print:text-black uppercase tracking-wider text-[9px] print:text-[8px] flex items-center justify-between">
                     <span>Quality Manager :</span>
-                    <span className="text-[8px] print:text-[7px] text-slate-400 font-normal lowercase">(otorisasi mutu)</span>
+                    <span className="text-[8px] print:text-[7.5px] text-slate-600 print:text-black font-normal lowercase">(otorisasi mutu)</span>
                   </div>
-                  <div className="h-14 print:h-8 flex flex-col justify-center">
+                  <div className="h-14 print:h-9 flex flex-col justify-center">
                     {report.qmSignature?.signatureHash ? (
                       <>
-                        <div className="font-mono font-bold text-blue-900 text-[10px] print:text-[8px]">
+                        <div className="font-mono font-black text-blue-950 print:text-black text-[10px] print:text-[8.5px]">
                           OFFICIALLY AUTHORIZED BY QUALITY MANAGER
                         </div>
-                        <div className="text-[9px] print:text-[7.5px] font-mono text-slate-500 truncate">
+                        <div className="text-[9px] print:text-[8px] font-mono text-slate-700 print:text-black truncate font-semibold">
                           Hash: {report.qmSignature.signatureHash}
                         </div>
-                        <div className="text-[9px] print:text-[7.5px] text-slate-400">
+                        <div className="text-[9px] print:text-[7.5px] text-slate-600 print:text-black font-medium">
                           Waktu: {report.qmSignature.signedAt ? new Date(report.qmSignature.signedAt).toLocaleString('id-ID') : '-'}
                         </div>
                       </>
                     ) : (
-                      <div className="text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1 text-[9px] print:text-[7.5px] font-medium flex items-center justify-center h-full">
+                      <div className="text-slate-900 print:text-black bg-amber-50 print:bg-white border border-amber-300 print:border-black rounded px-2 py-1 text-[9px] print:text-[8px] font-bold flex items-center justify-center h-full">
                         Menunggu Otorisasi Quality Manager
                       </div>
                     )}
                   </div>
-                  <div className="border-t border-slate-300 pt-1 print:pt-0.5">
-                    <div className="font-bold text-slate-900 text-[11px] print:text-[8.5px]">
+                  <div className="border-t border-slate-300 print:border-black pt-1 print:pt-0.5">
+                    <div className="font-black text-slate-950 print:text-black text-[11px] print:text-[9.5px]">
                       {report.qmSignature?.signatureHash ? qmName : (report.status === 'PASSED' || report.status === 'PASSED_WITH_DEVIATION' || report.status === 'REJECTED' ? qmName : 'Belum Diotorisasi')}
                     </div>
-                    <div className="text-[9px] print:text-[7.5px] text-slate-600 font-medium font-mono">
+                    <div className="text-[9px] print:text-[8px] text-slate-800 print:text-black font-bold font-mono">
                       NIK: {qmNik} • Quality Manager
                     </div>
                   </div>
@@ -525,12 +525,12 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
             </div>
 
             {/* Dokumen Footer */}
-            <div className="pt-2 print:pt-1 border-t border-slate-200 flex items-center justify-between text-[9px] print:text-[8px] text-slate-500 break-inside-avoid page-break-inside-avoid mt-2">
+            <div className="pt-2 print:pt-1 border-t-2 border-slate-950 print:border-black flex items-center justify-between text-[9px] print:text-[8.5px] text-slate-800 print:text-black break-inside-avoid page-break-inside-avoid mt-2 font-bold">
               <div className="flex items-center gap-1.5">
-                <QrCode className="w-3.5 h-3.5 text-slate-700 shrink-0" />
+                <QrCode className="w-3.5 h-3.5 text-slate-950 print:text-black shrink-0" />
                 <span>VERIFIED CPKB LOT #{normalizeLotNumber(report.lotInternalNumber || report.grnNumber)} • PT. Larassanti Makmur Sejahtera</span>
               </div>
-              <div className="font-mono font-bold text-slate-700">
+              <div className="font-mono font-black text-slate-950 print:text-black">
                 Sistem Terpadu Pengawasan Mutu CPKB • Dokumen Sah
               </div>
             </div>
