@@ -35,6 +35,7 @@ export const IpcInspectionReportPdfModal: React.FC<IpcInspectionReportPdfModalPr
   const printContentRef = useRef<HTMLDivElement>(null);
   const { user: currentUser, profile } = useAuth();
   const [matchedProduct, setMatchedProduct] = useState<Product | null>(productSpec || null);
+  const [isCompactMode, setIsCompactMode] = useState<boolean>(true);
 
   useEffect(() => {
     if (!isOpen || !batch) return;
@@ -71,9 +72,13 @@ export const IpcInspectionReportPdfModal: React.FC<IpcInspectionReportPdfModalPr
 
   const handlePrintPdf = () => {
     document.body.classList.add('printing-report');
+    if (isCompactMode) {
+      document.body.classList.add('printing-compact');
+    }
     window.print();
     setTimeout(() => {
       document.body.classList.remove('printing-report');
+      document.body.classList.remove('printing-compact');
     }, 1000);
   };
 
@@ -210,6 +215,18 @@ export const IpcInspectionReportPdfModal: React.FC<IpcInspectionReportPdfModalPr
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsCompactMode(!isCompactMode)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                isCompactMode
+                  ? 'bg-purple-900/60 border-purple-500 text-purple-200 hover:bg-purple-800'
+                  : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+              }`}
+              title="Ganti antara mode muat 1 lembar atau mode standar"
+            >
+              <span>{isCompactMode ? 'Mode: Auto-Fit (1 Halaman)' : 'Mode: Standar (Aliran Penuh)'}</span>
+            </button>
+
             <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700 text-[11px] text-slate-300">
               <Info className="w-3.5 h-3.5 text-blue-400" />
               <span>Gunakan opsi <strong>"Save as PDF / A4"</strong></span>
@@ -253,7 +270,9 @@ export const IpcInspectionReportPdfModal: React.FC<IpcInspectionReportPdfModalPr
             </div>
 
             {/* Document A4 Sheet */}
-            <div className="print-page bg-white p-6 sm:p-8 shadow-xl rounded-2xl border border-slate-300 text-slate-900 space-y-3 print:space-y-1.5 print:p-0 print:shadow-none print:border-none print:rounded-none relative flex flex-col justify-between min-h-[900px] print:min-h-0 print:h-auto">
+            <div className={`print-page bg-white p-6 sm:p-8 shadow-xl rounded-2xl border border-slate-300 text-slate-900 print:p-0 print:shadow-none print:border-none print:rounded-none relative flex flex-col justify-between min-h-[900px] print:min-h-0 print:h-auto ${
+              isCompactMode ? 'compact-sheet space-y-2.5 print:space-y-1' : 'space-y-3 print:space-y-1.5'
+            }`}>
               
               <div className="space-y-3 print:space-y-1.5">
                 {/* Header Perusahaan PT. LARASSANTI MAKMUR SEJAHTERA */}
@@ -378,7 +397,7 @@ export const IpcInspectionReportPdfModal: React.FC<IpcInspectionReportPdfModalPr
                     </thead>
                     <tbody className="divide-y divide-slate-200">
                       {parameters.map((param, index) => (
-                        <tr key={param.id || index} className="even:bg-slate-50/50">
+                        <tr key={param.id || index} className="even:bg-slate-50/50 break-inside-avoid page-break-inside-avoid">
                           <td className="p-2 print:p-1 text-center font-mono text-slate-500 border-r border-slate-200">{index + 1}</td>
                           <td className="p-2 print:p-1 font-bold text-slate-900 border-r border-slate-200">{param.parameterName}</td>
                           <td className="p-2 print:p-1 font-mono text-slate-700 border-r border-slate-200">{param.specification}</td>
@@ -399,7 +418,7 @@ export const IpcInspectionReportPdfModal: React.FC<IpcInspectionReportPdfModalPr
                 </div>
 
                 {/* III. Kesimpulan & Evaluasi Mutu */}
-                <div className="border border-slate-300 rounded-lg p-2.5 print:p-1.5 bg-slate-50 text-[11px] print:text-[8.5px] space-y-1.5 print:space-y-0.5">
+                <div className="border border-slate-300 rounded-lg p-2.5 print:p-1.5 bg-slate-50 text-[11px] print:text-[8.5px] space-y-1.5 print:space-y-0.5 break-inside-avoid page-break-inside-avoid">
                   <div className="flex items-center justify-between border-b border-slate-200 pb-1 print:pb-0.5">
                     <span className="font-bold text-slate-800 uppercase tracking-wider text-[10px] print:text-[8px]">
                       III. Kesimpulan Akhir Quality Control:
@@ -435,7 +454,7 @@ export const IpcInspectionReportPdfModal: React.FC<IpcInspectionReportPdfModalPr
                 </div>
 
                 {/* IV. Tanda Tangan Digital & Otorisasi CPKB */}
-                <div className="border border-slate-300 rounded-lg p-2.5 print:p-1.5 bg-white text-xs print:text-[8.5px]">
+                <div className="border border-slate-300 rounded-lg p-2.5 print:p-1.5 bg-white text-xs print:text-[8.5px] break-inside-avoid page-break-inside-avoid">
                   <div className="text-center font-bold text-slate-800 uppercase tracking-wider text-[10px] print:text-[8px] mb-1.5 print:mb-1">
                     IV. Otorisasi & Pengesahan Mutu (Sesuai Regulasi CPKB / BPOM RI)
                   </div>

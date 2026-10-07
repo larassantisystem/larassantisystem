@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   X,
@@ -6,7 +6,10 @@ import {
   FileCheck,
   QrCode,
   FileText,
-  Info
+  Info,
+  Layers,
+  Minimize2,
+  Maximize2
 } from 'lucide-react';
 import { QcInspectionReport } from '../types/qcTypes';
 import { normalizeLotNumber, getUserJabatan } from '../utils/qcNumbering';
@@ -25,6 +28,9 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
 }) => {
   const printContentRef = useRef<HTMLDivElement>(null);
   const { user: currentUser } = useAuth();
+  
+  const parameters = report?.parameters || [];
+  const [isCompactMode, setIsCompactMode] = useState<boolean>(parameters.length <= 8);
 
   if (!isOpen || !report) return null;
 
@@ -78,9 +84,13 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
 
   const handlePrintPdf = () => {
     document.body.classList.add('printing-report');
+    if (isCompactMode) {
+      document.body.classList.add('printing-compact');
+    }
     window.print();
     setTimeout(() => {
       document.body.classList.remove('printing-report');
+      document.body.classList.remove('printing-compact');
     }, 1000);
   };
 
@@ -102,16 +112,6 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
     maximumFractionDigits: 3,
   });
 
-  // Calculate page splitting for A4 print
-  // Page 1 contains Header + Material Identity + Sampling + up to 5 parameters
-  // If more than 5 parameters, split into Page 2 with continuation table + Conclusion + Signatures
-  const parameters = report.parameters || [];
-  const needsMultiPage = parameters.length > 5;
-
-  const page1Params = needsMultiPage ? parameters.slice(0, 5) : parameters;
-  const page2Params = needsMultiPage ? parameters.slice(5) : [];
-  const totalPages = needsMultiPage ? 2 : 1;
-
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-2 sm:p-4 overflow-y-auto animate-in fade-in duration-200 print:static print:p-0 print:m-0 print:bg-white print:overflow-visible">
       <div className="bg-slate-900 rounded-3xl shadow-2xl max-w-5xl w-full my-4 overflow-hidden border border-slate-700 flex flex-col max-h-[96vh] print:max-h-none print:h-auto print:max-w-none print:w-full print:m-0 print:p-0 print:border-none print:shadow-none print:rounded-none print:bg-white">
@@ -130,12 +130,26 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
                 </span>
               </h3>
               <p className="text-[11px] text-slate-400">
-                Sertifikat Analisis (Internal CoA) • Terbagi Menjadi {totalPages} Halaman A4 Standar
+                Sertifikat Analisis (Internal CoA) • {parameters.length} Parameter Uji Laboratorium
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Toggle Mode Auto-Fit / Multi-Page */}
+            <button
+              onClick={() => setIsCompactMode(!isCompactMode)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                isCompactMode
+                  ? 'bg-purple-900/60 border-purple-500 text-purple-200 hover:bg-purple-800'
+                  : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+              }`}
+              title="Ganti antara mode muat 1 lembar atau mode standar"
+            >
+              {isCompactMode ? <Minimize2 className="w-3.5 h-3.5 text-purple-400" /> : <Maximize2 className="w-3.5 h-3.5 text-blue-400" />}
+              <span>{isCompactMode ? 'Mode: Auto-Fit (1 Halaman)' : 'Mode: Standar (Aliran Penuh)'}</span>
+            </button>
+
             <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700 text-[11px] text-slate-300">
               <Info className="w-3.5 h-3.5 text-blue-400" />
               <span>Gunakan opsi <strong>"Save as PDF / A4"</strong></span>
@@ -165,587 +179,352 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
           <div
             ref={printContentRef}
             id="printable-qc-report"
-            className="w-full max-w-3xl space-y-8 print:max-w-none print:w-full print:space-y-0 print:m-0 print:p-0"
+            className={`w-full max-w-3xl bg-white p-6 sm:p-8 shadow-xl rounded-2xl border border-slate-300 text-slate-900 print:max-w-none print:w-full print:p-0 print:shadow-none print:border-none print:rounded-none print:bg-white flex flex-col justify-between ${
+              isCompactMode
+                ? 'compact-sheet space-y-2.5 print:space-y-1'
+                : 'space-y-3.5 print:space-y-2'
+            }`}
           >
             {/* ========================================================================= */}
-            {/* LEMBAR 1 / HALAMAN 1 (A4 STANDAR) */}
+            {/* DOKUMEN RESMI CPKB INTERNAL COA (ALIRAN ALAMI A4) */}
             {/* ========================================================================= */}
-            <div className="no-print flex items-center justify-between text-xs font-bold text-slate-600 px-2">
-              <span className="flex items-center gap-1.5 uppercase tracking-wider">
-                <FileText className="w-4 h-4 text-emerald-700" />
-                Lembar Dokumen Halaman 1 dari {totalPages}
-              </span>
-              <span className="bg-slate-300 text-slate-800 px-2.5 py-0.5 rounded-full text-[10px] font-mono">
-                Format Cetak A4 Portrait
-              </span>
-            </div>
-
-            <div className="print-page bg-white p-6 sm:p-8 shadow-xl rounded-2xl border border-slate-300 text-slate-900 space-y-3 print:space-y-1.5 print:p-0 print:shadow-none print:border-none print:rounded-none relative flex flex-col justify-between min-h-[900px] print:min-h-0 print:h-auto">
+            <div className="space-y-3 print:space-y-1.5">
               
-              <div className="space-y-3 print:space-y-1.5">
-                {/* Header Perusahaan PT. LARASSANTI MAKMUR SEJAHTERA */}
-                <div className="border-b-2 border-slate-900 pb-2.5 print:pb-1.5">
-                  <div className="flex items-start justify-between gap-4 print:gap-2">
-                    <div className="flex items-center gap-3 print:gap-2">
-                      <div className="p-1 bg-white rounded-xl border border-slate-200 shrink-0 shadow-2xs flex items-center justify-center">
-                        <img
-                          src="/logo.png"
-                          alt="Logo Larassanti"
-                          className="h-11 print:h-8 w-auto max-w-[110px] print:max-w-[85px] object-contain"
-                          referrerPolicy="no-referrer"
-                        />
-                      </div>
-                      <div>
-                        <h1 className="text-base sm:text-lg print:text-[13px] font-black tracking-tight text-slate-900 uppercase">
-                          PT. LARASSANTI MAKMUR SEJAHTERA
-                        </h1>
-                        <p className="text-[10px] sm:text-[11px] print:text-[8px] text-slate-700 font-semibold">
-                          Industri Kosmetika & Personal Care • Sertifikasi CPKB Golongan A
-                        </p>
-                        <p className="text-[9px] sm:text-[10px] print:text-[7.5px] text-slate-600 max-w-md leading-tight mt-0.5">
-                          Jl. Pembangunan 3 No.38 A, B, C, D, RT.002/RW.001, Batusari, Kec. Batuceper, Kota Tangerang, Banten 15121
-                        </p>
-                      </div>
+              {/* Header Perusahaan PT. LARASSANTI MAKMUR SEJAHTERA */}
+              <div className="border-b-2 border-slate-900 pb-2.5 print:pb-1.5">
+                <div className="flex items-start justify-between gap-4 print:gap-2">
+                  <div className="flex items-center gap-3 print:gap-2">
+                    <div className="p-1 bg-white rounded-xl border border-slate-200 shrink-0 shadow-2xs flex items-center justify-center">
+                      <img
+                        src="/logo.png"
+                        alt="Logo Larassanti"
+                        className="h-11 print:h-8 w-auto max-w-[110px] print:max-w-[85px] object-contain"
+                        referrerPolicy="no-referrer"
+                      />
                     </div>
-                    
-                    {/* Kotak Dokumen Kontrol Mutu */}
-                    <div className="text-right text-[9px] sm:text-[10px] print:text-[7.5px] text-slate-700 border border-slate-300 rounded-lg p-2 print:p-1 bg-slate-50 shrink-0 font-mono space-y-0.5 leading-tight">
-                      <div><span className="font-sans font-semibold text-slate-500">No. Dokumen :</span> <strong className="text-slate-900 font-bold">{docNumber}</strong></div>
-                      <div><span className="font-sans font-semibold text-slate-500">TANGGAL BERLAKU :</span> <strong className="text-slate-900 font-bold">{effectiveDate}</strong></div>
-                      <div><span className="font-sans font-semibold text-slate-500">MENGGANTI NO. :</span> <strong className="text-slate-900 font-bold">{replacesDocNumber}</strong></div>
+                    <div>
+                      <h1 className="text-base sm:text-lg print:text-[13px] font-black tracking-tight text-slate-900 uppercase">
+                        PT. LARASSANTI MAKMUR SEJAHTERA
+                      </h1>
+                      <p className="text-[10px] sm:text-[11px] print:text-[8px] text-slate-700 font-semibold">
+                        Industri Kosmetika & Personal Care • Sertifikasi CPKB Golongan A
+                      </p>
+                      <p className="text-[9px] sm:text-[10px] print:text-[7.5px] text-slate-600 max-w-md leading-tight mt-0.5">
+                        Jl. Pembangunan 3 No.38 A, B, C, D, RT.002/RW.001, Batusari, Kec. Batuceper, Kota Tangerang, Banten 15121
+                      </p>
                     </div>
                   </div>
-
-                  <div className="mt-2.5 print:mt-1 pt-2 print:pt-1 border-t border-slate-200 text-center">
-                    <h2 className="text-xs sm:text-sm print:text-[11px] font-black uppercase tracking-wider text-slate-900">
-                      {docTitle}
-                    </h2>
-                    <div className="text-[11px] sm:text-xs print:text-[9.5px] font-mono font-bold text-emerald-900 mt-0.5">
-                      NO. LOT / LAPORAN: {normalizeLotNumber(report.lotInternalNumber || report.grnNumber)}
-                    </div>
+                  
+                  {/* Kotak Dokumen Kontrol Mutu */}
+                  <div className="text-right text-[9px] sm:text-[10px] print:text-[7.5px] text-slate-700 border border-slate-300 rounded-lg p-2 print:p-1 bg-slate-50 shrink-0 font-mono space-y-0.5 leading-tight">
+                    <div><span className="font-sans font-semibold text-slate-500">No. Dokumen :</span> <strong className="text-slate-900 font-bold">{docNumber}</strong></div>
+                    <div><span className="font-sans font-semibold text-slate-500">TANGGAL BERLAKU :</span> <strong className="text-slate-900 font-bold">{effectiveDate}</strong></div>
+                    <div><span className="font-sans font-semibold text-slate-500">MENGGANTI NO. :</span> <strong className="text-slate-900 font-bold">{replacesDocNumber}</strong></div>
                   </div>
                 </div>
 
-                {/* I. Identitas Bahan & Penerimaan (GRN) */}
-                <div className="border border-slate-300 rounded-lg overflow-hidden text-xs print:text-[8.5px]">
-                  <div className="bg-slate-100 px-3 py-1.5 print:px-2 print:py-0.5 font-bold uppercase tracking-wider border-b border-slate-300 text-slate-800 text-[11px] print:text-[9px]">
-                    I. Identitas Bahan & Penerimaan (GRN)
+                <div className="mt-2.5 print:mt-1 pt-2 print:pt-1 border-t border-slate-200 text-center">
+                  <h2 className="text-xs sm:text-sm print:text-[11px] font-black uppercase tracking-wider text-slate-900">
+                    {docTitle}
+                  </h2>
+                  <div className="text-[11px] sm:text-xs print:text-[9.5px] font-mono font-bold text-emerald-900 mt-0.5">
+                    NO. LOT / LAPORAN: {normalizeLotNumber(report.lotInternalNumber || report.grnNumber)}
                   </div>
-                  <div className="p-3 print:p-1.5 grid grid-cols-1 sm:grid-cols-2 print:grid-cols-2 gap-x-6 print:gap-x-4 gap-y-1.5 print:gap-y-0.5 text-slate-800 text-[11px] print:text-[8.5px]">
-                    {/* Left Column */}
-                    <div className="space-y-1 print:space-y-0.5">
-                      <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[105px_8px_1fr] items-baseline">
-                        <span className="text-slate-500 font-medium">Kode Material</span>
-                        <span className="text-slate-400 font-bold">:</span>
-                        <span className="font-mono font-bold text-slate-900">{report.materialCode}</span>
-                      </div>
-                      <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[105px_8px_1fr] items-baseline">
-                        <span className="text-slate-500 font-medium">Nama Bahan</span>
-                        <span className="text-slate-400 font-bold">:</span>
-                        <span className="font-bold text-slate-900">{report.materialName}</span>
-                      </div>
-                      <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[105px_8px_1fr] items-baseline">
-                        <span className="text-slate-500 font-medium">Produsen</span>
-                        <span className="text-slate-400 font-bold">:</span>
-                        <span className="font-semibold text-slate-800">{report.manufacturer || '-'}</span>
-                      </div>
-                      <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[105px_8px_1fr] items-baseline">
-                        <span className="text-slate-500 font-medium">Supplier</span>
-                        <span className="text-slate-400 font-bold">:</span>
-                        <span className="text-slate-800">{report.distributor || '-'}</span>
-                      </div>
-                      <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[105px_8px_1fr] items-baseline">
-                        <span className="text-slate-500 font-medium">No. Batch Vendor</span>
-                        <span className="text-slate-400 font-bold">:</span>
-                        <span className="font-mono font-bold text-slate-900">{report.batchNumberVendor || '-'}</span>
-                      </div>
-                    </div>
+                </div>
+              </div>
 
-                    {/* Right Column */}
-                    <div className="space-y-1 print:space-y-0.5">
-                      <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[105px_8px_1fr] items-baseline">
-                        <span className="text-slate-500 font-medium">No. Bukti Terima (GRN)</span>
-                        <span className="text-slate-400 font-bold">:</span>
-                        <span className="font-mono font-bold text-slate-900">{report.grnNumber}</span>
+              {/* I. Identitas Bahan & Penerimaan (GRN) */}
+              <div className="border border-slate-300 rounded-lg overflow-hidden text-xs print:text-[8.5px]">
+                <div className="bg-slate-100 px-3 py-1.5 print:px-2 print:py-0.5 font-bold uppercase tracking-wider border-b border-slate-300 text-slate-800 text-[11px] print:text-[9px]">
+                  I. Identitas Bahan & Penerimaan (GRN)
+                </div>
+                <div className="p-3 print:p-1.5 grid grid-cols-1 sm:grid-cols-2 print:grid-cols-2 gap-x-6 print:gap-x-4 gap-y-1.5 print:gap-y-0.5 text-slate-800 text-[11px] print:text-[8.5px]">
+                  {/* Left Column */}
+                  <div className="space-y-1 print:space-y-0.5">
+                    <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[105px_8px_1fr] items-baseline">
+                      <span className="text-slate-500 font-medium">Kode Material</span>
+                      <span className="text-slate-400 font-bold">:</span>
+                      <span className="font-mono font-bold text-slate-900">{report.materialCode}</span>
+                    </div>
+                    <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[105px_8px_1fr] items-baseline">
+                      <span className="text-slate-500 font-medium">Nama Bahan</span>
+                      <span className="text-slate-400 font-bold">:</span>
+                      <span className="font-bold text-slate-900">{report.materialName}</span>
+                    </div>
+                    <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[105px_8px_1fr] items-baseline">
+                      <span className="text-slate-500 font-medium">Produsen</span>
+                      <span className="text-slate-400 font-bold">:</span>
+                      <span className="font-semibold text-slate-800">{report.manufacturer || '-'}</span>
+                    </div>
+                    <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[105px_8px_1fr] items-baseline">
+                      <span className="text-slate-500 font-medium">Supplier</span>
+                      <span className="text-slate-400 font-bold">:</span>
+                      <span className="text-slate-800">{report.distributor || '-'}</span>
+                    </div>
+                    <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[105px_8px_1fr] items-baseline">
+                      <span className="text-slate-500 font-medium">No. Batch Vendor</span>
+                      <span className="text-slate-400 font-bold">:</span>
+                      <span className="font-mono font-bold text-slate-900">{report.batchNumberVendor || '-'}</span>
+                    </div>
+                  </div>
+
+                  {/* Right Column */}
+                  <div className="space-y-1 print:space-y-0.5">
+                    <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[105px_8px_1fr] items-baseline">
+                      <span className="text-slate-500 font-medium">No. Bukti Terima (GRN)</span>
+                      <span className="text-slate-400 font-bold">:</span>
+                      <span className="font-mono font-bold text-slate-900">{report.grnNumber}</span>
+                    </div>
+                    <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[105px_8px_1fr] items-baseline">
+                      <span className="text-slate-500 font-medium">Tanggal Penerimaan</span>
+                      <span className="text-slate-400 font-bold">:</span>
+                      <span className="text-slate-800">{report.receivedDate || '-'}</span>
+                    </div>
+                    <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[105px_8px_1fr] items-baseline">
+                      <span className="text-slate-500 font-medium">Tanggal Kedaluwarsa</span>
+                      <span className="text-slate-400 font-bold">:</span>
+                      <span className="font-semibold text-slate-800">{report.expiryDate || 'N/A'}</span>
+                    </div>
+                    {isRawMaterial && (
+                      <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[105px_8px_1fr] items-baseline bg-emerald-50/70 px-1 py-0.5 rounded border border-emerald-200/60">
+                        <span className="text-emerald-800 font-bold">Tanggal Retest (Uji Ulang)</span>
+                        <span className="text-emerald-700 font-bold">:</span>
+                        <span className="font-bold text-emerald-950 font-mono">
+                          {report.retestDate || 'N/A (Sesuai ED)'}
+                        </span>
                       </div>
-                      <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[105px_8px_1fr] items-baseline">
-                        <span className="text-slate-500 font-medium">Tanggal Penerimaan</span>
-                        <span className="text-slate-400 font-bold">:</span>
-                        <span className="text-slate-800">{report.receivedDate || '-'}</span>
-                      </div>
-                      <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[105px_8px_1fr] items-baseline">
-                        <span className="text-slate-500 font-medium">Tanggal Kedaluwarsa</span>
-                        <span className="text-slate-400 font-bold">:</span>
-                        <span className="font-semibold text-slate-800">{report.expiryDate || 'N/A'}</span>
-                      </div>
-                      {isRawMaterial && (
-                        <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[105px_8px_1fr] items-baseline bg-emerald-50/70 px-1 py-0.5 rounded border border-emerald-200/60">
-                          <span className="text-emerald-800 font-bold">Tanggal Retest (Uji Ulang)</span>
-                          <span className="text-emerald-700 font-bold">:</span>
-                          <span className="font-bold text-emerald-950 font-mono">
-                            {report.retestDate || 'N/A (Sesuai ED)'}
-                          </span>
-                        </div>
-                      )}
-                      <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[105px_8px_1fr] items-baseline">
-                        <span className="text-slate-500 font-medium">Kuantitas Diterima</span>
-                        <span className="text-slate-400 font-bold">:</span>
-                        <span className="font-bold text-slate-900">{formattedQty} {report.unit}</span>
-                      </div>
-                      <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[105px_8px_1fr] items-baseline">
-                        <span className="text-slate-500 font-medium">Jumlah Kemasan</span>
-                        <span className="text-slate-400 font-bold">:</span>
-                        <span className="text-slate-800">{report.containerCount} {report.containerType}</span>
-                      </div>
+                    )}
+                    <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[105px_8px_1fr] items-baseline">
+                      <span className="text-slate-500 font-medium">Kuantitas Diterima</span>
+                      <span className="text-slate-400 font-bold">:</span>
+                      <span className="font-bold text-slate-900">{formattedQty} {report.unit}</span>
+                    </div>
+                    <div className="grid grid-cols-[130px_10px_1fr] print:grid-cols-[105px_8px_1fr] items-baseline">
+                      <span className="text-slate-500 font-medium">Jumlah Kemasan</span>
+                      <span className="text-slate-400 font-bold">:</span>
+                      <span className="text-slate-800">{report.containerCount} {report.containerType}</span>
                     </div>
                   </div>
                 </div>
+              </div>
 
-                {/* II. Metode & Pengambilan Contoh (Sampling) */}
-                <div className="border border-slate-300 rounded-lg p-2.5 print:p-1.5 text-[11px] print:text-[8px] bg-slate-50/70 space-y-1.5 print:space-y-0.5">
-                  <div className="flex justify-between items-center border-b border-slate-200 pb-1 print:pb-0.5">
-                    <span className="font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5 text-[10px] print:text-[8.5px]">
-                      II. Metode & Pengambilan Contoh (Sampling)
+              {/* II. Metode & Pengambilan Contoh (Sampling) */}
+              <div className="border border-slate-300 rounded-lg p-2.5 print:p-1.5 text-[11px] print:text-[8px] bg-slate-50/70 space-y-1.5 print:space-y-0.5">
+                <div className="flex justify-between items-center border-b border-slate-200 pb-1 print:pb-0.5">
+                  <span className="font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5 text-[10px] print:text-[8.5px]">
+                    II. Metode & Pengambilan Contoh (Sampling)
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-4 print:grid-cols-4 gap-2 print:gap-1.5 text-slate-700 pt-0.5">
+                  <div>
+                    <span className="text-slate-500 block text-[10px] print:text-[7.5px]">Rencana Sampling (n):</span>
+                    <span className="font-bold text-slate-900 block text-[11px] print:text-[8px]">
+                      {report.samplingInfo?.sampleSizeQuantity || 1} {report.samplingInfo?.sampleUnit || 'wadah'}
+                    </span>
+                    <span className="inline-block mt-0.5 px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 font-mono font-bold text-[9px] print:text-[7.5px] border border-emerald-300">
+                      {isRawMaterial ? 'n = 1 + √N' : (report.samplingInfo?.samplingStandard || 'MIL-STD-105E Level II')}
                     </span>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-4 print:grid-cols-4 gap-2 print:gap-1.5 text-slate-700 pt-0.5">
-                    <div>
-                      <span className="text-slate-500 block text-[10px] print:text-[7.5px]">Rencana Sampling (n):</span>
-                      <span className="font-bold text-slate-900 block text-[11px] print:text-[8px]">
-                        {report.samplingInfo?.sampleSizeQuantity || 1} {report.samplingInfo?.sampleUnit || 'wadah'}
-                      </span>
-                      <span className="inline-block mt-0.5 px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 font-mono font-bold text-[9px] print:text-[7.5px] border border-emerald-300">
-                        {isRawMaterial ? 'n = 1 + √N' : (report.samplingInfo?.samplingStandard || 'MIL-STD-105E Level II')}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-slate-500 block text-[10px] print:text-[7.5px]">Sampel Diuji Lab:</span>
-                      <span className="font-bold text-emerald-950 text-[11px] print:text-[8px]">
-                        {report.actualSampleSize !== undefined && report.actualSampleSize !== null
-                          ? `${report.actualSampleSize} ${report.actualSampleUnit || (report.materialType === 'raw' ? 'gram' : 'pcs')}`
-                          : `${report.samplingInfo?.sampleSizeQuantity || 1} ${report.samplingInfo?.sampleUnit || 'wadah'}`}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-slate-500 block text-[10px] print:text-[7.5px]">Wadah yang Disampling:</span>
-                      <span className="font-bold text-slate-900 text-[11px] print:text-[8px]">
-                        {report.sampledContainers || `Wadah #1 s/d #${Math.min(report.containerCount, report.samplingInfo?.sampleSizeQuantity || 1)} (Total ${report.containerCount} ${report.containerType})`}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-slate-500 block text-[10px] print:text-[7.5px]">Waktu & Petugas Sampling:</span>
-                      <span className="text-slate-800 font-medium text-[11px] print:text-[8px]">
-                        {report.samplingDateTime ? new Date(report.samplingDateTime).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : (report.receivedDate || '-')} • {analystName} ({analystJabatan})
-                      </span>
-                    </div>
+                  <div>
+                    <span className="text-slate-500 block text-[10px] print:text-[7.5px]">Sampel Diuji Lab:</span>
+                    <span className="font-bold text-emerald-950 text-[11px] print:text-[8px]">
+                      {report.actualSampleSize !== undefined && report.actualSampleSize !== null
+                        ? `${report.actualSampleSize} ${report.actualSampleUnit || (report.materialType === 'raw' ? 'gram' : 'pcs')}`
+                        : `${report.samplingInfo?.sampleSizeQuantity || 1} ${report.samplingInfo?.sampleUnit || 'wadah'}`}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[10px] print:text-[7.5px]">Wadah yang Disampling:</span>
+                    <span className="font-bold text-slate-900 text-[11px] print:text-[8px]">
+                      {report.sampledContainers || `Wadah #1 s/d #${Math.min(report.containerCount, report.samplingInfo?.sampleSizeQuantity || 1)} (Total ${report.containerCount} ${report.containerType})`}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[10px] print:text-[7.5px]">Waktu & Petugas Sampling:</span>
+                    <span className="text-slate-800 font-medium text-[11px] print:text-[8px]">
+                      {report.samplingDateTime ? new Date(report.samplingDateTime).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : (report.receivedDate || '-')} • {analystName} ({analystJabatan})
+                    </span>
                   </div>
                 </div>
+              </div>
 
-                {/* III. Hasil Pemeriksaan & Analisis Laboratorium QC (Bagian 1) */}
-                <div className="border border-slate-300 rounded-lg overflow-hidden text-xs print:text-[8.5px]">
-                  <div className="bg-slate-100 px-3 py-1.5 print:px-2 print:py-0.5 font-bold uppercase tracking-wider border-b border-slate-300 text-slate-800 text-[11px] print:text-[9px] flex items-center justify-between">
-                    <span>III. Hasil Pemeriksaan & Analisis Laboratorium QC</span>
-                    {needsMultiPage && (
-                      <span className="text-[10px] print:text-[8px] text-slate-500 font-normal">
-                        (Bagian 1 dari 2)
-                      </span>
-                    )}
-                  </div>
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-300 text-slate-700 font-bold uppercase text-[10px] print:text-[8px]">
-                        <th className="p-2 print:p-1 w-8 text-center border-r border-slate-200">No</th>
-                        <th className="p-2 print:p-1 w-1/3 border-r border-slate-200">Parameter Uji</th>
-                        <th className="p-2 print:p-1 w-1/3 border-r border-slate-200">Spesifikasi Standar</th>
-                        <th className="p-2 print:p-1 w-1/4 border-r border-slate-200">Hasil Analisa Lab</th>
-                        <th className="p-2 print:p-1 w-14 text-center">Hasil</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200 text-[11px] print:text-[8.5px]">
-                      {page1Params.map((param, idx) => (
-                        <tr key={param.id || idx} className="hover:bg-slate-50/50">
-                          <td className="p-2 print:p-1 text-center font-mono text-slate-500 border-r border-slate-200">
-                            {idx + 1}
-                          </td>
-                          <td className="p-2 print:p-1 font-semibold text-slate-800 border-r border-slate-200">
-                            {param.parameterName}
-                          </td>
-                          <td className="p-2 print:p-1 text-slate-700 border-r border-slate-200">
-                            {param.specification}
-                          </td>
-                          <td className="p-2 print:p-1 font-bold text-slate-900 border-r border-slate-200">
-                            {param.resultValue || '-'}
-                          </td>
-                          <td className="p-2 print:p-1 text-center font-bold">
-                            <span
-                              className={`px-1.5 py-0.2 rounded text-[9px] print:text-[7.5px] font-black ${
-                                param.isCompliant
-                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                  : 'bg-red-100 text-red-800 border border-red-300'
-                              }`}
-                            >
-                              {param.isCompliant ? 'MS' : 'TMS'}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {needsMultiPage && (
-                    <div className="text-[10px] print:text-[8px] text-slate-500 italic p-1 border-t border-slate-200 text-center">
-                      * Bersambung ke Lembar 2 untuk lanjutan parameter analisis & otorisasi kelulusan mutu resmi.
-                    </div>
-                  )}
+              {/* III. Tabel Hasil Pemeriksaan & Analisis Laboratorium QC (Aliran Alami Penuh) */}
+              <div className="border border-slate-300 rounded-lg overflow-hidden text-xs print:text-[8.5px]">
+                <div className="bg-slate-100 px-3 py-1.5 print:px-2 print:py-0.5 font-bold uppercase tracking-wider border-b border-slate-300 text-slate-800 text-[11px] print:text-[9px] flex items-center justify-between">
+                  <span>III. Hasil Pemeriksaan & Analisis Laboratorium QC</span>
+                  <span className="text-[10px] print:text-[8px] text-slate-500 font-normal">
+                    (Total {parameters.length} Parameter Uji)
+                  </span>
                 </div>
-
-                {/* If Single Page: show Conclusion & Signature on Page 1 */}
-                {!needsMultiPage && (
-                  <>
-                    {/* Kesimpulan & Disposisi Mutu */}
-                    <div
-                      className={`border-2 rounded-xl p-3 print:p-1.5 text-xs print:text-[8.5px] page-break-inside-avoid ${
-                        isRejected
-                          ? 'border-red-400 bg-red-50/60'
-                          : hasDeviation
-                          ? 'border-amber-400 bg-amber-50/60'
-                          : 'border-emerald-400 bg-emerald-50/60'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="font-bold text-slate-700 uppercase tracking-wider text-[10px] print:text-[8px]">
-                            IV. KESIMPULAN & DISPOSISI KELULUSAN MUTU
-                          </div>
-                          <div
-                            className={`text-sm sm:text-base print:text-[11px] font-black mt-0.5 ${
-                              isRejected
-                                ? 'text-red-700'
-                                : hasDeviation
-                                ? 'text-amber-800'
-                                : 'text-emerald-800'
+                <table className="w-full text-left border-collapse">
+                  <thead className="print:table-header-group">
+                    <tr className="bg-slate-50 border-b border-slate-300 text-slate-700 font-bold uppercase text-[10px] print:text-[8px]">
+                      <th className="p-2 print:p-1 w-8 text-center border-r border-slate-200">No</th>
+                      <th className="p-2 print:p-1 w-1/3 border-r border-slate-200">Parameter Uji</th>
+                      <th className="p-2 print:p-1 w-1/3 border-r border-slate-200">Spesifikasi Standar</th>
+                      <th className="p-2 print:p-1 w-1/4 border-r border-slate-200">Hasil Analisa Lab</th>
+                      <th className="p-2 print:p-1 w-14 text-center">Hasil</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 text-[11px] print:text-[8.5px]">
+                    {parameters.map((param, idx) => (
+                      <tr key={param.id || idx} className="hover:bg-slate-50/50 break-inside-avoid page-break-inside-avoid">
+                        <td className="p-2 print:p-1 text-center font-mono text-slate-500 border-r border-slate-200">
+                          {idx + 1}
+                        </td>
+                        <td className="p-2 print:p-1 font-semibold text-slate-800 border-r border-slate-200">
+                          {param.parameterName}
+                        </td>
+                        <td className="p-2 print:p-1 text-slate-700 border-r border-slate-200">
+                          {param.specification}
+                        </td>
+                        <td className="p-2 print:p-1 font-bold text-slate-900 border-r border-slate-200">
+                          {param.resultValue || '-'}
+                        </td>
+                        <td className="p-2 print:p-1 text-center font-bold">
+                          <span
+                            className={`px-1.5 py-0.2 rounded text-[9px] print:text-[7.5px] font-black ${
+                              param.isCompliant
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                : 'bg-red-100 text-red-800 border border-red-300'
                             }`}
                           >
-                            STATUS DISPOSISI:{' '}
-                            {isRejected
-                              ? 'DITOLAK / REJECT'
-                              : hasDeviation
-                              ? 'DILULUSKAN BERSYARAT (RELEASE BY DEVIATION)'
-                              : 'DILULUSKAN / RELEASE'}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-[10px] print:text-[7.5px] text-slate-500 font-semibold">TANGGAL OTORISASI</div>
-                          <div className="font-bold font-mono text-slate-800 text-xs print:text-[9px]">
-                            {report.qmSignature?.signedAt
-                              ? new Date(report.qmSignature.signedAt).toLocaleDateString('id-ID', {
-                                  day: '2-digit',
-                                  month: 'long',
-                                  year: 'numeric',
-                                })
-                              : new Date().toLocaleDateString('id-ID')}
-                          </div>
-                        </div>
-                      </div>
+                            {param.isCompliant ? 'MS' : 'TMS'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
 
-                      {report.qmNotes && (
-                        <div className="mt-1.5 print:mt-1 pt-1.5 print:pt-0.5 border-t border-slate-200/60 text-slate-700 text-[10px] print:text-[8px]">
-                          <strong>Catatan Disposisi:</strong> {report.qmNotes}
-                        </div>
-                      )}
+              {/* IV. Kesimpulan & Disposisi Mutu */}
+              <div
+                className={`border-2 rounded-xl p-3 print:p-1.5 text-xs print:text-[8.5px] break-inside-avoid page-break-inside-avoid ${
+                  isRejected
+                    ? 'border-red-400 bg-red-50/60'
+                    : hasDeviation
+                    ? 'border-amber-400 bg-amber-50/60'
+                    : 'border-emerald-400 bg-emerald-50/60'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-bold text-slate-700 uppercase tracking-wider text-[10px] print:text-[8px]">
+                      IV. KESIMPULAN & DISPOSISI KELULUSAN MUTU
                     </div>
-
-                    {/* Dual Digital Signature */}
-                    <div className="border border-slate-300 rounded-xl p-3 print:p-1.5 grid grid-cols-2 gap-4 print:gap-2 text-xs print:text-[8px] text-slate-800 page-break-inside-avoid">
-                      <div className="space-y-1 print:space-y-0.5 border-r border-slate-200 pr-3 print:pr-1.5">
-                        <div className="font-bold text-slate-700 uppercase tracking-wider text-[9px] print:text-[7.5px] flex items-center justify-between">
-                          <span>{analystJabatan} :</span>
-                          <span className="text-[8px] print:text-[7px] text-slate-400 font-normal lowercase">(pemeriksa lab)</span>
-                        </div>
-                        <div className="h-14 print:h-8 flex flex-col justify-center">
-                          <div className="font-mono font-bold text-emerald-800 text-[10px] print:text-[8px]">
-                            DIGITALLY SIGNED ELECTRONICALLY
-                          </div>
-                          <div className="text-[9px] print:text-[7.5px] font-mono text-slate-500 truncate">
-                            Hash: {report.staffSignature?.signatureHash || 'SIG-STF-VERIFIED'}
-                          </div>
-                          <div className="text-[9px] print:text-[7px] text-slate-400">
-                            Waktu: {report.staffSignature?.signedAt ? new Date(report.staffSignature.signedAt).toLocaleString('id-ID') : '-'}
-                          </div>
-                        </div>
-                        <div className="border-t border-slate-300 pt-1 print:pt-0.5">
-                          <div className="font-bold text-slate-900 text-[11px] print:text-[8.5px]">
-                            {analystName}
-                          </div>
-                          <div className="text-[9px] print:text-[7.5px] text-slate-600 font-medium font-mono">
-                            NIK: {analystNik} • {analystJabatan}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="space-y-1 print:space-y-0.5 pl-1 print:pl-0.5">
-                        <div className="font-bold text-slate-700 uppercase tracking-wider text-[9px] print:text-[7.5px] flex items-center justify-between">
-                          <span>Quality Manager :</span>
-                          <span className="text-[8px] print:text-[7px] text-slate-400 font-normal lowercase">(otorisasi mutu)</span>
-                        </div>
-                        <div className="h-14 print:h-8 flex flex-col justify-center">
-                          {report.qmSignature?.signatureHash ? (
-                            <>
-                              <div className="font-mono font-bold text-blue-900 text-[10px] print:text-[8px]">
-                                OFFICIALLY AUTHORIZED BY QUALITY MANAGER
-                              </div>
-                              <div className="text-[9px] print:text-[7.5px] font-mono text-slate-500 truncate">
-                                Hash: {report.qmSignature.signatureHash}
-                              </div>
-                              <div className="text-[9px] print:text-[7px] text-slate-400">
-                                Waktu: {report.qmSignature.signedAt ? new Date(report.qmSignature.signedAt).toLocaleString('id-ID') : '-'}
-                              </div>
-                            </>
-                          ) : (
-                            <div className="text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1 text-[9px] print:text-[7.5px] font-medium flex items-center justify-center h-full">
-                              Menunggu Otorisasi Quality Manager
-                            </div>
-                          )}
-                        </div>
-                        <div className="border-t border-slate-300 pt-1 print:pt-0.5">
-                          <div className="font-bold text-slate-900 text-[11px] print:text-[8.5px]">
-                            {report.qmSignature?.signatureHash ? qmName : (report.status === 'PASSED' || report.status === 'PASSED_WITH_DEVIATION' || report.status === 'REJECTED' ? qmName : 'Belum Diotorisasi')}
-                          </div>
-                          <div className="text-[9px] print:text-[7.5px] text-slate-600 font-medium font-mono">
-                            NIK: {qmNik} • Quality Manager
-                          </div>
-                        </div>
-                      </div>
+                    <div
+                      className={`text-sm sm:text-base print:text-[11px] font-black mt-0.5 ${
+                        isRejected
+                          ? 'text-red-700'
+                          : hasDeviation
+                          ? 'text-amber-800'
+                          : 'text-emerald-800'
+                      }`}
+                    >
+                      STATUS DISPOSISI:{' '}
+                      {isRejected
+                        ? 'DITOLAK / REJECT'
+                        : hasDeviation
+                        ? 'DILULUSKAN BERSYARAT (RELEASE BY DEVIATION)'
+                        : 'DILULUSKAN / RELEASE'}
                     </div>
-                  </>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[10px] print:text-[7.5px] text-slate-500 font-semibold">TANGGAL OTORISASI</div>
+                    <div className="font-bold font-mono text-slate-800 text-xs print:text-[9px]">
+                      {report.qmSignature?.signedAt
+                        ? new Date(report.qmSignature.signedAt).toLocaleDateString('id-ID', {
+                            day: '2-digit',
+                            month: 'long',
+                            year: 'numeric',
+                          })
+                        : new Date().toLocaleDateString('id-ID')}
+                    </div>
+                  </div>
+                </div>
+
+                {report.qmNotes && (
+                  <div className="mt-1.5 print:mt-1 pt-1.5 print:pt-0.5 border-t border-slate-200/60 text-slate-700 text-[10px] print:text-[8px]">
+                    <strong>Catatan Disposisi:</strong> {report.qmNotes}
+                  </div>
                 )}
               </div>
 
-              {/* Page 1 Footer */}
-              <div className="pt-2 print:pt-1 border-t border-slate-200 flex items-center justify-between text-[9px] print:text-[8px] text-slate-500">
-                <div>
-                  PT. Larassanti Makmur Sejahtera • Sistem Terpadu Pengawasan Mutu CPKB
+              {/* V. Blok Dual Digital Signature (Staf Analis & Quality Manager) */}
+              <div className="border border-slate-300 rounded-xl p-3 print:p-1.5 grid grid-cols-2 gap-4 print:gap-2 text-xs print:text-[8px] text-slate-800 break-inside-avoid page-break-inside-avoid">
+                <div className="space-y-1 print:space-y-0.5 border-r border-slate-200 pr-3 print:pr-1.5">
+                  <div className="font-bold text-slate-700 uppercase tracking-wider text-[9px] print:text-[7.5px] flex items-center justify-between">
+                    <span>{analystJabatan} :</span>
+                    <span className="text-[8px] print:text-[7px] text-slate-400 font-normal lowercase">(pemeriksa lab)</span>
+                  </div>
+                  <div className="h-14 print:h-8 flex flex-col justify-center">
+                    <div className="font-mono font-bold text-emerald-800 text-[10px] print:text-[8px]">
+                      DIGITALLY SIGNED ELECTRONICALLY
+                    </div>
+                    <div className="text-[9px] print:text-[7.5px] font-mono text-slate-500 truncate">
+                      Hash: {report.staffSignature?.signatureHash || 'SIG-STF-VERIFIED'}
+                    </div>
+                    <div className="text-[9px] print:text-[7px] text-slate-400">
+                      Waktu: {report.staffSignature?.signedAt ? new Date(report.staffSignature.signedAt).toLocaleString('id-ID') : '-'}
+                    </div>
+                  </div>
+                  <div className="border-t border-slate-300 pt-1 print:pt-0.5">
+                    <div className="font-bold text-slate-900 text-[11px] print:text-[8.5px]">
+                      {analystName}
+                    </div>
+                    <div className="text-[9px] print:text-[7.5px] text-slate-600 font-medium font-mono">
+                      NIK: {analystNik} • {analystJabatan}
+                    </div>
+                  </div>
                 </div>
-                <div className="font-mono font-bold text-slate-700">
-                  {needsMultiPage ? 'Halaman 1 dari 2 (Bersambung)' : 'Halaman 1 dari 1 (Lengkap)'}
+
+                <div className="space-y-1 print:space-y-0.5 pl-1 print:pl-0.5">
+                  <div className="font-bold text-slate-700 uppercase tracking-wider text-[9px] print:text-[7.5px] flex items-center justify-between">
+                    <span>Quality Manager :</span>
+                    <span className="text-[8px] print:text-[7px] text-slate-400 font-normal lowercase">(otorisasi mutu)</span>
+                  </div>
+                  <div className="h-14 print:h-8 flex flex-col justify-center">
+                    {report.qmSignature?.signatureHash ? (
+                      <>
+                        <div className="font-mono font-bold text-blue-900 text-[10px] print:text-[8px]">
+                          OFFICIALLY AUTHORIZED BY QUALITY MANAGER
+                        </div>
+                        <div className="text-[9px] print:text-[7.5px] font-mono text-slate-500 truncate">
+                          Hash: {report.qmSignature.signatureHash}
+                        </div>
+                        <div className="text-[9px] print:text-[7.5px] text-slate-400">
+                          Waktu: {report.qmSignature.signedAt ? new Date(report.qmSignature.signedAt).toLocaleString('id-ID') : '-'}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1 text-[9px] print:text-[7.5px] font-medium flex items-center justify-center h-full">
+                        Menunggu Otorisasi Quality Manager
+                      </div>
+                    )}
+                  </div>
+                  <div className="border-t border-slate-300 pt-1 print:pt-0.5">
+                    <div className="font-bold text-slate-900 text-[11px] print:text-[8.5px]">
+                      {report.qmSignature?.signatureHash ? qmName : (report.status === 'PASSED' || report.status === 'PASSED_WITH_DEVIATION' || report.status === 'REJECTED' ? qmName : 'Belum Diotorisasi')}
+                    </div>
+                    <div className="text-[9px] print:text-[7.5px] text-slate-600 font-medium font-mono">
+                      NIK: {qmNik} • Quality Manager
+                    </div>
+                  </div>
                 </div>
               </div>
-
             </div>
 
-            {/* ========================================================================= */}
-            {/* LEMBAR 2 / HALAMAN 2 (JIKA DOKUMEN MULTI-PAGE) */}
-            {/* ========================================================================= */}
-            {needsMultiPage && (
-              <>
-                <div className="no-print flex items-center justify-between text-xs font-bold text-slate-600 px-2 pt-4">
-                  <span className="flex items-center gap-1.5 uppercase tracking-wider">
-                    <FileText className="w-4 h-4 text-emerald-700" />
-                    Lembar Dokumen Halaman 2 dari 2 (Lanjutan & Otorisasi)
-                  </span>
-                  <span className="bg-slate-300 text-slate-800 px-2.5 py-0.5 rounded-full text-[10px] font-mono">
-                    Format Cetak A4 Portrait
-                  </span>
-                </div>
-
-                <div className="print-page bg-white p-6 sm:p-8 shadow-xl rounded-2xl border border-slate-300 text-slate-900 space-y-3 print:space-y-1.5 print:p-0 print:shadow-none print:border-none print:rounded-none relative flex flex-col justify-between min-h-[900px] print:min-h-0 print:h-auto">
-                  
-                  <div className="space-y-3 print:space-y-1.5">
-                    {/* Header Ringkas Halaman Lanjutan */}
-                    <div className="border-b-2 border-slate-900 pb-2 print:pb-1 flex items-center justify-between">
-                      <div>
-                        <div className="text-xs print:text-[11px] font-black uppercase text-slate-900">
-                          PT. LARASSANTI MAKMUR SEJAHTERA • INTERNAL COA
-                        </div>
-                        <div className="text-[11px] print:text-[8.5px] text-slate-600 font-semibold">
-                          Lanjutan Laporan Mutu Lot #{normalizeLotNumber(report.lotInternalNumber || report.grnNumber)} - {report.materialName}
-                        </div>
-                      </div>
-                      <div className="text-right font-mono text-[10px] print:text-[8px] text-slate-600 space-y-0.5">
-                        <div><strong>{docNumber}</strong> • HALAMAN 2/2</div>
-                        <div className="text-[9px] print:text-[7.5px] text-slate-400">Tgl Berlaku: {effectiveDate}</div>
-                      </div>
-                    </div>
-
-                    {/* III. Lanjutan Tabel Hasil Analisis Laboratorium */}
-                    <div className="border border-slate-300 rounded-lg overflow-hidden text-xs print:text-[8.5px]">
-                      <div className="bg-slate-100 px-3 py-1.5 print:px-2 print:py-0.5 font-bold uppercase tracking-wider border-b border-slate-300 text-slate-800 text-[11px] print:text-[9px]">
-                        III. Lanjutan Parameter Hasil Pemeriksaan Laboratorium QC
-                      </div>
-                      <table className="w-full text-left border-collapse">
-                        <thead>
-                          <tr className="bg-slate-50 border-b border-slate-300 text-slate-700 font-bold uppercase text-[10px] print:text-[8px]">
-                            <th className="p-2 print:p-1 w-8 text-center border-r border-slate-200">No</th>
-                            <th className="p-2 print:p-1 w-1/3 border-r border-slate-200">Parameter Uji</th>
-                            <th className="p-2 print:p-1 w-1/3 border-r border-slate-200">Spesifikasi Standar</th>
-                            <th className="p-2 print:p-1 w-1/4 border-r border-slate-200">Hasil Analisa Lab</th>
-                            <th className="p-2 print:p-1 w-14 text-center">Hasil</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-200 text-[11px] print:text-[8.5px]">
-                          {page2Params.map((param, idx) => (
-                            <tr key={param.id || idx} className="hover:bg-slate-50/50">
-                              <td className="p-2 print:p-1 text-center font-mono text-slate-500 border-r border-slate-200">
-                                {page1Params.length + idx + 1}
-                              </td>
-                              <td className="p-2 print:p-1 font-semibold text-slate-800 border-r border-slate-200">
-                                {param.parameterName}
-                              </td>
-                              <td className="p-2 print:p-1 text-slate-700 border-r border-slate-200">
-                                {param.specification}
-                              </td>
-                              <td className="p-2 print:p-1 font-bold text-slate-900 border-r border-slate-200">
-                                {param.resultValue || '-'}
-                              </td>
-                              <td className="p-2 print:p-1 text-center font-bold">
-                                <span
-                                  className={`px-1.5 py-0.2 rounded text-[9px] print:text-[7.5px] font-black ${
-                                    param.isCompliant
-                                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                      : 'bg-red-100 text-red-800 border border-red-300'
-                                  }`}
-                                >
-                                  {param.isCompliant ? 'MS' : 'TMS'}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* IV. Kesimpulan & Disposisi Mutu */}
-                    <div
-                      className={`border-2 rounded-xl p-3 print:p-1.5 text-xs print:text-[8.5px] page-break-inside-avoid ${
-                        isRejected
-                          ? 'border-red-400 bg-red-50/60'
-                          : hasDeviation
-                          ? 'border-amber-400 bg-amber-50/60'
-                          : 'border-emerald-400 bg-emerald-50/60'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="font-bold text-slate-700 uppercase tracking-wider text-[10px] print:text-[8px]">
-                            IV. KESIMPULAN & DISPOSISI KELULUSAN MUTU
-                          </div>
-                          <div
-                            className={`text-sm sm:text-base print:text-[11px] font-black mt-0.5 ${
-                              isRejected
-                                ? 'text-red-700'
-                                : hasDeviation
-                                ? 'text-amber-800'
-                                : 'text-emerald-800'
-                            }`}
-                          >
-                            STATUS DISPOSISI:{' '}
-                            {isRejected
-                              ? 'DITOLAK / REJECT'
-                              : hasDeviation
-                              ? 'DILULUSKAN BERSYARAT (RELEASE BY DEVIATION)'
-                              : 'DILULUSKAN / RELEASE'}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-[10px] print:text-[7.5px] text-slate-500 font-semibold">TANGGAL OTORISASI</div>
-                          <div className="font-bold font-mono text-slate-800 text-xs print:text-[9px]">
-                            {report.qmSignature?.signedAt
-                              ? new Date(report.qmSignature.signedAt).toLocaleDateString('id-ID', {
-                                  day: '2-digit',
-                                  month: 'long',
-                                  year: 'numeric',
-                                })
-                              : new Date().toLocaleDateString('id-ID')}
-                          </div>
-                        </div>
-                      </div>
-
-                      {report.qmNotes && (
-                        <div className="mt-1.5 print:mt-1 pt-1.5 print:pt-0.5 border-t border-slate-200/60 text-slate-700 text-[10px] print:text-[8px]">
-                          <strong>Catatan Disposisi:</strong> {report.qmNotes}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* V. Blok Dual Digital Signature (Staf Analis & Quality Manager) */}
-                    <div className="border border-slate-300 rounded-xl p-3 print:p-1.5 grid grid-cols-2 gap-4 print:gap-2 text-xs print:text-[8px] text-slate-800 page-break-inside-avoid">
-                      {/* Analis QC / Jabatan User */}
-                      <div className="space-y-1 print:space-y-0.5 border-r border-slate-200 pr-3 print:pr-1.5">
-                        <div className="font-bold text-slate-700 uppercase tracking-wider text-[9px] print:text-[7.5px] flex items-center justify-between">
-                          <span>{analystJabatan} :</span>
-                          <span className="text-[8px] print:text-[7px] text-slate-400 font-normal lowercase">(pemeriksa lab)</span>
-                        </div>
-                        <div className="h-14 print:h-8 flex flex-col justify-center">
-                          <div className="font-mono font-bold text-emerald-800 text-[10px] print:text-[8px]">
-                            DIGITALLY SIGNED ELECTRONICALLY
-                          </div>
-                          <div className="text-[9px] print:text-[7.5px] font-mono text-slate-500 truncate">
-                            Hash: {report.staffSignature?.signatureHash || 'SIG-STF-VERIFIED'}
-                          </div>
-                          <div className="text-[9px] print:text-[7px] text-slate-400">
-                            Waktu: {report.staffSignature?.signedAt ? new Date(report.staffSignature.signedAt).toLocaleString('id-ID') : '-'}
-                          </div>
-                        </div>
-                        <div className="border-t border-slate-300 pt-1 print:pt-0.5">
-                          <div className="font-bold text-slate-900 text-[11px] print:text-[8.5px]">
-                            {analystName}
-                          </div>
-                          <div className="text-[9px] print:text-[7.5px] text-slate-600 font-medium font-mono">
-                            NIK: {analystNik} • {analystJabatan}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Quality Manager */}
-                      <div className="space-y-1 print:space-y-0.5 pl-1 print:pl-0.5">
-                        <div className="font-bold text-slate-700 uppercase tracking-wider text-[9px] print:text-[7.5px] flex items-center justify-between">
-                          <span>Quality Manager :</span>
-                          <span className="text-[8px] print:text-[7px] text-slate-400 font-normal lowercase">(otorisasi mutu)</span>
-                        </div>
-                        <div className="h-14 print:h-8 flex flex-col justify-center">
-                          {report.qmSignature?.signatureHash ? (
-                            <>
-                              <div className="font-mono font-bold text-blue-900 text-[10px] print:text-[8px]">
-                                OFFICIALLY AUTHORIZED BY QUALITY MANAGER
-                              </div>
-                              <div className="text-[9px] print:text-[7.5px] font-mono text-slate-500 truncate">
-                                Hash: {report.qmSignature.signatureHash}
-                              </div>
-                              <div className="text-[9px] print:text-[7px] text-slate-400">
-                                Waktu: {report.qmSignature.signedAt ? new Date(report.qmSignature.signedAt).toLocaleString('id-ID') : '-'}
-                              </div>
-                            </>
-                          ) : (
-                            <div className="text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1 text-[9px] print:text-[7.5px] font-medium flex items-center justify-center h-full">
-                              Menunggu Otorisasi Quality Manager
-                            </div>
-                          )}
-                        </div>
-                        <div className="border-t border-slate-300 pt-1 print:pt-0.5">
-                          <div className="font-bold text-slate-900 text-[11px] print:text-[8.5px]">
-                            {report.qmSignature?.signatureHash ? qmName : (report.status === 'PASSED' || report.status === 'PASSED_WITH_DEVIATION' || report.status === 'REJECTED' ? qmName : 'Belum Diotorisasi')}
-                          </div>
-                          <div className="text-[9px] print:text-[7.5px] text-slate-600 font-medium font-mono">
-                            NIK: {qmNik} • Quality Manager
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Page 2 Footer */}
-                  <div className="pt-2 print:pt-1 border-t border-slate-200 flex items-center justify-between text-[9px] print:text-[8px] text-slate-500">
-                    <div className="flex items-center gap-1">
-                      <QrCode className="w-3.5 h-3.5 text-slate-700" />
-                      <span>VERIFIED CPKB LOT #{normalizeLotNumber(report.lotInternalNumber || report.grnNumber)} • PT. Larassanti Makmur Sejahtera • Sistem Terpadu Pengawasan Mutu CPKB</span>
-                    </div>
-                    <div className="font-mono font-bold text-slate-700">
-                      Halaman 2 dari 2 (Selesai)
-                    </div>
-                  </div>
-
-                </div>
-              </>
-            )}
+            {/* Dokumen Footer */}
+            <div className="pt-2 print:pt-1 border-t border-slate-200 flex items-center justify-between text-[9px] print:text-[8px] text-slate-500 break-inside-avoid page-break-inside-avoid mt-2">
+              <div className="flex items-center gap-1.5">
+                <QrCode className="w-3.5 h-3.5 text-slate-700 shrink-0" />
+                <span>VERIFIED CPKB LOT #{normalizeLotNumber(report.lotInternalNumber || report.grnNumber)} • PT. Larassanti Makmur Sejahtera</span>
+              </div>
+              <div className="font-mono font-bold text-slate-700">
+                Sistem Terpadu Pengawasan Mutu CPKB • Dokumen Sah
+              </div>
+            </div>
 
           </div>
 
