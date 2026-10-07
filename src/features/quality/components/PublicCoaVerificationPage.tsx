@@ -12,9 +12,12 @@ import {
   Layers,
   Building2,
   FileBadge,
+  FileText,
+  Eye,
 } from 'lucide-react';
 import { qualityService } from '../qualityService';
 import { QcInspectionReport } from '../types/qcTypes';
+import { QcInspectionReportPdfModal } from './QcInspectionReportPdfModal';
 import { normalizeLotNumber } from '../utils/qcNumbering';
 
 interface PublicCoaVerificationPageProps {
@@ -31,6 +34,7 @@ export const PublicCoaVerificationPage: React.FC<PublicCoaVerificationPageProps>
   const [reports, setReports] = useState<QcInspectionReport[]>([]);
   const [selectedReport, setSelectedReport] = useState<QcInspectionReport | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [showPdfModal, setShowPdfModal] = useState(false);
 
   // Fetch reports directly from Supabase database
   const loadData = async (targetTerm?: string) => {
@@ -233,21 +237,43 @@ export const PublicCoaVerificationPage: React.FC<PublicCoaVerificationPageProps>
                     : 'Sedang Dalam Proses Pengujian Laboratorium QC'}
                 </p>
               </div>
+
+              {/* Header Quick View CoA Button */}
+              <button
+                type="button"
+                onClick={() => setShowPdfModal(true)}
+                className="hidden sm:inline-flex px-3.5 py-2 bg-white/20 hover:bg-white/30 active:scale-95 text-white rounded-xl text-xs font-bold backdrop-blur-xs border border-white/30 items-center gap-1.5 transition-all cursor-pointer shadow-sm shrink-0"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>View CoA</span>
+              </button>
             </div>
 
             {/* 2. Detail Identitas Material & Lot */}
             <div className="p-5 sm:p-6 space-y-4">
               {/* Nama Bahan */}
-              <div className="border-b border-slate-100 pb-3">
-                <span className="text-[10px] font-bold text-slate-400 uppercase block tracking-wider">
-                  Nama Bahan / Material
-                </span>
-                <div className="text-base sm:text-lg font-black text-slate-900 uppercase mt-0.5">
-                  {selectedReport.materialName}
+              <div className="border-b border-slate-100 pb-3 flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block tracking-wider">
+                    Nama Bahan / Material
+                  </span>
+                  <div className="text-base sm:text-lg font-black text-slate-900 uppercase mt-0.5">
+                    {selectedReport.materialName}
+                  </div>
+                  <div className="text-xs font-mono font-bold text-emerald-700 mt-0.5">
+                    Kode: {selectedReport.materialCode}
+                  </div>
                 </div>
-                <div className="text-xs font-mono font-bold text-emerald-700 mt-0.5">
-                  Kode: {selectedReport.materialCode}
-                </div>
+
+                {/* Mobile View CoA Button */}
+                <button
+                  type="button"
+                  onClick={() => setShowPdfModal(true)}
+                  className="sm:hidden px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  <span>View CoA</span>
+                </button>
               </div>
 
               {/* Grid Informasi Inti */}
@@ -319,6 +345,18 @@ export const PublicCoaVerificationPage: React.FC<PublicCoaVerificationPageProps>
                   {selectedReport.storageConditions || 'Suhu Ruang Terkendali (15-25°C)'}
                 </span>
               </div>
+
+              {/* Tombol Utama View CoA */}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowPdfModal(true)}
+                  className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-2xl text-xs font-black shadow-md shadow-emerald-900/20 flex items-center justify-center gap-2 border border-emerald-500/30 transition-all cursor-pointer"
+                >
+                  <FileText className="w-4 h-4" />
+                  <span>Lihat Dokumen CoA Resmi (View CoA)</span>
+                </button>
+              </div>
             </div>
 
             {/* 3. Footer Otorisasi Resmi */}
@@ -333,6 +371,15 @@ export const PublicCoaVerificationPage: React.FC<PublicCoaVerificationPageProps>
               </span>
             </div>
           </div>
+        )}
+
+        {/* Official CoA PDF Preview Modal */}
+        {selectedReport && showPdfModal && (
+          <QcInspectionReportPdfModal
+            isOpen={showPdfModal}
+            onClose={() => setShowPdfModal(false)}
+            report={selectedReport}
+          />
         )}
 
         {/* Footnote */}
