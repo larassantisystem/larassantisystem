@@ -83,12 +83,22 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
       : '-';
 
   const handlePrintPdf = () => {
+    const rawLot = normalizeLotNumber(report.lotInternalNumber || report.grnNumber || 'LOT');
+    const cleanLot = rawLot.replace(/[/\\?%*:|"<>]/g, '-').trim();
+    const cleanMaterial = (report.materialName || 'Material').replace(/[/\\?%*:|"<>]/g, '-').trim();
+    const cleanDocNo = docNumber.replace(/[/\\?%*:|"<>]/g, '-').trim();
+    
+    const suggestedFileName = `COA_${cleanDocNo}_${cleanLot}_${cleanMaterial}`;
+    const previousTitle = document.title;
+    document.title = suggestedFileName;
+
     document.body.classList.add('printing-report');
     if (isCompactMode) {
       document.body.classList.add('printing-compact');
     }
     window.print();
     setTimeout(() => {
+      document.title = previousTitle;
       document.body.classList.remove('printing-report');
       document.body.classList.remove('printing-compact');
     }, 1000);

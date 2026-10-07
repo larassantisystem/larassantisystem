@@ -71,12 +71,22 @@ export const IpcInspectionReportPdfModal: React.FC<IpcInspectionReportPdfModalPr
   if (!isOpen || !batch) return null;
 
   const handlePrintPdf = () => {
+    const rawIpc = batch.ipcNo || batch.id || 'IPC';
+    const cleanIpc = rawIpc.replace(/[/\\?%*:|"<>]/g, '-').trim();
+    const cleanBatch = (batch.batchNo || 'BETS').replace(/[/\\?%*:|"<>]/g, '-').trim();
+    const cleanProduct = (batch.productName || 'Produk').replace(/[/\\?%*:|"<>]/g, '-').trim();
+    
+    const suggestedFileName = `IPC_${cleanIpc}_${cleanBatch}_${cleanProduct}`;
+    const previousTitle = document.title;
+    document.title = suggestedFileName;
+
     document.body.classList.add('printing-report');
     if (isCompactMode) {
       document.body.classList.add('printing-compact');
     }
     window.print();
     setTimeout(() => {
+      document.title = previousTitle;
       document.body.classList.remove('printing-report');
       document.body.classList.remove('printing-compact');
     }, 1000);
