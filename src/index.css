@@ -74,7 +74,7 @@
     backdrop-filter: none !important;
   }
 
-  /* Tampilkan kontainer cetak resmi secara utuh dengan kontras hitam pekat */
+  /* Tampilkan kontainer cetak resmi secara utuh */
   #quarantine-label-printable,
   #quarantine-label-printable *,
   #qc-status-label-printable,
@@ -86,7 +86,6 @@
   #ipc-labels-printable,
   #ipc-labels-printable * {
     visibility: visible !important;
-    color: #000000;
   }
 
   #printable-qc-report,
@@ -100,14 +99,6 @@
     border: none !important;
     box-shadow: none !important;
     background: white !important;
-    color: #000000 !important;
-  }
-
-  #printable-qc-report th,
-  #printable-qc-report td,
-  #printable-ipc-report th,
-  #printable-ipc-report td {
-    color: #000000 !important;
   }
 
   #quarantine-label-printable,
