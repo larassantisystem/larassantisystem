@@ -94,12 +94,20 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
     if (isCompactMode) {
       document.body.classList.add('printing-compact');
     }
-    window.print();
-    setTimeout(() => {
+
+    let cleanedUp = false;
+    const cleanup = () => {
+      if (cleanedUp) return;
+      cleanedUp = true;
+      window.removeEventListener('afterprint', cleanup);
       document.title = previousTitle;
       document.body.classList.remove('printing-report');
       document.body.classList.remove('printing-compact');
-    }, 1000);
+    };
+
+    window.addEventListener('afterprint', cleanup);
+    window.print();
+    setTimeout(cleanup, 60000);
   };
 
   const isPassed = report.status === 'PASSED' || report.status === 'PASSED_WITH_DEVIATION';

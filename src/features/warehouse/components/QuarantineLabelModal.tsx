@@ -29,9 +29,9 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
   record,
   records,
 }) => {
-  const effectiveRecords: GrnRecord[] = records && records.length > 0
-    ? records
-    : (record ? [record] : []);
+  const effectiveRecords: GrnRecord[] = record
+    ? [record]
+    : (records && records.length > 0 ? records : []);
 
   const isMultiRecord = effectiveRecords.length > 1;
 
@@ -107,12 +107,21 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
       }
     `;
     document.head.appendChild(styleEl);
-    window.print();
-    setTimeout(() => {
+
+    let cleanedUp = false;
+    const cleanup = () => {
+      if (cleanedUp) return;
+      cleanedUp = true;
+      window.removeEventListener('afterprint', cleanup);
       document.body.classList.remove('printing-label');
       const el = document.getElementById('quarantine-label-print-style');
       if (el) el.remove();
-    }, 1000);
+    };
+
+    window.addEventListener('afterprint', cleanup);
+    window.print();
+    // Safety fallback cleanup after print dialog completes or closes
+    setTimeout(cleanup, 60000);
   };
 
   return createPortal(

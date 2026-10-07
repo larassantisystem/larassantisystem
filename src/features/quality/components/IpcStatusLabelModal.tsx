@@ -62,12 +62,21 @@ export const IpcStatusLabelModal: React.FC<IpcStatusLabelModalProps> = ({
       }
     `;
     document.head.appendChild(styleEl);
-    window.print();
-    setTimeout(() => {
+
+    let cleanedUp = false;
+    const cleanup = () => {
+      if (cleanedUp) return;
+      cleanedUp = true;
+      window.removeEventListener('afterprint', cleanup);
       document.body.classList.remove('printing-label');
       const el = document.getElementById('ipc-label-print-style');
       if (el) el.remove();
-    }, 1000);
+    };
+
+    window.addEventListener('afterprint', cleanup);
+    window.print();
+    // Safety fallback cleanup after print dialog completes or closes
+    setTimeout(cleanup, 60000);
   };
 
   const isReleased = activeType === 'RELEASED';
