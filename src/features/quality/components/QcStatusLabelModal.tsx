@@ -411,7 +411,7 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
 
               const normalizedLot = normalizeLotNumber(rep.lotInternalNumber || rep.grnNumber || '');
               const coaVerificationUrl = getQrTargetUrl(
-                rep.lotInternalNumber || rep.grnNumber || '',
+                normalizedLot || rep.lotInternalNumber || rep.grnNumber || '',
                 rep.status,
                 `${item.containerIndex}/${item.totalContainers}`
               );

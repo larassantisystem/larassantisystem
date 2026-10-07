@@ -5,9 +5,16 @@ export const getQrTargetUrl = (lotOrGrn: string, status?: string, containerStr?:
   if (typeof window === 'undefined') return '';
   let origin = window.location.origin;
 
-  // If origin is localhost/127.0.0.1 (inside dev iframe), use public development Cloud Run URL
-  if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
-    origin = 'https://ais-dev-du6kirk5xft6s7zdx7hxwh-897867244394.asia-southeast1.run.app';
+  // Public shared URL yang dapat diakses publik oleh kamera ponsel tanpa sesi internal dev
+  const PUBLIC_APP_URL = 'https://ais-pre-du6kirk5xft6s7zdx7hxwh-897867244394.asia-southeast1.run.app';
+
+  // Jika sedang berjalan di localhost, 127.0.0.1, atau development private iframe, arahkan ke shared public URL
+  if (
+    origin.includes('localhost') ||
+    origin.includes('127.0.0.1') ||
+    origin.includes('ais-dev-')
+  ) {
+    origin = PUBLIC_APP_URL;
   }
 
   const lotQuery = encodeURIComponent(lotOrGrn);

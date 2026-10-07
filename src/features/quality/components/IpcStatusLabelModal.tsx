@@ -17,6 +17,7 @@ import { QrCodeBadge } from '../../../components/QrCodeBadge';
 import { Product } from '../../../types';
 import { formatDateDDMMMYYYY } from '../../../utils/dateUtils';
 import { getUserPositionTitleByNik } from '../../../utils/userPositionUtils';
+import { getQrTargetUrl } from '../../../core/utils/qrUrlHelper';
 
 interface IpcStatusLabelModalProps {
   isOpen: boolean;
@@ -118,7 +119,11 @@ export const IpcStatusLabelModal: React.FC<IpcStatusLabelModalProps> = ({
   const ipcNumber = rawIpc.startsWith('LPR-')
     ? rawIpc
     : `LPR-${defaultYyMm}0001`;
-  const qrValidationUrl = `https://larassanti.co.id/qc/verify-ipc?ipc=${encodeURIComponent(ipcNumber)}&batch=${encodeURIComponent(batch.batchNo)}`;
+  const qrValidationUrl = getQrTargetUrl(
+    ipcNumber,
+    isReleased ? 'RELEASED' : 'QUARANTINE',
+    batch.batchNo
+  );
 
   const theme = isReleased
     ? {

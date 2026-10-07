@@ -11,6 +11,7 @@ import { RndModule } from './components/RndModule';
 import { EmployeeManagementModule } from './features/admin/EmployeeManagementModule';
 import { WarehouseModule } from './features/warehouse/components/WarehouseModule';
 import { QualityModule } from './features/quality/components/QualityModule';
+import { PublicCoaVerificationPage } from './features/quality/components/PublicCoaVerificationPage';
 import { DeviationModule } from './features/quality/components/deviations/DeviationModule';
 import { authService } from './core/auth/authService';
 import { DepartmentWorkspaceDashboard } from './features/dashboard/DepartmentWorkspaceDashboard';
@@ -53,17 +54,40 @@ const MainAppContent: React.FC = () => {
     | 'complaints'
   >('queue');
 
+  const [scannedCoaQuery, setScannedCoaQuery] = React.useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('coa') || urlParams.get('coaId') || urlParams.get('reportId') || urlParams.get('lot');
+  });
+
   // Auto-switch to Quality tab if scanned via QR Code with ?coa= param
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
       const coaQuery = urlParams.get('coa') || urlParams.get('coaId') || urlParams.get('reportId') || urlParams.get('lot');
       if (coaQuery) {
+        setScannedCoaQuery(coaQuery);
         setActiveTab('quality');
         setActiveQualitySubTab('archive');
       }
     }
   }, [isAuthenticated]);
+
+  // Jika diakses melalui scan QR Code label (?coa=...), langsung tampilkan sertifikat CoA resmi tanpa terhalang login
+  if (scannedCoaQuery) {
+    return (
+      <PublicCoaVerificationPage
+        lotQuery={scannedCoaQuery}
+        onExit={() => {
+          if (typeof window !== 'undefined' && window.history?.replaceState) {
+            const cleanUrl = window.location.pathname;
+            window.history.replaceState({}, document.title, cleanUrl);
+          }
+          setScannedCoaQuery(null);
+        }}
+      />
+    );
+  }
 
   if (isLoading) {
     return (
