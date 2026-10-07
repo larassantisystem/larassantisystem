@@ -20,7 +20,6 @@ import { QcInspectionReport } from '../types/qcTypes';
 import { QrCodeBadge } from '../../../components/QrCodeBadge';
 import { getQrTargetUrl } from '../../../core/utils/qrUrlHelper';
 import { normalizeLotNumber } from '../utils/qcNumbering';
-import { printThermalElementDirect } from '../../../core/utils/directThermalPrinter';
 
 interface QcStatusLabelModalProps {
   isOpen: boolean;
@@ -141,19 +140,40 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
         };
   };
 
-  const handlePrint = async () => {
-    try {
-      setIsPrinting(true);
-      const rawLot = normalizeLotNumber(firstReport.lotInternalNumber || firstReport.grnNumber || 'LOT');
-      const cleanMat = (firstReport.materialName || 'Material').replace(/[/\\?%*:|"<>]/g, '-').trim();
-      await printThermalElementDirect('qc-status-label-printable', `LABEL_QC_${rawLot}_${cleanMat}`);
-    } catch (err) {
-      console.error('Error in direct thermal printing:', err);
-      window.focus();
-      window.print();
-    } finally {
-      setIsPrinting(false);
-    }
+  const handlePrint = () => {
+    const rawLot = normalizeLotNumber(firstReport.lotInternalNumber || firstReport.grnNumber || 'LOT');
+    const cleanLot = rawLot.replace(/[/\\?%*:|"<>]/g, '-').trim();
+    const cleanMat = (firstReport.materialName || 'Material').replace(/[/\\?%*:|"<>]/g, '-').trim();
+    const suggestedFileName = `LABEL_QC_${cleanLot}_${cleanMat}`;
+    const previousTitle = document.title;
+    document.title = suggestedFileName;
+
+    document.body.classList.add('printing-label');
+    const styleEl = document.createElement('style');
+    styleEl.id = 'qc-status-label-print-style';
+    styleEl.innerHTML = `
+      @page {
+        size: 100mm 100mm !important;
+        margin: 0mm !important;
+      }
+    `;
+    document.head.appendChild(styleEl);
+
+    let cleanedUp = false;
+    const cleanup = () => {
+      if (cleanedUp) return;
+      cleanedUp = true;
+      window.removeEventListener('afterprint', cleanup);
+      document.title = previousTitle;
+      document.body.classList.remove('printing-label');
+      const el = document.getElementById('qc-status-label-print-style');
+      if (el) el.remove();
+    };
+
+    window.addEventListener('afterprint', cleanup);
+    window.focus();
+    window.print();
+    setTimeout(cleanup, 60000);
   };
 
   const firstTheme = getTheme(firstReport);

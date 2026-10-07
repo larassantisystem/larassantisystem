@@ -15,7 +15,6 @@ import {
 } from 'lucide-react';
 import { GrnRecord } from '../types/grnTypes';
 import { QrCodeBadge } from '../../../components/QrCodeBadge';
-import { printThermalElementDirect } from '../../../core/utils/directThermalPrinter';
 
 interface QuarantineLabelModalProps {
   isOpen: boolean;
@@ -98,19 +97,39 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
     });
   });
 
-  const handlePrint = async () => {
-    try {
-      setIsPrinting(true);
-      const cleanGrn = (activeRecord.grnNumber || 'GRN').replace(/[/\\?%*:|"<>]/g, '-').trim();
-      const cleanMat = (activeRecord.materialName || 'Material').replace(/[/\\?%*:|"<>]/g, '-').trim();
-      await printThermalElementDirect('quarantine-label-printable', `LABEL_KARANTINA_${cleanGrn}_${cleanMat}`);
-    } catch (err) {
-      console.error('Error in direct quarantine thermal printing:', err);
-      window.focus();
-      window.print();
-    } finally {
-      setIsPrinting(false);
-    }
+  const handlePrint = () => {
+    const cleanGrn = (activeRecord.grnNumber || 'GRN').replace(/[/\\?%*:|"<>]/g, '-').trim();
+    const cleanMat = (activeRecord.materialName || 'Material').replace(/[/\\?%*:|"<>]/g, '-').trim();
+    const suggestedFileName = `LABEL_KARANTINA_${cleanGrn}_${cleanMat}`;
+    const previousTitle = document.title;
+    document.title = suggestedFileName;
+
+    document.body.classList.add('printing-label');
+    const styleEl = document.createElement('style');
+    styleEl.id = 'quarantine-label-print-style';
+    styleEl.innerHTML = `
+      @page {
+        size: 100mm 100mm !important;
+        margin: 0mm !important;
+      }
+    `;
+    document.head.appendChild(styleEl);
+
+    let cleanedUp = false;
+    const cleanup = () => {
+      if (cleanedUp) return;
+      cleanedUp = true;
+      window.removeEventListener('afterprint', cleanup);
+      document.title = previousTitle;
+      document.body.classList.remove('printing-label');
+      const el = document.getElementById('quarantine-label-print-style');
+      if (el) el.remove();
+    };
+
+    window.addEventListener('afterprint', cleanup);
+    window.focus();
+    window.print();
+    setTimeout(cleanup, 60000);
   };
 
   return createPortal(
