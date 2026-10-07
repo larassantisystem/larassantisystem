@@ -20,6 +20,7 @@ import { QcInspectionReport } from '../types/qcTypes';
 import { QrCodeBadge } from '../../../components/QrCodeBadge';
 import { getQrTargetUrl } from '../../../core/utils/qrUrlHelper';
 import { normalizeLotNumber } from '../utils/qcNumbering';
+import { printThermalElementDirect } from '../../../core/utils/directThermalPrinter';
 
 interface QcStatusLabelModalProps {
   isOpen: boolean;
@@ -139,33 +140,21 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
         };
   };
 
-  const handlePrint = () => {
-    document.body.classList.add('printing-label');
-    const styleEl = document.createElement('style');
-    styleEl.id = 'qc-status-label-print-style';
-    styleEl.innerHTML = `
-      @page {
-        size: 100mm 100mm;
-        margin: 0mm !important;
-      }
-    `;
-    document.head.appendChild(styleEl);
+  const [isPrinting, setIsPrinting] = useState<boolean>(false);
 
-    let cleanedUp = false;
-    const cleanup = () => {
-      if (cleanedUp) return;
-      cleanedUp = true;
-      window.removeEventListener('afterprint', cleanup);
-      document.body.classList.remove('printing-label');
-      const el = document.getElementById('qc-status-label-print-style');
-      if (el) el.remove();
-    };
-
-    window.addEventListener('afterprint', cleanup);
-    window.focus();
-    window.print();
-    // Safety fallback cleanup after print dialog completes or closes
-    setTimeout(cleanup, 60000);
+  const handlePrint = async () => {
+    try {
+      setIsPrinting(true);
+      const rawLot = normalizeLotNumber(firstReport.lotInternalNumber || firstReport.grnNumber || 'LOT');
+      const cleanMat = (firstReport.materialName || 'Material').replace(/[/\\?%*:|"<>]/g, '-').trim();
+      await printThermalElementDirect('qc-status-label-printable', `LABEL_QC_${rawLot}_${cleanMat}`);
+    } catch (err) {
+      console.error('Error in direct thermal printing:', err);
+      window.focus();
+      window.print();
+    } finally {
+      setIsPrinting(false);
+    }
   };
 
   const firstTheme = getTheme(firstReport);

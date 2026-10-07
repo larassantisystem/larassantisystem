@@ -17,6 +17,7 @@ import { QrCodeBadge } from '../../../components/QrCodeBadge';
 import { Product } from '../../../types';
 import { formatDateDDMMMYYYY } from '../../../utils/dateUtils';
 import { getUserPositionTitleByNik } from '../../../utils/userPositionUtils';
+import { printThermalElementDirect } from '../../../core/utils/directThermalPrinter';
 
 interface IpcStatusLabelModalProps {
   isOpen: boolean;
@@ -51,33 +52,21 @@ export const IpcStatusLabelModal: React.FC<IpcStatusLabelModalProps> = ({
 
   if (!isOpen || !batch) return null;
 
-  const handlePrint = () => {
-    document.body.classList.add('printing-label');
-    const styleEl = document.createElement('style');
-    styleEl.id = 'ipc-label-print-style';
-    styleEl.innerHTML = `
-      @page {
-        size: 100mm 100mm;
-        margin: 0mm !important;
-      }
-    `;
-    document.head.appendChild(styleEl);
+  const [isPrinting, setIsPrinting] = useState<boolean>(false);
 
-    let cleanedUp = false;
-    const cleanup = () => {
-      if (cleanedUp) return;
-      cleanedUp = true;
-      window.removeEventListener('afterprint', cleanup);
-      document.body.classList.remove('printing-label');
-      const el = document.getElementById('ipc-label-print-style');
-      if (el) el.remove();
-    };
-
-    window.addEventListener('afterprint', cleanup);
-    window.focus();
-    window.print();
-    // Safety fallback cleanup after print dialog completes or closes
-    setTimeout(cleanup, 60000);
+  const handlePrint = async () => {
+    try {
+      setIsPrinting(true);
+      const cleanIpc = (ipcNumber || 'IPC').replace(/[/\\?%*:|"<>]/g, '-').trim();
+      const cleanBatch = (batch.batchNo || 'BETS').replace(/[/\\?%*:|"<>]/g, '-').trim();
+      await printThermalElementDirect('ipc-labels-printable', `LABEL_IPC_${cleanIpc}_${cleanBatch}`);
+    } catch (err) {
+      console.error('Error in direct IPC thermal printing:', err);
+      window.focus();
+      window.print();
+    } finally {
+      setIsPrinting(false);
+    }
   };
 
   const isReleased = activeType === 'RELEASED';

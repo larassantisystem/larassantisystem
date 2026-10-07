@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   X,
   ShieldAlert,
@@ -127,11 +128,11 @@ export const QcManagerAuthModal: React.FC<QcManagerAuthModalProps> = ({
 
   const isStaffRejected = report.staffDecision === 'REJECT';
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full my-8 overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 px-6 py-4 text-white flex items-center justify-between">
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
+      <div className="bg-white rounded-3xl shadow-2xl max-w-3xl w-full my-auto overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200 flex flex-col max-h-[92vh]">
+        {/* Header (Always sticky & visible at top) */}
+        <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 px-6 py-4 text-white flex items-center justify-between shrink-0 border-b border-blue-950">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-blue-500/20 rounded-xl border border-blue-400/30">
               <ShieldCheck className="w-6 h-6 text-blue-300" />
@@ -152,13 +153,14 @@ export const QcManagerAuthModal: React.FC<QcManagerAuthModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="text-white/80 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+            className="text-white/80 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto grow flex flex-col justify-between">
+          <div className="space-y-5">
           {/* Summary Lot Card */}
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs space-y-2">
             <div className="flex justify-between items-center border-b border-slate-200 pb-2">
@@ -557,8 +559,10 @@ export const QcManagerAuthModal: React.FC<QcManagerAuthModalProps> = ({
             </div>
           )}
 
+          </div>
+
           {/* Footer Actions */}
-          <div className="flex items-center justify-end gap-3 pt-2">
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 shrink-0 sticky bottom-0 bg-white/95 backdrop-blur-xs mt-4">
             <button
               type="button"
               onClick={onClose}
@@ -598,6 +602,7 @@ export const QcManagerAuthModal: React.FC<QcManagerAuthModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
