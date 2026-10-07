@@ -148,7 +148,8 @@
     break-after: auto !important;
   }
 
-  .thermal-label-page {
+  .thermal-label-page,
+  .ipc-label-card {
     width: 100mm !important;
     height: 100mm !important;
     min-width: 100mm !important;
@@ -162,6 +163,39 @@
     flex-direction: column !important;
     justify-content: space-between !important;
     overflow: hidden !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    -webkit-font-smoothing: antialiased !important;
+    -moz-osx-font-smoothing: grayscale !important;
+    text-rendering: geometricPrecision !important;
+    shape-rendering: geometricPrecision !important;
+    image-rendering: -webkit-optimize-contrast !important;
+    image-rendering: crisp-edges !important;
+  }
+
+  /* Hilangkan dithering / bayangan abu-abu (halftoning) pada head printer thermal 1-bit solid black */
+  .thermal-label-page *,
+  .ipc-label-card *,
+  #qc-status-label-printable *,
+  #quarantine-label-printable *,
+  #ipc-labels-printable * {
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
+    opacity: 1 !important;
+    border-color: #000000 !important;
+    text-rendering: geometricPrecision !important;
+    shape-rendering: geometricPrecision !important;
+  }
+
+  .thermal-label-page img,
+  .ipc-label-card img,
+  #qc-status-label-printable img,
+  #quarantine-label-printable img,
+  #ipc-labels-printable img {
+    image-rendering: -webkit-optimize-contrast !important;
+    image-rendering: crisp-edges !important;
+    image-rendering: pixelated !important;
+    filter: none !important;
   }
 
   .print-page {

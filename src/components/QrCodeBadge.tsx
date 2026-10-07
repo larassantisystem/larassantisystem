@@ -22,13 +22,13 @@ export const QrCodeBadge: React.FC<QrCodeBadgeProps> = ({
     if (!qrText) return;
 
     QRCode.toDataURL(qrText, {
-      width: Math.max(size * 4, 360), // Ultra-sharp resolution for printing & camera scanning
-      margin: 2, // Standard quiet zone recommended for camera decoders
+      width: Math.max(size * 16, 1200), // Ultra-high 1000+ DPI equivalent matrix for razor-sharp thermal micro-printing
+      margin: 1, // Compact standard quiet zone
       color: {
         dark: '#000000',
         light: '#ffffff',
       },
-      errorCorrectionLevel: 'M',
+      errorCorrectionLevel: 'H', // Level H (30% damage/stain tolerance) for high reliability scanning
     })
       .then((url) => {
         if (isMounted) {
@@ -60,6 +60,7 @@ export const QrCodeBadge: React.FC<QrCodeBadgeProps> = ({
       width={size}
       height={size}
       className={`shrink-0 rounded-md object-contain bg-white border border-slate-200 shadow-2xs ${className}`}
+      style={{ imageRendering: 'pixelated' }}
       referrerPolicy="no-referrer"
     />
   );
