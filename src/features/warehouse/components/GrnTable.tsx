@@ -98,6 +98,7 @@ export const GrnTable: React.FC<GrnTableProps> = ({
           materialType: activeCategory,
           status: statusFilter,
           search: searchQuery,
+          forceRefresh: true,
         })
         .then((res) => {
           if (!isCancelled) {

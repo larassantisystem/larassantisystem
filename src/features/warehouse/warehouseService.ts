@@ -263,6 +263,8 @@ function mapDbRowToGrnRecord(d: any): GrnRecord {
   let resolvedQcStatus = 'QUARANTINE';
   if (isOpnameGrn) {
     resolvedQcStatus = 'RELEASED';
+  } else if (payloadStatus === 'REVERTED_TO_WAREHOUSE' || Boolean(d.revert_reason || d.revertReason || (d.notes && d.notes.includes('REVERTED_TO_WAREHOUSE')))) {
+    resolvedQcStatus = 'REVERTED_TO_WAREHOUSE';
   } else if (payloadStatus && payloadStatus !== 'QUARANTINE') {
     resolvedQcStatus = payloadStatus === 'PASSED' ? 'RELEASED' : payloadStatus;
   } else if (rawDbStatus === 'PASSED' || rawDbStatus === 'RELEASED') {
@@ -589,6 +591,10 @@ export const warehouseService = {
         if (status && status !== 'ALL') {
           if (status === 'PASSED' || status === 'RELEASED') {
             query = query.in('qc_status', ['PASSED', 'RELEASED', 'PASSED_WITH_DEVIATION']);
+          } else if (status === 'REVERTED_TO_WAREHOUSE') {
+            query = query.or('qc_status.eq.REVERTED_TO_WAREHOUSE,notes.ilike.%REVERTED_TO_WAREHOUSE%');
+          } else if (status === 'QUARANTINE') {
+            query = query.eq('qc_status', 'QUARANTINE').not('notes', 'ilike', '%REVERTED_TO_WAREHOUSE%');
           } else {
             query = query.eq('qc_status', status);
           }
@@ -604,11 +610,19 @@ export const warehouseService = {
           .range(from, to);
 
         if (!error && data) {
-          const records: GrnRecord[] = data
+          let records: GrnRecord[] = data
             .filter((d: any) => d.grn_number !== 'SYSTEM-STOCK-LEDGER')
             .map(mapDbRowToGrnRecord);
 
-          const totalItems = count !== null && count !== undefined ? count : records.length;
+          if (status === 'REVERTED_TO_WAREHOUSE') {
+            records = records.filter((r) => r.qcStatus === 'REVERTED_TO_WAREHOUSE');
+          } else if (status === 'QUARANTINE') {
+            records = records.filter((r) => r.qcStatus === 'QUARANTINE');
+          }
+
+          const totalItems = count !== null && count !== undefined
+            ? (status === 'REVERTED_TO_WAREHOUSE' || status === 'QUARANTINE' ? records.length : count)
+            : records.length;
           const totalPages = Math.ceil(totalItems / pageSize) || 1;
           const result: GrnPaginatedResponse = {
             records,
