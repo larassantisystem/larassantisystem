@@ -62,13 +62,35 @@ export const IpcStatusLabelModal: React.FC<IpcStatusLabelModalProps> = ({
     const previousTitle = document.title;
     document.title = suggestedFileName;
 
+    // Bersihkan sisa style report A4 jika ada
+    document.body.classList.remove('printing-report');
+    document.body.classList.remove('printing-compact');
+    const reportStyles = ['qc-report-print-style', 'ipc-report-print-style'];
+    reportStyles.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.remove();
+    });
+
     document.body.classList.add('printing-label');
     const styleEl = document.createElement('style');
     styleEl.id = 'ipc-label-print-style';
     styleEl.innerHTML = `
       @page {
-        size: 100mm 100mm !important;
-        margin: 0mm !important;
+        size: 100mm 100mm;
+        margin: 0;
+      }
+      @media print {
+        html, body {
+          width: 100mm !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          background: transparent !important;
+        }
+        #ipc-labels-printable {
+          width: 100mm !important;
+          margin: 0 !important;
+          padding: 0 !important;
+        }
       }
     `;
     document.head.appendChild(styleEl);

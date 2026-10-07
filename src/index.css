@@ -192,6 +192,36 @@
     shape-rendering: geometricPrecision !important;
   }
 
+  /* PENGECUALIAN KRUSIAL: Proteksi teks putih pada latar banner hitam agar tidak tertutup */
+  .thermal-label-page .bg-black,
+  .thermal-label-page [class*="bg-black"],
+  .ipc-label-card .bg-black,
+  #qc-status-label-printable .bg-black,
+  #quarantine-label-printable .bg-black {
+    background-color: #000000 !important;
+    background: #000000 !important;
+  }
+
+  .thermal-label-page .text-white,
+  .thermal-label-page .bg-black,
+  .thermal-label-page .bg-black *,
+  .thermal-label-page [class*="bg-black"] *,
+  .ipc-label-card .text-white,
+  .ipc-label-card .bg-black,
+  .ipc-label-card .bg-black *,
+  #qc-status-label-printable .bg-black *,
+  #quarantine-label-printable .bg-black *,
+  #ipc-labels-printable .bg-black * {
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+  }
+
+  body.printing-label {
+    width: 100mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
   .thermal-label-page img,
   .ipc-label-card img,
   #qc-status-label-printable img,
