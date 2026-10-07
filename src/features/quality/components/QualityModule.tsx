@@ -889,6 +889,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
     const handleTriggerBatchArchivePrint = () => {
       const selected = reports.filter((r) => selectedArchiveReportIds.includes(r.id));
       if (selected.length === 0) return;
+      setLabelReport(null);
       setBatchArchiveReportsToPrint(selected);
     };
 
@@ -1031,7 +1032,10 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
                     <td className={`${isCompactMode ? 'p-1.5' : 'p-3'} text-right`}>
                       <div className="flex items-center justify-end gap-1.5">
                         <button
-                          onClick={() => setSmartTagReport(item)}
+                          onClick={() => {
+                            setBatchArchiveReportsToPrint([]);
+                            setSmartTagReport(item);
+                          }}
                           title="Buka Smart Tag QR Wadah (Paperless Sampling CPKB)"
                           className={`inline-flex items-center gap-1 ${isCompactMode ? 'px-2 py-1 text-[11px]' : 'px-2.5 py-1.5 text-xs'} bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold rounded-lg transition-colors cursor-pointer`}
                         >
@@ -1039,7 +1043,10 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
                           Smart Tag
                         </button>
                         <button
-                          onClick={() => setLabelReport(item)}
+                          onClick={() => {
+                            setBatchArchiveReportsToPrint([]);
+                            setLabelReport(item);
+                          }}
                           title="Cetak Label Status QC"
                           className={`inline-flex items-center gap-1 ${isCompactMode ? 'px-2 py-1 text-[11px]' : 'px-2.5 py-1.5 text-xs'} bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg transition-colors cursor-pointer`}
                         >
@@ -3436,7 +3443,7 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ subTab = 'queue' }
           setBatchArchiveReportsToPrint([]);
         }}
         report={labelReport}
-        reports={batchArchiveReportsToPrint.length > 0 ? batchArchiveReportsToPrint : undefined}
+        reports={!labelReport && batchArchiveReportsToPrint.length > 0 ? batchArchiveReportsToPrint : undefined}
         onViewCoa={(rep) => setPdfReport(rep)}
       />
 

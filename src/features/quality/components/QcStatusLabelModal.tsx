@@ -36,9 +36,9 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
   reports,
   onViewCoa,
 }) => {
-  const effectiveReports: QcInspectionReport[] = reports && reports.length > 0
-    ? reports
-    : (report ? [report] : []);
+  const effectiveReports: QcInspectionReport[] = report
+    ? [report]
+    : (reports && reports.length > 0 ? reports : []);
 
   const isMultiReport = effectiveReports.length > 1;
 
