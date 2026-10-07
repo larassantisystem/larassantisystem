@@ -65,6 +65,7 @@ export const printThermalElementDirect = (
               box-sizing: border-box !important;
               box-shadow: none !important;
               text-shadow: none !important;
+              visibility: visible !important;
             }
             html, body {
               margin: 0 !important;
@@ -76,6 +77,22 @@ export const printThermalElementDirect = (
               max-width: 100mm !important;
               overflow: visible !important;
               font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+              visibility: visible !important;
+            }
+            body * {
+              visibility: visible !important;
+            }
+            #qc-status-label-printable,
+            #quarantine-label-printable,
+            #ipc-labels-printable {
+              display: flex !important;
+              flex-direction: column !important;
+              align-items: center !important;
+              width: 100mm !important;
+              margin: 0 auto !important;
+              padding: 0 !important;
+              background: transparent !important;
+              visibility: visible !important;
             }
             .print-page-wrapper {
               display: block !important;
@@ -95,6 +112,7 @@ export const printThermalElementDirect = (
               break-inside: avoid !important;
               box-sizing: border-box !important;
               overflow: hidden !important;
+              visibility: visible !important;
             }
             .print-page-wrapper:last-child {
               page-break-after: auto !important;
@@ -117,9 +135,11 @@ export const printThermalElementDirect = (
               border: 2px solid black !important;
               border-radius: 0 !important;
               background: transparent !important;
+              visibility: visible !important;
             }
             .no-print {
               display: none !important;
+              visibility: hidden !important;
             }
           </style>
         </head>
@@ -130,8 +150,8 @@ export const printThermalElementDirect = (
     `);
     doc.close();
 
-    // Give browser small frame to render images (like QR codes & Logos) then trigger print
-    setTimeout(() => {
+    // Wait for images (QR Code badge & Logo) to finish loading inside iframe
+    const triggerPrint = () => {
       try {
         const frameWin = iframe.contentWindow;
         if (frameWin) {
@@ -152,8 +172,8 @@ export const printThermalElementDirect = (
           frameWin.addEventListener('afterprint', cleanup);
           frameWin.focus();
           frameWin.print();
-          // Fallback cleanup after 45 seconds if afterprint doesn't fire
-          setTimeout(cleanup, 45000);
+          // Fallback cleanup after 60 seconds if afterprint doesn't fire
+          setTimeout(cleanup, 60000);
         } else {
           window.focus();
           window.print();
@@ -165,6 +185,25 @@ export const printThermalElementDirect = (
         window.print();
         resolve();
       }
-    }, 250);
+    };
+
+    const images = Array.from(doc.images || []);
+    if (images.length === 0) {
+      setTimeout(triggerPrint, 150);
+    } else {
+      const imagePromises = images.map((img) => {
+        if (img.complete) return Promise.resolve();
+        return new Promise((res) => {
+          img.onload = () => res(true);
+          img.onerror = () => res(false);
+          // Safety timeout for any image load
+          setTimeout(() => res(true), 500);
+        });
+      });
+
+      Promise.all(imagePromises).then(() => {
+        setTimeout(triggerPrint, 150);
+      });
+    }
   });
 };
