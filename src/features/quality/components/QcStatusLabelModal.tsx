@@ -162,6 +162,7 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
     };
 
     window.addEventListener('afterprint', cleanup);
+    window.focus();
     window.print();
     // Safety fallback cleanup after print dialog completes or closes
     setTimeout(cleanup, 60000);
@@ -170,10 +171,10 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
   const firstTheme = getTheme(firstReport);
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto bg-slate-900/70 backdrop-blur-xs">
-      <div className="bg-white w-full max-w-4xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[96vh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto bg-slate-900/70 backdrop-blur-xs print:p-0 print:m-0 print:bg-transparent print:static print:block">
+      <div className="bg-white w-full max-w-4xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[96vh] flex flex-col animate-in fade-in zoom-in-95 duration-200 print:shadow-none print:border-none print:p-0 print:m-0 print:max-h-none print:w-auto print:block">
         {/* Modal Header */}
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white shrink-0 no-print">
           <div className="flex items-center gap-3">
             <div className={`w-10 h-10 rounded-xl ${firstTheme.btnBg} text-white flex items-center justify-center shadow-md`}>
               <Printer className="w-5 h-5" />
@@ -206,7 +207,7 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
         {/* Paper Roll Indicator Banner */}
         <div className={`px-6 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs border-b ${
           isFirstReleasedState ? 'bg-emerald-100 border-emerald-300 text-emerald-950' : 'bg-rose-100 border-rose-300 text-rose-950'
-        } shrink-0`}>
+        } shrink-0 no-print`}>
           <div className="flex items-center gap-2 font-medium">
             <span className={`w-3.5 h-3.5 rounded-full ${firstTheme.paperDot} inline-block shadow-xs shrink-0`} />
             <span>
@@ -219,7 +220,7 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
         </div>
 
         {/* Toolbar & Options */}
-        <div className="px-6 py-3 bg-slate-50 border-b border-slate-200/80 flex flex-wrap items-center justify-between gap-3 shrink-0">
+        <div className="px-6 py-3 bg-slate-50 border-b border-slate-200/80 flex flex-wrap items-center justify-between gap-3 shrink-0 no-print">
           <div className="flex flex-wrap items-center gap-3 text-xs">
             {isMultiReport ? (
               <div className="flex items-center gap-2">
@@ -362,8 +363,8 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
         </div>
 
         {/* Modal Body / Label Preview */}
-        <div className="p-6 overflow-y-auto bg-slate-200/70 space-y-6 flex-1 flex flex-col items-center">
-          <div className="text-xs text-slate-600 font-medium">
+        <div className="p-6 overflow-y-auto bg-slate-200/70 space-y-6 flex-1 flex flex-col items-center print:p-0 print:m-0 print:bg-transparent print:overflow-visible print:block">
+          <div className="text-xs text-slate-600 font-medium no-print">
             Pratinjau fisik label stiker status mutu QC ({labelItems.length} Label 100mm × 100mm):
           </div>
 
@@ -559,7 +560,7 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between bg-white shrink-0">
+        <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between bg-white shrink-0 no-print">
           <p className="text-xs text-slate-500">
             *Tempelkan stiker {isFirstReleasedState ? 'hijau' : 'merah'} 100×100 mm ini menimpa/di samping label karantina setelah otorisasi mutu CPKB.
           </p>

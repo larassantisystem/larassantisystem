@@ -32,15 +32,24 @@
     font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
   }
 
-  /* Sembunyikan elemen no-print secara mutlak */
-  .no-print {
+  /* Sembunyikan elemen no-print secara mutlak dari layout */
+  .no-print,
+  .no-print * {
     display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    max-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: hidden !important;
   }
 
   /* Sembunyikan seluruh root aplikasi saat mencetak laporan atau label dari modal */
   body.printing-report #root,
   body.printing-label #root {
     display: none !important;
+    visibility: hidden !important;
   }
 
   /* Sembunyikan elemen latar secara default sebagai perlindungan tambahan */

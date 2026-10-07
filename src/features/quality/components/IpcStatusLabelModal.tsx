@@ -74,6 +74,7 @@ export const IpcStatusLabelModal: React.FC<IpcStatusLabelModalProps> = ({
     };
 
     window.addEventListener('afterprint', cleanup);
+    window.focus();
     window.print();
     // Safety fallback cleanup after print dialog completes or closes
     setTimeout(cleanup, 60000);
@@ -120,8 +121,8 @@ export const IpcStatusLabelModal: React.FC<IpcStatusLabelModalProps> = ({
     : [1];
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4 overflow-y-auto animate-in fade-in duration-200">
-      <div className="bg-slate-900 rounded-3xl shadow-2xl max-w-4xl w-full my-4 overflow-hidden border border-slate-700 flex flex-col max-h-[95vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4 overflow-y-auto animate-in fade-in duration-200 print:p-0 print:m-0 print:bg-transparent print:static print:block">
+      <div className="bg-slate-900 rounded-3xl shadow-2xl max-w-4xl w-full my-4 overflow-hidden border border-slate-700 flex flex-col max-h-[95vh] print:shadow-none print:border-none print:p-0 print:m-0 print:max-h-none print:w-auto print:block">
         
         {/* Modal Top Control Bar */}
         <div className="bg-slate-950 text-white px-6 py-4 flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 shrink-0 no-print">

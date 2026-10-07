@@ -119,16 +119,17 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
     };
 
     window.addEventListener('afterprint', cleanup);
+    window.focus();
     window.print();
     // Safety fallback cleanup after print dialog completes or closes
     setTimeout(cleanup, 60000);
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto bg-slate-900/70 backdrop-blur-xs">
-      <div className="bg-white w-full max-w-4xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[96vh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto bg-slate-900/70 backdrop-blur-xs print:p-0 print:m-0 print:bg-transparent print:static print:block">
+      <div className="bg-white w-full max-w-4xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[96vh] flex flex-col animate-in fade-in zoom-in-95 duration-200 print:shadow-none print:border-none print:p-0 print:m-0 print:max-h-none print:w-auto print:block">
         {/* Modal Header */}
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white shrink-0 no-print">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-md shadow-amber-500/20">
               <Printer className="w-5 h-5" />
@@ -159,7 +160,7 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
         </div>
 
         {/* Paper Roll Indicator Banner */}
-        <div className="bg-amber-100 border-b border-amber-300 px-6 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs text-amber-950 shrink-0">
+        <div className="bg-amber-100 border-b border-amber-300 px-6 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs text-amber-950 shrink-0 no-print">
           <div className="flex items-center gap-2 font-medium">
             <span className="w-3.5 h-3.5 rounded-full bg-amber-400 border border-amber-600 inline-block shadow-xs shrink-0" />
             <span>
@@ -172,7 +173,7 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
         </div>
 
         {/* Toolbar & Options */}
-        <div className="px-6 py-3 bg-slate-50 border-b border-slate-200/80 flex flex-wrap items-center justify-between gap-3 shrink-0">
+        <div className="px-6 py-3 bg-slate-50 border-b border-slate-200/80 flex flex-wrap items-center justify-between gap-3 shrink-0 no-print">
           <div className="flex flex-wrap items-center gap-3 text-xs">
             {isMultiRecord ? (
               <div className="flex items-center gap-2">
@@ -315,8 +316,8 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
         </div>
 
         {/* Modal Body / Label Preview */}
-        <div className="p-6 overflow-y-auto bg-slate-200/70 space-y-6 flex-1 flex flex-col items-center">
-          <div className="text-xs text-slate-600 font-medium">
+        <div className="p-6 overflow-y-auto bg-slate-200/70 space-y-6 flex-1 flex flex-col items-center print:p-0 print:m-0 print:bg-transparent print:overflow-visible print:block">
+          <div className="text-xs text-slate-600 font-medium no-print">
             Pratinjau fisik label stiker roll kuning ({labelItems.length} Label Thermal 100mm × 100mm):
           </div>
 
@@ -501,7 +502,7 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between bg-white shrink-0">
+        <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between bg-white shrink-0 no-print">
           <p className="text-xs text-slate-500">
             *Tempelkan stiker kuning 100×100 mm ini pada setiap koli/wadah saat barang tiba di area karantina gudang.
           </p>
