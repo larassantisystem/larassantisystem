@@ -39,6 +39,7 @@ export const IpcStatusLabelModal: React.FC<IpcStatusLabelModalProps> = ({
   const [activeType, setActiveType] = useState<'QUARANTINE' | 'RELEASED'>(defaultLabelType);
   const [containerCount, setContainerCount] = useState<number>(1);
   const [containerRange, setContainerRange] = useState<'single' | 'all'>('all');
+  const [isPrinting, setIsPrinting] = useState<boolean>(false);
 
   React.useEffect(() => {
     if (batch) {
@@ -51,8 +52,6 @@ export const IpcStatusLabelModal: React.FC<IpcStatusLabelModalProps> = ({
   }, [batch, defaultLabelType]);
 
   if (!isOpen || !batch) return null;
-
-  const [isPrinting, setIsPrinting] = useState<boolean>(false);
 
   const handlePrint = async () => {
     try {

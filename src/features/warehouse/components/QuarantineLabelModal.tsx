@@ -47,6 +47,7 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
 
   // Copies multiplier per container
   const [copiesCount, setCopiesCount] = useState<number>(1);
+  const [isPrinting, setIsPrinting] = useState<boolean>(false);
 
   if (!isOpen || effectiveRecords.length === 0) return null;
 
@@ -96,8 +97,6 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
       }
     });
   });
-
-  const [isPrinting, setIsPrinting] = useState<boolean>(false);
 
   const handlePrint = async () => {
     try {

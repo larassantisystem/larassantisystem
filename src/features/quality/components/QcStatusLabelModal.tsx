@@ -54,6 +54,7 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
 
   // Copies multiplier per container
   const [copiesCount, setCopiesCount] = useState<number>(1);
+  const [isPrinting, setIsPrinting] = useState<boolean>(false);
 
   if (!isOpen || effectiveReports.length === 0) return null;
 
@@ -139,8 +140,6 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
           formCode: 'L-DQC-003-01',
         };
   };
-
-  const [isPrinting, setIsPrinting] = useState<boolean>(false);
 
   const handlePrint = async () => {
     try {
