@@ -90,10 +90,48 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
     const previousTitle = document.title;
     document.title = suggestedFileName;
 
+    // Bersihkan sisa state / class cetak label thermal jika ada
+    document.body.classList.remove('printing-label');
+    const thermalStyles = ['qc-status-label-print-style', 'quarantine-label-print-style', 'ipc-label-print-style'];
+    thermalStyles.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.remove();
+    });
+
     document.body.classList.add('printing-report');
     if (isCompactMode) {
       document.body.classList.add('printing-compact');
     }
+
+    // Suntikkan style khusus A4 resmi beresolusi tinggi (Vektor Murni)
+    const styleEl = document.createElement('style');
+    styleEl.id = 'qc-report-print-style';
+    styleEl.innerHTML = `
+      @page {
+        size: A4 portrait !important;
+        margin: 8mm 10mm 8mm 10mm !important;
+      }
+      @media print {
+        html, body {
+          width: 210mm !important;
+          background: #ffffff !important;
+        }
+        #printable-qc-report {
+          width: 100% !important;
+          max-width: 100% !important;
+          margin: 0 auto !important;
+          padding: 0 !important;
+          background: #ffffff !important;
+          color: #0f172a !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+          -webkit-font-smoothing: antialiased !important;
+          -moz-osx-font-smoothing: grayscale !important;
+          text-rendering: geometricPrecision !important;
+        }
+      }
+    `;
+    document.head.appendChild(styleEl);
 
     let cleanedUp = false;
     const cleanup = () => {
@@ -103,9 +141,12 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
       document.title = previousTitle;
       document.body.classList.remove('printing-report');
       document.body.classList.remove('printing-compact');
+      const el = document.getElementById('qc-report-print-style');
+      if (el) el.remove();
     };
 
     window.addEventListener('afterprint', cleanup);
+    window.focus();
     window.print();
     setTimeout(cleanup, 60000);
   };
@@ -166,17 +207,12 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
               <span>{isCompactMode ? 'Mode: Auto-Fit (1 Halaman)' : 'Mode: Standar (Aliran Penuh)'}</span>
             </button>
 
-            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700 text-[11px] text-slate-300">
-              <Info className="w-3.5 h-3.5 text-blue-400" />
-              <span>Gunakan opsi <strong>"Save as PDF / A4"</strong></span>
-            </div>
-
             <button
               onClick={handlePrintPdf}
               className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-xl text-xs font-black shadow-lg shadow-emerald-900/30 transition-all cursor-pointer border border-emerald-400/30"
             >
               <Printer className="w-4 h-4" />
-              <span>Cetak Laporan / Simpan PDF</span>
+              <span>Cetak A4 / Simpan PDF</span>
             </button>
 
             <button
@@ -187,6 +223,19 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
               <X className="w-5 h-5" />
             </button>
           </div>
+        </div>
+
+        {/* Guidance Banner (Pastikan Pilih Printer A4 / Save as PDF) */}
+        <div className="bg-amber-950/80 border-b border-amber-600/50 px-5 py-2 text-xs text-amber-200 flex flex-wrap items-center justify-between gap-2 shrink-0 no-print">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
+            <span>
+              <strong>Panduan Cetak Dokumen Tajam:</strong> Dokumen CoA adalah format <strong>Kertas A4</strong>. Saat dialog cetak browser terbuka, pastikan <strong>Destination</strong> dipilih ke <strong>"Save as PDF"</strong> atau <strong>Printer Kantor A4</strong> (<em>Jangan arahkan ke Printer Label Thermal 100×100mm agar teks tidak pecah/buram</em>).
+            </span>
+          </div>
+          <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded bg-black/40 border border-amber-500/40 text-amber-300 shrink-0">
+            Standar Kertas: A4 (210 × 297 mm)
+          </span>
         </div>
 
         {/* Printable Document Sheet Container */}
