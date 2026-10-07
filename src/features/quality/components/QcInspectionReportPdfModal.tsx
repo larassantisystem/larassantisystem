@@ -86,9 +86,8 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
     const rawLot = normalizeLotNumber(report.lotInternalNumber || report.grnNumber || 'LOT');
     const cleanLot = rawLot.replace(/[/\\?%*:|"<>]/g, '-').trim();
     const cleanMaterial = (report.materialName || 'Material').replace(/[/\\?%*:|"<>]/g, '-').trim();
-    const cleanDocNo = docNumber.replace(/[/\\?%*:|"<>]/g, '-').trim();
     
-    const suggestedFileName = `COA_${cleanDocNo}_${cleanLot}_${cleanMaterial}`;
+    const suggestedFileName = `COA_${cleanLot}_${cleanMaterial}`;
     const previousTitle = document.title;
     document.title = suggestedFileName;
 
