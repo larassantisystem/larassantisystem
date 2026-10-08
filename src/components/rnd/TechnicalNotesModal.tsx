@@ -24,6 +24,7 @@ import {
   Clock,
 } from 'lucide-react';
 import { CpbDocumentModal } from './CpbDocumentModal';
+import { useEscapeKey } from '../../core/utils/useEscapeKey';
 
 export interface DynamicProcessStep {
   id: string;
@@ -56,6 +57,8 @@ export const TechnicalNotesModal: React.FC<TechnicalNotesModalProps> = ({
   canWrite,
   onSaveNotes,
 }) => {
+  useEscapeKey(onClose, isOpen);
+
   if (!isOpen) return null;
 
   // Active view inside modal: "BUILDER" (Dynamic Process Steps) vs "PDF_PREVIEW" (Format Resmi 1:1)

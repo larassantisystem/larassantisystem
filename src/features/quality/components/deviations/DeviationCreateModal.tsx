@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, AlertTriangle, ShieldAlert, Package, Factory, Wrench, FileText, CheckCircle2 } from 'lucide-react';
 import { DeviationCategory, DeviationSeverity, DeviationReport } from '../../types/deviationTypes';
 import { deviationService } from '../../services/deviationService';
+import { useEscapeKey } from '../../../../core/utils/useEscapeKey';
 
 interface DeviationCreateModalProps {
   isOpen: boolean;
@@ -16,6 +17,8 @@ export const DeviationCreateModal: React.FC<DeviationCreateModalProps> = ({
   onCreated,
   currentUser,
 }) => {
+  useEscapeKey(onClose, isOpen);
+
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<DeviationCategory>('PRODUCTION');
   const [severity, setSeverity] = useState<DeviationSeverity>('MINOR');

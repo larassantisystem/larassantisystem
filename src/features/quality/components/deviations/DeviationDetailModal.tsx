@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, ShieldAlert, CheckCircle2, AlertTriangle, Plus, Trash2, ArrowRight, Lock, Save, FileText, Wrench, Package } from 'lucide-react';
 import { DeviationReport, CapaAction, RootCauseAnalysis } from '../../types/deviationTypes';
 import { deviationService } from '../../services/deviationService';
+import { useEscapeKey } from '../../../../core/utils/useEscapeKey';
 
 interface DeviationDetailModalProps {
   isOpen: boolean;
@@ -20,6 +21,8 @@ export const DeviationDetailModal: React.FC<DeviationDetailModalProps> = ({
   currentUser,
   initialTab = 'review',
 }) => {
+  useEscapeKey(onClose, isOpen && !!deviation);
+
   const [activeTab, setActiveTab] = React.useState<'info' | 'review' | 'rca' | 'capa' | 'closure'>(initialTab);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);

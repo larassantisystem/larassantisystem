@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Copy, Check, Database, Terminal, ShieldCheck, Download, RefreshCw, AlertCircle, CheckCircle2, ArrowUpRight } from 'lucide-react';
 import { warehouseService } from '../warehouseService';
+import { useEscapeKey } from '../../../core/utils/useEscapeKey';
 
 interface SupabaseWarehouseSqlModalProps {
   isOpen: boolean;
@@ -13,6 +14,8 @@ export const SupabaseWarehouseSqlModal: React.FC<SupabaseWarehouseSqlModalProps>
   onClose,
   onDataChanged,
 }) => {
+  useEscapeKey(onClose, isOpen);
+
   const [activeTab, setActiveTab] = useState<'stock_movements' | 'warehouse_grn'>('stock_movements');
   const [copied, setCopied] = useState(false);
   const [auditLoading, setAuditLoading] = useState(false);

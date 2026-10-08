@@ -34,6 +34,7 @@ import { authService } from '../core/auth/authService';
 import { isContainerSampled } from '../features/quality/utils/samplingUtils';
 import { normalizeLotNumber } from '../features/quality/utils/qcNumbering';
 import { QcInspectionReportPdfModal } from '../features/quality/components/QcInspectionReportPdfModal';
+import { useEscapeKey } from '../core/utils/useEscapeKey';
 
 interface UniversalQrScannerModalProps {
   isOpen: boolean;
@@ -78,6 +79,14 @@ export const UniversalQrScannerModal: React.FC<UniversalQrScannerModalProps> = (
   const [matchedReport, setMatchedReport] = useState<any | null>(null);
   const [showPdfModal, setShowPdfModal] = useState<boolean>(false);
   const [isLoadingMatch, setIsLoadingMatch] = useState<boolean>(false);
+
+  useEscapeKey(() => {
+    if (showPdfModal) {
+      setShowPdfModal(false);
+    } else {
+      onClose();
+    }
+  }, isOpen);
 
   // Field sampling states for QC
   const [currentUser] = useState(() => authService.getCurrentUser());

@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { GrnRecord, GrnQcStatus } from '../types/grnTypes';
 import { CoaViewerModal } from './CoaViewerModal';
+import { useEscapeKey } from '../../../core/utils/useEscapeKey';
 
 interface GrnDetailModalProps {
   isOpen?: boolean;
@@ -35,6 +36,8 @@ export const GrnDetailModal: React.FC<GrnDetailModalProps> = ({
   onPrintLabel,
 }) => {
   const [showCoaViewer, setShowCoaViewer] = useState(false);
+
+  useEscapeKey(onClose, isOpen && !showCoaViewer && !!record);
 
   if (!isOpen || !record) return null;
 

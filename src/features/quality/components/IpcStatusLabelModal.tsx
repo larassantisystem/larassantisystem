@@ -18,6 +18,7 @@ import { Product } from '../../../types';
 import { formatDateDDMMMYYYY } from '../../../utils/dateUtils';
 import { getUserPositionTitleByNik } from '../../../utils/userPositionUtils';
 import { getQrTargetUrl } from '../../../core/utils/qrUrlHelper';
+import { useEscapeKey } from '../../../core/utils/useEscapeKey';
 
 interface IpcStatusLabelModalProps {
   isOpen: boolean;
@@ -36,6 +37,8 @@ export const IpcStatusLabelModal: React.FC<IpcStatusLabelModalProps> = ({
   defaultLabelType = 'QUARANTINE',
   onViewReport,
 }) => {
+  useEscapeKey(onClose, isOpen);
+
   const [activeType, setActiveType] = useState<'QUARANTINE' | 'RELEASED'>(defaultLabelType);
   const [containerCount, setContainerCount] = useState<number>(1);
   const [containerRange, setContainerRange] = useState<'single' | 'all'>('all');

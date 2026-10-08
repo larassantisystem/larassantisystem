@@ -24,6 +24,7 @@ import { getQrTargetUrl } from '../../../core/utils/qrUrlHelper';
 import { qualityService } from '../qualityService';
 import { authService } from '../../../core/auth/authService';
 import { isContainerSampled } from '../utils/samplingUtils';
+import { useEscapeKey } from '../../../core/utils/useEscapeKey';
 
 interface QcContainerSamplingQrModalProps {
   isOpen: boolean;
@@ -40,6 +41,8 @@ export const QcContainerSamplingQrModal: React.FC<QcContainerSamplingQrModalProp
   onUpdateSampling,
   onViewCoa,
 }) => {
+  useEscapeKey(onClose, isOpen && !!report);
+
   const [selectedDrumIndex, setSelectedDrumIndex] = useState<number>(1);
   const [copied, setCopied] = useState<boolean>(false);
   const [isUpdatingSampling, setIsUpdatingSampling] = useState<boolean>(false);

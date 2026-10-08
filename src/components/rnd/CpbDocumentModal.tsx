@@ -13,6 +13,7 @@ import {
   Info,
 } from 'lucide-react';
 import { DynamicProcessStep } from './TechnicalNotesModal';
+import { useEscapeKey } from '../../core/utils/useEscapeKey';
 
 interface CpbDocumentModalProps {
   isOpen: boolean;
@@ -35,6 +36,8 @@ export const CpbDocumentModal: React.FC<CpbDocumentModalProps> = ({
   initialMachine1,
   initialMachine2,
 }) => {
+  useEscapeKey(onClose, isOpen);
+
   if (!isOpen) return null;
 
   // Custom metadata editable for this batch CPB print

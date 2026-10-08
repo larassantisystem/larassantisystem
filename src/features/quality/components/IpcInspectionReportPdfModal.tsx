@@ -20,6 +20,7 @@ import { QrCodeBadge } from '../../../components/QrCodeBadge';
 import { productService } from '../../rnd/products/productService';
 import { formatDateDDMMMYYYY, formatDateDDMMMYYYYUpper } from '../../../utils/dateUtils';
 import { getUserPositionTitleByNik, getUserPositionTitle } from '../../../utils/userPositionUtils';
+import { useEscapeKey } from '../../../core/utils/useEscapeKey';
 
 interface IpcInspectionReportPdfModalProps {
   isOpen: boolean;
@@ -34,6 +35,8 @@ export const IpcInspectionReportPdfModal: React.FC<IpcInspectionReportPdfModalPr
   batch,
   productSpec,
 }) => {
+  useEscapeKey(onClose, isOpen && !!batch);
+
   const printContentRef = useRef<HTMLDivElement>(null);
   const { user: currentUser, profile } = useAuth();
   const [matchedProduct, setMatchedProduct] = useState<Product | null>(productSpec || null);

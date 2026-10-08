@@ -20,6 +20,7 @@ import { IpcBulkTest } from '../utils/qcExtData';
 import { productService } from '../../rnd/products/productService';
 import { Product } from '../../../types';
 import { useAuth } from '../../../core/auth/AuthContext';
+import { useEscapeKey } from '../../../core/utils/useEscapeKey';
 
 interface IpcBulkBatchRegisterModalProps {
   isOpen: boolean;
@@ -32,6 +33,8 @@ export const IpcBulkBatchRegisterModal: React.FC<IpcBulkBatchRegisterModalProps>
   onClose,
   onSuccess,
 }) => {
+  useEscapeKey(onClose, isOpen);
+
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'excel' | 'paste' | 'manual'>('excel');
 

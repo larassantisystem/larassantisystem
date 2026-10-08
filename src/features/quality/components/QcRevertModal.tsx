@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AlertTriangle, X, ArrowLeftCircle, CheckCircle2, Lock } from 'lucide-react';
 import { QcInspectionReport } from '../types/qcTypes';
+import { useEscapeKey } from '../../../core/utils/useEscapeKey';
 
 interface QcRevertModalProps {
   isOpen: boolean;
@@ -15,6 +16,8 @@ export const QcRevertModal: React.FC<QcRevertModalProps> = ({
   report,
   onConfirmRevert,
 }) => {
+  useEscapeKey(onClose, isOpen && !!report);
+
   const [reason, setReason] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);

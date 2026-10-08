@@ -17,6 +17,7 @@ import {
 import { QcInspectionReport } from '../types/qcTypes';
 import { useAuth } from '../../../core/auth/AuthContext';
 import { isQualityManager } from '../../../core/auth/permissionGuard';
+import { useEscapeKey } from '../../../core/utils/useEscapeKey';
 
 interface QcManagerAuthModalProps {
   isOpen: boolean;
@@ -43,6 +44,8 @@ export const QcManagerAuthModal: React.FC<QcManagerAuthModalProps> = ({
   onAuthorize,
   onRevertToLab,
 }) => {
+  useEscapeKey(onClose, isOpen && !!report);
+
   const { user } = useAuth();
 
   const [activeMode, setActiveMode] = useState<'AUTHORIZE' | 'REVERT_TO_LAB'>('AUTHORIZE');

@@ -22,6 +22,7 @@ import { calculateAutoRetestDate, getUserJabatan } from '../utils/qcNumbering';
 import { useAuth } from '../../../core/auth/AuthContext';
 import { warehouseService } from '../../warehouse/warehouseService';
 import { CoaViewerModal } from '../../warehouse/components/CoaViewerModal';
+import { useEscapeKey } from '../../../core/utils/useEscapeKey';
 
 interface QcInspectionModalProps {
   isOpen: boolean;
@@ -67,6 +68,18 @@ export const QcInspectionModal: React.FC<QcInspectionModalProps> = ({
   const [errorMessage, setErrorMessage] = useState('');
   const [focusedEmptyParamId, setFocusedEmptyParamId] = useState<string | null>(null);
   const [showCoaViewer, setShowCoaViewer] = useState(false);
+
+  useEscapeKey(() => {
+    if (showCoaViewer) {
+      setShowCoaViewer(false);
+    } else if (showSignatureModal) {
+      setShowSignatureModal(false);
+      setStaffPassword('');
+      setErrorMessage('');
+    } else {
+      onClose();
+    }
+  }, isOpen && !!report);
 
   const matchingGrn = report
     ? warehouseService

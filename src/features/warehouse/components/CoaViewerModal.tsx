@@ -19,6 +19,7 @@ import {
   searchCoaFileInDrive,
 } from '../../../core/googleDrive/googleDriveService';
 import { warehouseService } from '../warehouseService';
+import { useEscapeKey } from '../../../core/utils/useEscapeKey';
 
 interface CoaViewerModalProps {
   isOpen: boolean;
@@ -45,6 +46,7 @@ export const CoaViewerModal: React.FC<CoaViewerModalProps> = ({
   grnNumber = '-',
   onDriveUploaded,
 }) => {
+  useEscapeKey(onClose, isOpen);
   const [isUploading, setIsUploading] = useState(false);
   const [isSearchingDrive, setIsSearchingDrive] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);

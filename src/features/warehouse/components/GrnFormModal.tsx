@@ -33,6 +33,7 @@ import {
   getDriveUser,
   initDriveAuth,
 } from '../../../core/googleDrive/googleDriveService';
+import { useEscapeKey } from '../../../core/utils/useEscapeKey';
 
 interface GrnFormModalProps {
   isOpen: boolean;
@@ -51,6 +52,8 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
   onSave,
   userName = 'Staf Gudang Logistik',
 }) => {
+  useEscapeKey(onClose, isOpen);
+
   const { user } = useAuth();
   const todayStr = new Date().toISOString().split('T')[0];
   const defaultExpDate = new Date(Date.now() + 730 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]; // +2 years

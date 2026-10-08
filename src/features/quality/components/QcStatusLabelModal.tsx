@@ -20,6 +20,7 @@ import { QcInspectionReport } from '../types/qcTypes';
 import { QrCodeBadge } from '../../../components/QrCodeBadge';
 import { getQrTargetUrl } from '../../../core/utils/qrUrlHelper';
 import { normalizeLotNumber } from '../utils/qcNumbering';
+import { useEscapeKey } from '../../../core/utils/useEscapeKey';
 
 interface QcStatusLabelModalProps {
   isOpen: boolean;
@@ -36,6 +37,8 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
   reports,
   onViewCoa,
 }) => {
+  useEscapeKey(onClose, isOpen);
+
   const effectiveReports: QcInspectionReport[] = report
     ? [report]
     : (reports && reports.length > 0 ? reports : []);
@@ -450,32 +453,26 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
                       </div>
                     </div>
 
-                    {/* 2. Status Banner */}
+                    {/* 2. Status Banner (with Material Code & Type Badges) */}
                     <div className="bg-black text-white px-2.5 py-1 rounded-xs flex items-center justify-between my-1">
-                      <span className="font-black text-[10px] tracking-wider uppercase flex items-center gap-1.5">
+                      <span className="font-black text-[10px] tracking-wider uppercase flex items-center gap-1.5 shrink-0">
                         <span>{repTheme.iconSymbol}</span>
                         <span>{repTheme.title}</span>
                       </span>
-                      <span className="text-[7.5px] font-bold tracking-normal italic">
-                        {repTheme.subtitle}
-                      </span>
-                    </div>
-
-                    {/* 3. Material Identity Box */}
-                    <div className="border border-black/40 rounded-xs p-1.5 bg-white/30">
-                      <div className="font-black text-[12px] leading-tight uppercase text-black line-clamp-1">
-                        {rep.materialName}
-                      </div>
-                      <div className="flex items-center gap-1.5 text-[8.5px] font-bold text-black/90 mt-1">
-                        <span className="font-mono bg-black text-white px-1.5 py-0.2 rounded-xs">
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="font-mono bg-white text-black font-black text-[8.5px] px-1.5 py-0.5 rounded-xs leading-none">
                           {rep.materialCode}
                         </span>
-                        <span className="border border-black/60 px-1 py-0.2 rounded-xs">
+                        <span className="bg-[#FEF08A] text-black font-black text-[8px] px-1.5 py-0.5 rounded-xs uppercase leading-none border border-black/40">
                           {rep.materialType === 'raw' ? 'Bahan Baku' : 'Bahan Kemas'}
                         </span>
-                        <span className="truncate max-w-[140px] text-black/80">
-                          Lot Internal: <strong className="font-mono">{normalizedLot}</strong>
-                        </span>
+                      </div>
+                    </div>
+
+                    {/* 3. Material Identity Box (Fixed 2 lines) */}
+                    <div className="border border-black/40 rounded-xs px-2 py-1 bg-white/30 min-h-[38px] max-h-[38px] flex items-center">
+                      <div className="font-black text-[11.5px] leading-tight uppercase text-black line-clamp-2 break-words w-full">
+                        {rep.materialName}
                       </div>
                     </div>
 
@@ -485,21 +482,33 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
                       <div className="flex-1 flex flex-col justify-between text-[8px]">
                         <div className="space-y-1">
                           <div className="flex justify-between border-b border-black/20 pb-0.5">
-                            <span className="font-bold text-black/70">No. GRN:</span>
-                            <span className="font-mono font-black text-[9px] text-black">{rep.grnNumber}</span>
+                            <span className="font-bold text-black/70">Lot Internal:</span>
+                            <span className="font-mono font-black text-[9px] text-black">{normalizedLot || rep.lotInternalNumber || rep.grnNumber}</span>
                           </div>
                           <div className="flex justify-between border-b border-black/20 pb-0.5">
                             <span className="font-bold text-black/70">Batch / Lot Vendor:</span>
-                            <span className="font-mono font-bold text-black truncate max-w-[110px]">{rep.batchNumber || '-'}</span>
+                            <span className="font-mono font-bold text-black truncate max-w-[110px]">{rep.batchNumber || rep.batchNumberVendor || '-'}</span>
                           </div>
                           <div className="flex justify-between border-b border-black/20 pb-0.5">
-                            <span className="font-bold text-black/70">Tgl Otorisasi QC:</span>
+                            <span className="font-bold text-black/70">Produsen:</span>
+                            <span className="font-bold text-black truncate max-w-[110px]">{rep.manufacturer || '-'}</span>
+                          </div>
+                          <div className="flex justify-between border-b border-black/20 pb-0.5">
+                            <span className="font-bold text-black/70">Tanggal Release:</span>
                             <span className="font-bold text-black">{rep.updatedAt ? rep.updatedAt.slice(0, 10) : new Date().toISOString().slice(0, 10)}</span>
                           </div>
-                          <div className="flex justify-between border-b border-black/20 pb-0.5">
-                            <span className="font-bold text-black/70">Tgl Kedaluwarsa:</span>
-                            <span className="font-bold text-black">{rep.expiryDate || 'Non-Exp (Kemasan)'}</span>
-                          </div>
+                          {rep.materialType !== 'packaging' && (
+                            <>
+                              <div className="flex justify-between border-b border-black/20 pb-0.5">
+                                <span className="font-bold text-black/70">Tgl Kedaluwarsa:</span>
+                                <span className="font-bold text-black">{rep.expiryDate || '-'}</span>
+                              </div>
+                              <div className="flex justify-between border-b border-black/20 pb-0.5">
+                                <span className="font-bold text-black/70">Tgl Retest:</span>
+                                <span className="font-bold text-black">{rep.retestDate || '-'}</span>
+                              </div>
+                            </>
+                          )}
                           <div className="flex justify-between border-b border-black/20 pb-0.5">
                             <span className="font-bold text-black/70">Total Kuantitas:</span>
                             <span className="font-mono font-black text-[9.5px] text-black">{formattedQty} {rep.unit}</span>
@@ -530,14 +539,21 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
                       </div>
                     </div>
 
-                    {/* 5. Koli / Wadah Highlight Bar */}
-                    <div className="bg-black text-white px-2.5 py-1 rounded-xs flex items-center justify-between mb-1">
-                      <span className="font-black text-[9.5px] tracking-wider uppercase">
-                        WADAH KE [ {item.containerIndex} ] DARI {item.totalContainers} WADAH/KOLI {item.copyIndex > 1 ? `(RANGKAP #${item.copyIndex})` : ''}
-                      </span>
-                      <span className="font-mono font-bold text-[9px]">
-                        KEMASAN: {rep.containerType}
-                      </span>
+                    {/* 5. Koli / Wadah Highlight Bar (2 Lines) */}
+                    <div className="bg-black text-white px-2.5 py-1 rounded-xs flex flex-col justify-center gap-0.5 mb-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-black text-[10px] tracking-wider uppercase leading-none">
+                          KOLI {item.containerIndex} DARI {item.totalContainers}
+                        </span>
+                        {item.copyIndex > 1 && (
+                          <span className="font-mono font-bold text-[7.5px] bg-white/20 px-1 py-0.5 rounded-2xs leading-none uppercase">
+                            Rangkap #{item.copyIndex}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between border-t border-white/20 pt-0.5 text-[8px] font-medium text-white/85 leading-none">
+                        <span>KEMASAN: <strong className="font-mono text-white">{rep.containerType || 'Standar'}</strong></span>
+                      </div>
                     </div>
 
                     {/* 6. Footer Signatures Row */}

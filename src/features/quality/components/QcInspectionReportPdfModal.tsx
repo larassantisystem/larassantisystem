@@ -13,6 +13,7 @@ import {
 import { QcInspectionReport } from '../types/qcTypes';
 import { normalizeLotNumber, getUserJabatan } from '../utils/qcNumbering';
 import { useAuth } from '../../../core/auth/AuthContext';
+import { useEscapeKey } from '../../../core/utils/useEscapeKey';
 
 interface QcInspectionReportPdfModalProps {
   isOpen: boolean;
@@ -25,6 +26,8 @@ export const QcInspectionReportPdfModal: React.FC<QcInspectionReportPdfModalProp
   onClose,
   report,
 }) => {
+  useEscapeKey(onClose, isOpen && !!report);
+
   const printContentRef = useRef<HTMLDivElement>(null);
   const { user: currentUser } = useAuth();
   

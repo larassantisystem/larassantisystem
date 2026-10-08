@@ -20,6 +20,7 @@ import { packagingService } from '../../rnd/materials/packagingService';
 import { qualityService } from '../qualityService';
 import { useAuth } from '../../../core/auth/AuthContext';
 import { authService } from '../../../core/auth/authService';
+import { useEscapeKey } from '../../../core/utils/useEscapeKey';
 
 interface QcDiagnosticAuditModalProps {
   isOpen: boolean;
@@ -43,6 +44,16 @@ export const QcDiagnosticAuditModal: React.FC<QcDiagnosticAuditModalProps> = ({
   const [confirmPassword, setConfirmPassword] = useState<string>('');
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
+
+  useEscapeKey(() => {
+    if (showPasswordConfirm) {
+      setShowPasswordConfirm(false);
+      setConfirmPassword('');
+      setPasswordError(null);
+    } else {
+      onClose();
+    }
+  }, isOpen);
   const [syncSuccessMsg, setSyncSuccessMsg] = useState<string | null>(null);
 
   const runDiagnosticQuery = async () => {

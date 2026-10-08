@@ -8,6 +8,7 @@ import {
   downloadStockDeductTemplate,
   parseStockDeductExcel,
 } from '../utils/excelWarehouseUtils';
+import { useEscapeKey } from '../../../core/utils/useEscapeKey';
 
 interface StockDeductionModalProps {
   isOpen: boolean;
@@ -41,6 +42,16 @@ export const StockDeductionModal: React.FC<StockDeductionModalProps> = ({
   const [authPassword, setAuthPassword] = useState('');
   const [authPasswordError, setAuthPasswordError] = useState<string | null>(null);
   const [pendingActionType, setPendingActionType] = useState<'manual' | 'excel'>('manual');
+
+  useEscapeKey(() => {
+    if (showPasswordModal) {
+      setShowPasswordModal(false);
+      setAuthPassword('');
+      setAuthPasswordError(null);
+    } else {
+      onClose();
+    }
+  }, isOpen);
 
   // Excel state
   const [excelFile, setExcelFile] = useState<File | null>(null);

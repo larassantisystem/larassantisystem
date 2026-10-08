@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { MaterialStockSummary, StockLotItem, StockMovementLedger } from '../types/stockTypes';
 import { stockService } from '../stockService';
+import { useEscapeKey } from '../../../core/utils/useEscapeKey';
 
 interface LotDetailModalProps {
   isOpen: boolean;
@@ -30,6 +31,8 @@ export const LotDetailModal: React.FC<LotDetailModalProps> = ({
   onClose,
   material,
 }) => {
+  useEscapeKey(onClose, isOpen && !!material);
+
   const [activeTab, setActiveTab] = useState<'lots' | 'ledger'>('lots');
   const [ledgerHistory, setLedgerHistory] = useState<StockMovementLedger[]>([]);
   const [isLoadingLedger, setIsLoadingLedger] = useState(false);

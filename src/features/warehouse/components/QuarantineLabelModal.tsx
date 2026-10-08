@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { GrnRecord } from '../types/grnTypes';
 import { QrCodeBadge } from '../../../components/QrCodeBadge';
+import { useEscapeKey } from '../../../core/utils/useEscapeKey';
 
 interface QuarantineLabelModalProps {
   isOpen: boolean;
@@ -29,6 +30,8 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
   record,
   records,
 }) => {
+  useEscapeKey(onClose, isOpen);
+
   const effectiveRecords: GrnRecord[] = record
     ? [record]
     : (records && records.length > 0 ? records : []);
@@ -379,9 +382,6 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
                           <h1 className="font-black text-[11px] tracking-tight uppercase leading-none text-black">
                             PT. LARASSANTI MAKMUR SEJAHTERA
                           </h1>
-                          <p className="text-[8px] font-bold tracking-wider uppercase text-black/85 mt-0.5 leading-tight">
-                            SISTEM PENANDAAN KARANTINA BAHAN MASUK (CPKB)
-                          </p>
                         </div>
                       </div>
                       <div className="text-right shrink-0">
@@ -391,32 +391,26 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
                       </div>
                     </div>
 
-                    {/* 2. Status Banner (Inverted High-Contrast Black Bar) */}
+                    {/* 2. Status Banner (Inverted High-Contrast Black Bar with Material Code & Type) */}
                     <div className="bg-black text-white px-2.5 py-1 rounded-xs flex items-center justify-between my-1">
-                      <span className="font-black text-[10px] tracking-wider uppercase flex items-center gap-1.5">
+                      <span className="font-black text-[10px] tracking-wider uppercase flex items-center gap-1.5 shrink-0">
                         <span>⚠</span>
-                        <span>STATUS: KARANTINA (QUARANTINE)</span>
+                        <span>STATUS: KARANTINA</span>
                       </span>
-                      <span className="text-[7.5px] font-bold tracking-normal italic">
-                        * DILARANG DIGUNAKAN / DIOLAH SEBELUM DILULUSKAN QC *
-                      </span>
-                    </div>
-
-                    {/* 3. Material Identity Box */}
-                    <div className="border border-black/40 rounded-xs p-1.5 bg-white/30">
-                      <div className="font-black text-[12px] leading-tight uppercase text-black line-clamp-1">
-                        {rec.materialName}
-                      </div>
-                      <div className="flex items-center gap-1.5 text-[8.5px] font-bold text-black/90 mt-1">
-                        <span className="font-mono bg-black text-white px-1.5 py-0.2 rounded-xs">
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="font-mono bg-white text-black font-black text-[8.5px] px-1.5 py-0.5 rounded-xs leading-none">
                           {rec.materialCode}
                         </span>
-                        <span className="border border-black/60 px-1 py-0.2 rounded-xs">
+                        <span className="bg-[#FEF08A] text-black font-black text-[8px] px-1.5 py-0.5 rounded-xs uppercase leading-none border border-black/40">
                           {rec.materialType === 'raw' ? 'Bahan Baku' : 'Bahan Kemas'}
                         </span>
-                        <span className="truncate max-w-[140px] text-black/80">
-                          Produsen: {rec.manufacturer}
-                        </span>
+                      </div>
+                    </div>
+
+                    {/* 3. Material Identity Box (Fixed 2 lines) */}
+                    <div className="border border-black/40 rounded-xs px-2 py-1 bg-white/30 min-h-[38px] max-h-[38px] flex items-center">
+                      <div className="font-black text-[11.5px] leading-tight uppercase text-black line-clamp-2 break-words w-full">
+                        {rec.materialName}
                       </div>
                     </div>
 
@@ -434,13 +428,19 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
                             <span className="font-bold text-black">{rec.receivedDate}</span>
                           </div>
                           <div className="flex justify-between border-b border-black/20 pb-0.5">
+                            <span className="font-bold text-black/70">Produsen:</span>
+                            <span className="font-bold text-black truncate max-w-[110px]">{rec.manufacturer || '-'}</span>
+                          </div>
+                          <div className="flex justify-between border-b border-black/20 pb-0.5">
                             <span className="font-bold text-black/70">Batch / Lot Vendor:</span>
                             <span className="font-mono font-bold text-black truncate max-w-[110px]">{rec.batchNumber || '-'}</span>
                           </div>
-                          <div className="flex justify-between border-b border-black/20 pb-0.5">
-                            <span className="font-bold text-black/70">Tgl Kedaluwarsa:</span>
-                            <span className="font-bold text-black">{rec.expiryDate || 'Non-Exp (Bahan Kemas)'}</span>
-                          </div>
+                          {rec.materialType !== 'packaging' && (
+                            <div className="flex justify-between border-b border-black/20 pb-0.5">
+                              <span className="font-bold text-black/70">Tgl Kedaluwarsa:</span>
+                              <span className="font-bold text-black">{rec.expiryDate || '-'}</span>
+                            </div>
+                          )}
                           <div className="flex justify-between border-b border-black/20 pb-0.5">
                             <span className="font-bold text-black/70">Total Kuantitas:</span>
                             <span className="font-mono font-black text-[9.5px] text-black">{formattedQty} {rec.unit}</span>
@@ -471,14 +471,22 @@ export const QuarantineLabelModal: React.FC<QuarantineLabelModalProps> = ({
                       </div>
                     </div>
 
-                    {/* 5. Koli / Wadah Highlight Bar */}
-                    <div className="bg-black text-white px-2.5 py-1 rounded-xs flex items-center justify-between mb-1">
-                      <span className="font-black text-[9.5px] tracking-wider uppercase">
-                        WADAH KE [ {item.containerIndex} ] DARI {item.totalContainers} WADAH/KOLI {item.copyIndex > 1 ? `(RANGKAP #${item.copyIndex})` : ''}
-                      </span>
-                      <span className="font-mono font-bold text-[9px]">
-                        KEMASAN: {rec.containerType}
-                      </span>
+                    {/* 5. Koli / Wadah Highlight Bar (2 Lines) */}
+                    <div className="bg-black text-white px-2.5 py-1 rounded-xs flex flex-col justify-center gap-0.5 mb-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-black text-[10px] tracking-wider uppercase leading-none">
+                          KOLI {item.containerIndex} DARI {item.totalContainers}
+                        </span>
+                        {item.copyIndex > 1 && (
+                          <span className="font-mono font-bold text-[7.5px] bg-white/20 px-1 py-0.5 rounded-2xs leading-none uppercase">
+                            Rangkap #{item.copyIndex}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between text-[8.5px] font-mono leading-none pt-0.5 border-t border-white/20">
+                        <span className="font-bold text-white/80">KEMASAN:</span>
+                        <span className="font-black text-white uppercase">{rec.containerType || '-'}</span>
+                      </div>
                     </div>
 
                     {/* 6. Footer Signatures Row */}

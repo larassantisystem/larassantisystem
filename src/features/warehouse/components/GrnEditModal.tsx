@@ -16,6 +16,7 @@ import {
 import { GrnRecord } from '../types/grnTypes';
 import { useAuth } from '../../../core/auth/AuthContext';
 import { authService } from '../../../core/auth/authService';
+import { useEscapeKey } from '../../../core/utils/useEscapeKey';
 
 interface GrnEditModalProps {
   isOpen: boolean;
@@ -39,6 +40,16 @@ export const GrnEditModal: React.FC<GrnEditModalProps> = ({
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [authPassword, setAuthPassword] = useState('');
   const [authPasswordError, setAuthPasswordError] = useState<string | null>(null);
+
+  useEscapeKey(() => {
+    if (showPasswordModal) {
+      setShowPasswordModal(false);
+      setAuthPassword('');
+      setAuthPasswordError(null);
+    } else {
+      onClose();
+    }
+  }, isOpen);
 
   useEffect(() => {
     if (record) {

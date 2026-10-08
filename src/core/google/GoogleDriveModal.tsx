@@ -27,6 +27,7 @@ import {
 import { useAuth } from '../auth/AuthContext';
 import { warehouseService } from '../../features/warehouse/warehouseService';
 import { qualityService } from '../../features/quality/qualityService';
+import { useEscapeKey } from '../utils/useEscapeKey';
 
 interface GoogleDriveModalProps {
   isOpen: boolean;
@@ -34,6 +35,8 @@ interface GoogleDriveModalProps {
 }
 
 export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({ isOpen, onClose }) => {
+  useEscapeKey(onClose, isOpen);
+
   const { user } = useAuth();
   const isAdmin = user?.role === 'superadmin' || user?.role === 'admin' || user?.department === 'management';
 

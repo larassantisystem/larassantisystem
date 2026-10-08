@@ -29,6 +29,7 @@ import { IpcStatusLabelModal } from './IpcStatusLabelModal';
 import { formatDateDDMMMYYYY } from '../../../utils/dateUtils';
 import { getUserPositionTitle } from '../../../utils/userPositionUtils';
 import { generateDigitalSignatureHash } from '../utils/qcNumbering';
+import { useEscapeKey } from '../../../core/utils/useEscapeKey';
 
 interface IpcAnalysisModalProps {
   isOpen: boolean;
@@ -70,6 +71,21 @@ export const IpcAnalysisModal: React.FC<IpcAnalysisModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [focusedEmptyParamId, setFocusedEmptyParamId] = useState<string | null>(null);
+
+  useEscapeKey(() => {
+    if (showPdfModal) {
+      setShowPdfModal(false);
+    } else if (showLabelModal) {
+      setShowLabelModal(false);
+    } else if (showSignatureModal) {
+      setShowSignatureModal(false);
+      setStaffPassword('');
+      setReturnReason('');
+      setErrorMessage('');
+    } else {
+      onClose();
+    }
+  }, isOpen && !!batch);
 
   const inputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
 
