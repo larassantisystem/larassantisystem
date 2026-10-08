@@ -460,10 +460,10 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
                         <span>{repTheme.title}</span>
                       </span>
                       <div className="flex items-center gap-1.5 shrink-0">
-                        <span className="font-mono bg-white text-black font-black text-[8.5px] px-1.5 py-0.5 rounded-xs leading-none">
+                        <span className="font-mono bg-white text-black font-black text-[8.5px] px-1.5 py-0.5 rounded-xs leading-none border border-black/80 print:bg-white print:text-black print:border-black print:font-black">
                           {rep.materialCode}
                         </span>
-                        <span className="bg-[#FEF08A] text-black font-black text-[8px] px-1.5 py-0.5 rounded-xs uppercase leading-none border border-black/40">
+                        <span className="bg-[#FEF08A] text-black font-black text-[8px] px-1.5 py-0.5 rounded-xs uppercase leading-none border border-black/60 print:bg-white print:text-black print:border-black print:font-black">
                           {rep.materialType === 'raw' ? 'Bahan Baku' : 'Bahan Kemas'}
                         </span>
                       </div>

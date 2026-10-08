@@ -216,6 +216,45 @@
     -webkit-text-fill-color: #ffffff !important;
   }
 
+  /* PENGECUALIAN SPESIFIK: Badge / Lencana berlatar terang di dalam banner hitam (Kode Material, Jenis Material, dll) HARUS teks hitam berlatar putih */
+  .thermal-label-page .bg-black .bg-white,
+  .thermal-label-page .bg-black .bg-white *,
+  .thermal-label-page .bg-black [class*="bg-white"],
+  .thermal-label-page .bg-black [class*="bg-white"] *,
+  .thermal-label-page .bg-black [class*="bg-[#FEF08A]"],
+  .thermal-label-page .bg-black [class*="bg-[#FEF08A]"] *,
+  .thermal-label-page .bg-black .text-black,
+  .thermal-label-page .bg-black .text-black *,
+  #qc-status-label-printable .bg-black .bg-white,
+  #qc-status-label-printable .bg-black .bg-white *,
+  #qc-status-label-printable .bg-black [class*="bg-white"],
+  #qc-status-label-printable .bg-black [class*="bg-white"] *,
+  #qc-status-label-printable .bg-black [class*="bg-[#FEF08A]"],
+  #qc-status-label-printable .bg-black [class*="bg-[#FEF08A]"] *,
+  #qc-status-label-printable .bg-black .text-black,
+  #qc-status-label-printable .bg-black .text-black *,
+  #quarantine-label-printable .bg-black .bg-white,
+  #quarantine-label-printable .bg-black .bg-white *,
+  #quarantine-label-printable .bg-black [class*="bg-white"],
+  #quarantine-label-printable .bg-black [class*="bg-white"] *,
+  #quarantine-label-printable .bg-black [class*="bg-[#FEF08A]"],
+  #quarantine-label-printable .bg-black [class*="bg-[#FEF08A]"] *,
+  #quarantine-label-printable .bg-black .text-black,
+  #quarantine-label-printable .bg-black .text-black *,
+  #ipc-labels-printable .bg-black .bg-white,
+  #ipc-labels-printable .bg-black .bg-white *,
+  #ipc-labels-printable .bg-black [class*="bg-white"],
+  #ipc-labels-printable .bg-black [class*="bg-white"] *,
+  #ipc-labels-printable .bg-black .text-black,
+  #ipc-labels-printable .bg-black .text-black * {
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
+    background-color: #ffffff !important;
+    background: #ffffff !important;
+    border-color: #000000 !important;
+    font-weight: 900 !important;
+  }
+
   body.printing-label {
     width: 100mm !important;
     margin: 0 !important;
