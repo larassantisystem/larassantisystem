@@ -32,6 +32,7 @@ import {
   getDriveAccessToken,
   getDriveUser,
   initDriveAuth,
+  validateGoogleDriveToken,
 } from '../../../core/googleDrive/googleDriveService';
 import { useEscapeKey } from '../../../core/utils/useEscapeKey';
 
@@ -121,7 +122,7 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
     setCoaFileName(file.name);
     setDriveUploadError(null);
 
-    // 1. Baca Data URL lokal agar file dapat langsung dilihat di browser
+    // 1. Baca Data URL lokal hanya untuk pratinjau sementara di modal saat sesi berjalan
     const reader = new FileReader();
     reader.onload = (e) => {
       const dataUrl = e.target?.result as string;
@@ -131,8 +132,26 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
     };
     reader.readAsDataURL(file);
 
-    // 2. Upload ke Google Drive jika token tersedia
-    const token = await getDriveAccessToken();
+    // 2. Upload file fisik langsung ke Google Drive (larassantisystem@gmail.com)
+    let token = await getDriveAccessToken();
+    let isTokenValid = token ? await validateGoogleDriveToken(token) : false;
+
+    if (!token || !isTokenValid) {
+      try {
+        const authRes = await googleDriveSignIn();
+        token = authRes.accessToken;
+        setIsDriveConnected(true);
+        setDriveUserEmail(authRes.user?.email || 'larassantisystem@gmail.com');
+      } catch (authErr: any) {
+        if (authErr.isCancelled || authErr.code === 'auth/popup-closed-by-user') {
+          setDriveUploadError('Autentikasi Google Drive dibatalkan. Klik "Sambungkan Google Drive" untuk mengunggah berkas.');
+        } else {
+          setDriveUploadError('Otorisasi Google Drive dibutuhkan: ' + (authErr.message || 'Harap masuk ke Google Drive'));
+        }
+        return;
+      }
+    }
+
     if (token) {
       setIsUploadingCoa(true);
       try {
@@ -145,10 +164,9 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
         setCoaDriveViewLink(result.webViewLink);
       } catch (err: any) {
         if (err.isCancelled || err.code === 'auth/popup-closed-by-user') {
-          console.log('Drive upload auth cancelled');
-          setDriveUploadError('Login Google dibatalkan. File tetap tersimpan sebagai lampiran lokal.');
+          setDriveUploadError('Login Google dibatalkan. Klik "Sambungkan Google Drive" untuk mencoba lagi.');
         } else {
-          console.warn('Drive upload failed, saved as local attachment:', err);
+          console.warn('Drive upload error:', err);
           setDriveUploadError('Gagal sinkron ke Google Drive: ' + (err.message || 'Error'));
         }
       } finally {
@@ -323,7 +341,7 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
         qcParametersCount: selectedMaterial.qcParametersCount ?? 0,
         sealCondition,
         packagingCondition,
-        coaAttachment: coaFileDataUrl || coaFileName || undefined,
+        coaAttachment: coaFileName || undefined,
         coaDriveFileId: coaDriveFileId || undefined,
         coaDriveViewLink: coaDriveViewLink || undefined,
         msdsAttachment: msdsFileName || undefined,
@@ -507,6 +525,7 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
               packagingMaterials={packagingMaterials}
               selectedCode={selectedMaterial?.code}
               onSelect={handleSelectMaterial}
+              onClear={() => setSelectedMaterial(null)}
             />
           </div>
 
@@ -830,18 +849,30 @@ export const GrnFormModal: React.FC<GrnFormModalProps> = ({
 
                     {/* Google Drive Status Banner */}
                     <div className="mt-2 mb-1 flex items-center justify-between gap-1 text-[11px] flex-wrap">
-                      <span className="inline-flex items-center gap-1 font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+                      <span className={`inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded-md border ${
+                        isDriveConnected
+                          ? 'text-blue-700 bg-blue-50 border-blue-200'
+                          : 'text-amber-700 bg-amber-50 border-amber-200'
+                      }`}>
                         <Cloud className="w-3 h-3 text-blue-600" />
-                        <span>Google Drive Perusahaan: Aktif</span>
+                        <span>Google Drive (larassantisystem@gmail.com): {isDriveConnected ? 'Aktif' : 'Perlu Login'}</span>
                       </span>
-                      {(user?.role === 'admin' || user?.role === 'superadmin' || user?.department === 'management') && (
+                      {!isDriveConnected ? (
+                        <button
+                          type="button"
+                          onClick={handleConnectDrive}
+                          className="text-[10px] font-bold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded border border-blue-200 cursor-pointer"
+                        >
+                          Sambungkan Drive
+                        </button>
+                      ) : (
                         <button
                           type="button"
                           onClick={handleSwitchDriveAccount}
                           className="text-[10px] font-semibold text-slate-500 hover:text-blue-700 underline cursor-pointer"
-                          title="Ganti atau hubungkan dengan akun Google lain (Admin)"
+                          title="Ganti atau hubungkan ulang akun Google larassantisystem@gmail.com"
                         >
-                          Ganti Akun
+                          Hubungkan Ulang
                         </button>
                       )}
                     </div>

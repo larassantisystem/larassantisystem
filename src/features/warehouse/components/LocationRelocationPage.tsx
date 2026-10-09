@@ -243,7 +243,7 @@ export const LocationRelocationPage: React.FC<LocationRelocationPageProps> = ({
         <div className="flex items-center gap-2.5 border-b border-slate-100 pb-4">
           <MapPin className="w-5 h-5 text-indigo-600" />
           <div>
-            <h3 className="text-sm font-black text-slate-900">Form Alokasi & Pemindahan Rak Simpan</h3>
+            <h3 className="text-sm font-black text-slate-900">Form Alokasi & Pemindahan Rak Penyimpanan</h3>
             <p className="text-xs text-slate-500">Pilih nomor lot dan tentukan area/rak penyimpanan baru yang sah.</p>
           </div>
         </div>
@@ -332,7 +332,7 @@ export const LocationRelocationPage: React.FC<LocationRelocationPageProps> = ({
 
                   <div className="grid grid-cols-2 gap-2 text-[11px] pt-2 border-t border-slate-200/80">
                     <div>
-                      <span className="text-slate-400 block text-[10px] font-bold uppercase">Lokasi Simpan Saat Ini</span>
+                      <span className="text-slate-400 block text-[10px] font-bold uppercase">Lokasi Penyimpanan Saat Ini</span>
                       <span className="font-black text-rose-700 flex items-center gap-1 mt-0.5">
                         <MapPin className="w-3 h-3 text-rose-500 shrink-0" />
                         <span className="truncate">{selectedLot.storageLocation}</span>
@@ -358,7 +358,7 @@ export const LocationRelocationPage: React.FC<LocationRelocationPageProps> = ({
             {/* RIGHT COLUMN: Target Location & Boundary Check */}
             <div className="space-y-4">
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                2. Tentukan Lokasi / Rak Simpan Baru <span className="text-rose-500">*</span>
+                2. Tentukan Lokasi / Rak Penyimpanan Baru <span className="text-rose-500">*</span>
               </label>
 
               {/* Mode Toggle: Preset Dropdown vs Custom Input */}
@@ -528,7 +528,7 @@ export const LocationRelocationPage: React.FC<LocationRelocationPageProps> = ({
                   <th className="p-3">WAKTU</th>
                   <th className="p-3">NO. LOT & KODE</th>
                   <th className="p-3">NAMA BAHAN</th>
-                  <th className="p-3">PERUBAHAN LOKASI SIMPAN</th>
+                  <th className="p-3">PERUBAHAN LOKASI PENYIMPANAN</th>
                   <th className="p-3">PETUGAS GUDANG</th>
                   <th className="p-3">CATATAN</th>
                 </tr>
@@ -548,7 +548,9 @@ export const LocationRelocationPage: React.FC<LocationRelocationPageProps> = ({
                       <td className="p-3 font-bold text-slate-800">{log.materialName}</td>
                       <td className="p-3">
                         <span className="px-2.5 py-1 rounded-xl bg-indigo-50 text-indigo-900 border border-indigo-200 font-bold text-[11px] inline-block">
-                          {log.notes?.includes('Pemindahan Lokasi Simpan:')
+                          {log.notes?.includes('Pemindahan Lokasi Penyimpanan:')
+                            ? log.notes.split('Pemindahan Lokasi Penyimpanan:')[1].split('.')[0]
+                            : log.notes?.includes('Pemindahan Lokasi Simpan:')
                             ? log.notes.split('Pemindahan Lokasi Simpan:')[1].split('.')[0]
                             : log.notes}
                         </span>

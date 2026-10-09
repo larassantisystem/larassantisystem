@@ -23,6 +23,7 @@ import {
   Lock,
   RotateCcw,
   X,
+  FileCheck,
 } from 'lucide-react';
 import { GrnRecord, GrnMaterialType, GrnQcStatus } from '../types/grnTypes';
 import { warehouseService } from '../warehouseService';
@@ -30,6 +31,7 @@ import { Pagination } from '../../../core/ui-components/Pagination';
 import { QuarantineLabelModal } from './QuarantineLabelModal';
 import { GrnEditModal } from './GrnEditModal';
 import { GrnDetailModal } from './GrnDetailModal';
+import { CoaViewerModal } from './CoaViewerModal';
 import { useAuth } from '../../../core/auth/AuthContext';
 import { authService } from '../../../core/auth/authService';
 
@@ -68,6 +70,9 @@ export const GrnTable: React.FC<GrnTableProps> = ({
 
   // Detail Modal State
   const [selectedRecord, setSelectedRecord] = useState<GrnRecord | null>(null);
+
+  // CoA Viewer Modal State (Direct Google Drive Access)
+  const [coaRecordToView, setCoaRecordToView] = useState<GrnRecord | null>(null);
 
   // Edit Modal State
   const [editRecordToUpdate, setEditRecordToUpdate] = useState<GrnRecord | null>(null);
@@ -634,6 +639,21 @@ export const GrnTable: React.FC<GrnTableProps> = ({
                             <Eye className="w-3.5 h-3.5" />
                           </button>
 
+                          {/* Direct CoA Google Drive View */}
+                          {(rec.coaAttachment || rec.coaDriveFileId || rec.coaDriveViewLink) && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setCoaRecordToView(rec);
+                              }}
+                              className={`${isCompactMode ? 'p-1' : 'p-1.5'} rounded-lg text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors cursor-pointer`}
+                              title="Buka Dokumen CoA di Google Drive"
+                            >
+                              <FileCheck className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+
                           {/* Delete Record - Protected by CPKB Data Integrity, Unlocked for Super Admin */}
                           {(() => {
                             const isAdmin = user?.role === 'admin' || user?.nik?.toLowerCase() === 'admin';
@@ -760,6 +780,29 @@ export const GrnTable: React.FC<GrnTableProps> = ({
           }
         }}
       />
+
+      {/* CoA Google Drive Modal */}
+      {coaRecordToView && (
+        <CoaViewerModal
+          isOpen={!!coaRecordToView}
+          onClose={() => setCoaRecordToView(null)}
+          fileName={coaRecordToView.coaAttachment}
+          driveFileId={coaRecordToView.coaDriveFileId}
+          driveViewLink={coaRecordToView.coaDriveViewLink}
+          materialName={coaRecordToView.materialName}
+          materialCode={coaRecordToView.materialCode}
+          batchNumber={coaRecordToView.batchNumber}
+          grnNumber={coaRecordToView.grnNumber}
+          onDriveUploaded={({ fileId, viewLink }) => {
+            if (onUpdateRecord && coaRecordToView) {
+              onUpdateRecord(coaRecordToView.id, {
+                coaDriveFileId: fileId,
+                coaDriveViewLink: viewLink,
+              });
+            }
+          }}
+        />
+      )}
 
       {/* Edit GRN Modal */}
       {editRecordToUpdate && (

@@ -516,7 +516,7 @@ export const QcStatusLabelModal: React.FC<QcStatusLabelModalProps> = ({
                         </div>
 
                         <div className="text-[7.5px] text-black/80 pt-0.5">
-                          <span className="font-bold">Simpan: </span>
+                          <span className="font-bold">Penyimpanan: </span>
                           <span>{rep.storageConditions || '15-30°C Ruang Terkendali, Kering & Terlindung Cahaya'}</span>
                         </div>
                       </div>

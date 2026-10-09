@@ -243,7 +243,7 @@ export const LotDetailModal: React.FC<LotDetailModalProps> = ({
                       </div>
 
                       <div>
-                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Lokasi Simpan</span>
+                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Lokasi Penyimpanan</span>
                         <span className="font-semibold text-slate-800 truncate block">{lot.storageLocation}</span>
                       </div>
 

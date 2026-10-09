@@ -952,7 +952,7 @@ export const RndBomCalculatorTab: React.FC<RndBomCalculatorTabProps> = ({
                                 {item.chemicalName !== '-' ? item.chemicalName : item.specNumber}
                               </div>
                               <div className="text-[9px] text-slate-400">
-                                📍 Simpan: <span className="text-slate-600 font-medium">{item.storageConditions}</span>
+                                📍 Penyimpanan: <span className="text-slate-600 font-medium">{item.storageConditions}</span>
                               </div>
                             </div>
                           </div>
@@ -1005,7 +1005,7 @@ export const RndBomCalculatorTab: React.FC<RndBomCalculatorTabProps> = ({
                           {item.chemicalName !== '-' ? item.chemicalName : item.specNumber}
                         </div>
                         <div className="text-[9px] text-slate-400">
-                          📍 Simpan: <span className="text-slate-600 font-medium">{item.storageConditions}</span>
+                          📍 Penyimpanan: <span className="text-slate-600 font-medium">{item.storageConditions}</span>
                         </div>
                       </div>
                     </div>

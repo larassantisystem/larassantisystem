@@ -1036,7 +1036,7 @@ export const stockService = {
         role: 'Petugas Relokasi Rak',
         department: 'Warehouse & Logistik',
       },
-      notes: `Pemindahan Lokasi Simpan: [${prevLocation}] ➔ [${cleanNewLoc}]. ${payload.notes ? `Catatan: ${payload.notes}` : ''}`,
+      notes: `Pemindahan Lokasi Penyimpanan: [${prevLocation}] ➔ [${cleanNewLoc}]. ${payload.notes ? `Catatan: ${payload.notes}` : ''}`,
     };
 
     const existingQcPayload = grnTarget.qcPayload || { status: grnTarget.qcStatus || 'QUARANTINE' };

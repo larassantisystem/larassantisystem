@@ -168,56 +168,47 @@ export const CoaViewerModal: React.FC<CoaViewerModalProps> = ({
     setUploadSuccess(null);
     setCurrentFileName(file.name);
 
-    // 1. Baca langsung Data URL agar pratinjau tampil seketika
+    // 1. Baca langsung Data URL hanya untuk pratinjau instan di layar
     const reader = new FileReader();
     reader.onload = async (ev) => {
       const dataUrl = ev.target?.result as string;
       if (dataUrl) {
         setLocalDataUrl(dataUrl);
-
-        // Update database Supabase dengan data URL agar tersimpan permanen
-        try {
-          await warehouseService.updateGrnCoa(grnNumber, {
-            coaAttachment: dataUrl,
-          });
-          setUploadSuccess('Dokumen berhasil disimpan ke sistem dan siap dilihat!');
-        } catch (_) {}
       }
     };
     reader.readAsDataURL(file);
 
-    // 2. Jika Google Drive tersedia atau berhasil sign in, upload ke Drive
+    // 2. Upload file fisik langsung ke Google Drive larassantisystem@gmail.com
     try {
-      const token = await getDriveAccessToken();
-      if (token) {
-        const result = await uploadCoaFileToDrive(file, {
-          grnNumber,
-          materialName,
-          batchNumber,
-        });
+      const result = await uploadCoaFileToDrive(file, {
+        grnNumber,
+        materialName,
+        batchNumber,
+      });
 
-        setCurrentDriveFileId(result.fileId);
-        setCurrentDriveViewLink(result.webViewLink);
-        setUploadSuccess('Dokumen berhasil disimpan dan disinkronkan ke Google Drive!');
+      setCurrentDriveFileId(result.fileId);
+      setCurrentDriveViewLink(result.webViewLink);
+      setUploadSuccess('Dokumen CoA berhasil diunggah ke Google Drive dan ditautkan ke sistem!');
 
-        if (onDriveUploaded) {
-          onDriveUploaded({
-            fileId: result.fileId,
-            viewLink: result.webViewLink,
-          });
-        }
-
-        await warehouseService.updateGrnCoa(grnNumber, {
-          coaAttachment: file.name,
-          coaDriveFileId: result.fileId,
-          coaDriveViewLink: result.webViewLink,
+      if (onDriveUploaded) {
+        onDriveUploaded({
+          fileId: result.fileId,
+          viewLink: result.webViewLink,
         });
       }
+
+      // Simpan HANYA nama file dan Google Drive link ke Supabase
+      await warehouseService.updateGrnCoa(grnNumber, {
+        coaAttachment: file.name,
+        coaDriveFileId: result.fileId,
+        coaDriveViewLink: result.webViewLink,
+      });
     } catch (err: any) {
       if (err.isCancelled || err.code === 'auth/popup-closed-by-user') {
-        setUploadSuccess('Pratinjau lokal siap dan tersimpan ke database.');
+        setUploadError('Autentikasi Google Drive dibatalkan.');
       } else {
         console.warn('Notice uploading CoA to Drive:', err?.message || err);
+        setUploadError('Gagal mengunggah ke Google Drive: ' + (err.message || 'Error'));
       }
     } finally {
       setIsUploading(false);

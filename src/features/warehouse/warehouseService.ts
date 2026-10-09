@@ -79,7 +79,14 @@ function buildPrimarySupabasePayload(record: GrnRecord): Record<string, any> {
     packaging_condition: ['clean', 'damaged', 'wet', 'contaminated'].includes(record.packagingCondition as string)
       ? record.packagingCondition
       : 'clean',
-    coa_attachment: record.coaAttachment || null,
+    // Store clean Google Drive metadata or file name without raw dataUrl
+    coa_attachment: record.coaDriveViewLink
+      ? JSON.stringify({
+          fileId: record.coaDriveFileId,
+          viewLink: record.coaDriveViewLink,
+          fileName: record.coaAttachment?.startsWith('data:') ? 'Dokumen_CoA.pdf' : (record.coaAttachment || 'Dokumen_CoA.pdf'),
+        })
+      : (record.coaAttachment?.startsWith('data:') ? 'Dokumen_CoA.pdf' : (record.coaAttachment || null)),
     received_by: record.receivedBy || 'Staf Gudang',
     received_by_nik: (record as any).receivedByNik || 'NIK-WH-001',
     notes: packGrnNotes(record.notes, record.qcPayload) || null,

@@ -39,6 +39,21 @@ export interface DriveUploadResult {
   mimeType: string;
 }
 
+/**
+ * Validate whether a token is still active on Google Drive API
+ */
+export const validateGoogleDriveToken = async (token: string): Promise<boolean> => {
+  if (!token) return false;
+  try {
+    const res = await fetch('https://www.googleapis.com/drive/v3/about?fields=user', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+};
+
 export const initDriveAuth = (
   onAuthSuccess?: (user: any, token: string) => void,
   onAuthFailure?: () => void
@@ -318,7 +333,7 @@ export const uploadCoaFileToDrive = async (
   combinedBody.set(fileBytes, headerBytes.length);
   combinedBody.set(footerBytes, headerBytes.length + fileBytes.length);
 
-  const uploadRes = await fetch(
+  let uploadRes = await fetch(
     'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,webViewLink,webContentLink',
     {
       method: 'POST',
@@ -329,6 +344,25 @@ export const uploadCoaFileToDrive = async (
       body: combinedBody,
     }
   );
+
+  // Auto-refresh token if 401 unauthorized
+  if (uploadRes.status === 401) {
+    console.warn('Google Drive token expired (401). Requesting re-auth for larassantisystem@gmail.com...');
+    const reauth = await googleDriveSignIn();
+    token = reauth.accessToken;
+
+    uploadRes = await fetch(
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,webViewLink,webContentLink',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': `multipart/related; boundary=${boundary}`,
+        },
+        body: combinedBody,
+      }
+    );
+  }
 
   if (!uploadRes.ok) {
     const errorText = await uploadRes.text();
